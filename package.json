@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "@calcit/procs": "^0.5.0-a16",
+    "shortid": "^2.2.16"
+  },
+  "scripts": {
+    "compile-page": "cr --emit-js --once --init-fn app.client/main! --reload-fn app.client/reload! --emit-path out-page",
+    "release-page": "vite build --base=./",
+    "watch-page": "cr --emit-js --emit-path out-page/ --init-fn app.client/main! --reload-fn app.client/reload!"
+  },
+  "devDependencies": {
+    "bottom-tip": "^0.1.2",
+    "url-parse": "^1.5.3",
+    "vite": "^2.5.8"
+  },
+  "version": "0.0.1"
+}
