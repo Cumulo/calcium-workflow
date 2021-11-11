@@ -1,8 +1,11 @@
 
 {} (:package |app)
-  :configs $ {} (:init-fn |app.server/main!) (:reload-fn |app.server/reload!)
-    :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
-    :version nil
+  :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!)
+    :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
+    :version |0.0.1
+  :entries $ {}
+    :server $ {} (:port 6001) (:storage-key |calcit.cirru) (:init-fn |app.server/main!) (:reload-fn |app.server/reload!)
+      :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
   :files $ {}
     |app.comp.container $ {}
       :ns $ quote
@@ -40,7 +43,7 @@
                     case-default (:name router) (<> router)
                       :home $ div
                         {} $ :style
-                          {} $ :padding "\"8px"
+                          merge ui/expand $ {} (:padding "\"8px")
                         input $ {} (:style ui/input)
                           :value $ :demo state
                         =< 8 nil
@@ -555,4 +558,4 @@
         |dev? $ quote
           def dev? $ = "\"dev" (get-env "\"mode")
         |site $ quote
-          def site $ {} (:port 5021) (:title "\"Cumulo") (:icon "\"http://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"workflow-storage-calcit") (:storage-file "\"storage.cirru")
+          def site $ {} (:port 5021) (:title "\"Calcium") (:icon "\"http://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")
