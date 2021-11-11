@@ -105,15 +105,15 @@
           app.updater :refer $ updater
           cumulo-reel.core :refer $ reel-reducer refresh-reel reel-schema
           app.config :as config
-          cumulo-util.file :refer $ write-mildly! get-backup-path! merge-local-edn!
-          cumulo-util.core :refer $ repeat! unix-time! delay!
           app.twig.container :refer $ twig-container
           recollect.diff :refer $ diff-twig
           wss.core :refer $ wss-serve! wss-send! wss-each!
           recollect.twig :refer $ new-twig-loop! clear-twig-caches!
           app.$meta :refer $ calcit-dirname
-          calcit.std.fs :refer $ path-exists?
+          calcit.std.fs :refer $ path-exists? check-write-file!
           calcit.std.time :refer $ set-interval
+          calcit.std.date :refer $ get-time! extract-time
+          calcit.std.path :refer $ join-path
       :defs $ {}
         |*initial-db $ quote
           defatom *initial-db $ if
@@ -126,10 +126,9 @@
               file-content $ format-cirru-edn
                 assoc (:db @*reel) :sessions $ {}
               storage-path storage-file
-              ; backup-path $ get-backup-path!
-            ; write-mildly! storage-path file-content
-            ; write-mildly! backup-path file-content
-            println "\"TODO write file" storage-path
+              backup-path $ get-backup-path!
+            check-write-file! storage-path file-content
+            check-write-file! backup-path file-content
         |sync-clients! $ quote
           defn sync-clients! (reel)
             wss-each! $ fn (sid)
@@ -169,6 +168,12 @@
             set-interval 200 $ fn () (render-loop!)
             set-interval 600000 $ fn () (persist-db!)
             on-control-c on-exit!
+        |get-backup-path! $ quote
+          defn get-backup-path! () $ let
+              now $ extract-time (get-time!)
+            join-path calcit-dirname "\"backups"
+              str $ :month now
+              str (:day now) "\"-snapshot.cirru"
         |on-exit! $ quote
           defn on-exit! () (persist-db!) (; println "\"exit code is...") (quit! 0)
         |dispatch! $ quote
@@ -225,10 +230,9 @@
                   :user $ memof-call twig-user
                     get-in db $ [] :users (:user-id session)
                   :router $ assoc router :data
-                    case (:name router)
+                    case-default (:name router) ({})
                       :home $ :pages db
                       :profile $ memof-call twig-members (:sessions db) (:users db)
-                      (:name router) ({})
                   :count $ count (:sessions db)
                   :color "\"red"
                 {}
@@ -269,7 +273,6 @@
     |app.updater.user $ {}
       :ns $ quote
         ns app.updater.user $ :require
-          cumulo-util.core :refer $ find-first
           calcit.std.hash :refer $ md5
       :defs $ {}
         |sign-up $ quote
@@ -365,7 +368,7 @@
                     :style $ merge ui/button
                       {} (:color :red) (:border-color :red)
                     :on-click $ fn (e dispatch!) (dispatch! :user/log-out nil)
-                      .removeItem js/localStorage $ :storage-key config/site
+                      .!removeItem js/localStorage $ :storage-key config/site
                   <> "\"Log out"
     |app.comp.login $ {}
       :ns $ quote
@@ -417,7 +420,7 @@
           defn on-submit (username password signup?)
             fn (e dispatch!)
               dispatch! (if signup? :user/sign-up :user/log-in) ([] username password)
-              .setItem js/localStorage (:storage-key config/site)
+              .!setItem js/localStorage (:storage-key config/site)
                 format-cirru-edn $ [] username password
     |app.comp.navigation $ {}
       :ns $ quote
@@ -495,7 +498,7 @@
             :states $ {}
               :cursor $ []
         |mount-target $ quote
-          def mount-target $ .querySelector js/document "\".app"
+          def mount-target $ js/document.querySelector "\".app"
         |connect! $ quote
           defn connect! () $ let
               url-obj $ url-parse js/location.href true
