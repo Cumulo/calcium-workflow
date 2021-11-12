@@ -1783,14 +1783,6 @@
                     :data $ {}
                       |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636649577851) (:text |raise)
                       |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636649597482) (:text "|\"reloading only happens in dev mode")
-              |vD $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1636643415233)
-                :data $ {}
-                  |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636643415233) (:text |do)
-                  |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636643624618) (:text |main!)
-                  |r $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1636643420958)
-                    :data $ {}
-                      |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636643421312) (:text |;)
-                      |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636649607542) (:text "|\"touch it")
               |vT $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1593255076396)
                 :data $ {}
                   |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1593255076725) (:text |clear-twig-caches!) (:id |BTUqyb3x4D)
@@ -1850,6 +1842,13 @@
                     |v $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1614221396290)
                       :data $ {}
                         |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1614221399308) (:text |memof-call)
+                |y $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1636712076557)
+                  :data $ {}
+                    |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636712084750) (:text |calcit.std.rand)
+                    |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636712086249) (:text |:refer)
+                    |r $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1636712086611)
+                      :data $ {}
+                        |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636712086961) (:text |rand-hex-color!)
               :id |HkOlxUZlRH-
           :id |rkSex8bg0S-
         :defs $ {}
@@ -1931,7 +1930,9 @@
                               |yT $ {} (:type :expr) (:by |root) (:at 1524279105545)
                                 :data $ {}
                                   |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1635183357696) (:text |:color) (:id |rycrDmO2fleaf)
-                                  |j $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1635183359900) (:text "|\"red")
+                                  |j $ {} (:type :expr) (:by |B1y7Rc-Zz) (:at 1636712063673)
+                                    :data $ {}
+                                      |T $ {} (:type :leaf) (:by |B1y7Rc-Zz) (:at 1636712072821) (:text |rand-hex-color!)
                                 :id |rycrDmO2f
                               |T $ {} (:type :leaf) (:by |root) (:at 1500541255553) (:text |{}) (:id |rJPQl8ZgCHb)
                               |v $ {} (:type :expr) (:by nil) (:at 1500541255553)

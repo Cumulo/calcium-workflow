@@ -212,7 +212,6 @@
         |reload! $ quote
           defn reload! () (println "\"Code updated..")
             if (not config/dev?) (raise "\"reloading only happens in dev mode")
-            do main! $ ; "\"touch it"
             clear-twig-caches!
             reset! *reel $ refresh-reel @*reel @*initial-db updater
             sync-clients! @*reader-reel
@@ -221,6 +220,7 @@
         ns app.twig.container $ :require
           app.twig.user :refer $ twig-user
           memof.alias :refer $ memof-call
+          calcit.std.rand :refer $ rand-hex-color!
       :defs $ {}
         |twig-container $ quote
           defn twig-container (db session records)
@@ -240,7 +240,7 @@
                       :home $ :pages db
                       :profile $ memof-call twig-members (:sessions db) (:users db)
                   :count $ count (:sessions db)
-                  :color "\"red"
+                  :color $ rand-hex-color!
                 {}
         |twig-members $ quote
           defn twig-members (sessions users)
