@@ -1,8 +1,11 @@
 
 {} (:package |app)
-  :configs $ {} (:init-fn |app.server/main!) (:reload-fn |app.server/reload!)
-    :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
-    :version nil
+  :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!)
+    :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
+    :version |0.0.1
+  :entries $ {}
+    :server $ {} (:port 6001) (:storage-key |calcit.cirru) (:init-fn |app.server/main!) (:reload-fn |app.server/reload!)
+      :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
   :files $ {}
     |app.comp.container $ {}
       :ns $ quote
@@ -40,7 +43,7 @@
                     case-default (:name router) (<> router)
                       :home $ div
                         {} $ :style
-                          {} $ :padding "\"8px"
+                          merge ui/expand $ {} (:padding "\"8px")
                         input $ {} (:style ui/input)
                           :value $ :demo state
                         =< 8 nil
@@ -180,7 +183,7 @@
           defn dispatch! (op op-data sid)
             let
                 op-id $ generate-id!
-                op-time "\"TODO TIME"
+                op-time $ str (get-time!)
               if config/dev? $ println "\"Dispatch!" (str op) op-data sid
               if (= op :effect/persist) (persist-db!)
                 reset! *reel $ reel-reducer @*reel updater op op-data sid op-id op-time config/dev?
@@ -207,10 +210,11 @@
         |*client-caches $ quote
           defatom *client-caches $ {}
         |reload! $ quote
-          defn reload! () (println "\"Code updated.") (clear-twig-caches!)
+          defn reload! () (println "\"Code updated..")
+            if (not config/dev?) (raise "\"reloading only happens in dev mode")
+            do main! $ ; "\"touch it"
+            clear-twig-caches!
             reset! *reel $ refresh-reel @*reel @*initial-db updater
-            ; js/clearTimeout @*loop-trigger
-            ; render-loop! *loop-trigger
             sync-clients! @*reader-reel
     |app.twig.container $ {}
       :ns $ quote
@@ -228,7 +232,9 @@
               merge base-data $ if logged-in?
                 {}
                   :user $ memof-call twig-user
-                    get-in db $ [] :users (:user-id session)
+                    dissoc
+                      get-in db $ [] :users (:user-id session)
+                      , :tasks
                   :router $ assoc router :data
                     case-default (:name router) ({})
                       :home $ :pages db
@@ -360,7 +366,7 @@
                   {}
                     :style $ merge ui/button
                     :on-click $ fn (e d!)
-                      js/location.replace $ str js/location.origin "\"?time=" (.now js/Date)
+                      js/location.replace $ str js/location.origin "\"?time=" (js/Date.now)
                   <> "\"Refresh"
                 =< 8 nil
                 button
@@ -555,4 +561,4 @@
         |dev? $ quote
           def dev? $ = "\"dev" (get-env "\"mode")
         |site $ quote
-          def site $ {} (:port 5021) (:title "\"Cumulo") (:icon "\"http://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"workflow-storage-calcit") (:storage-file "\"storage.cirru")
+          def site $ {} (:port 5021) (:title "\"Calcium.") (:icon "\"http://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")

@@ -4,9 +4,9 @@
     "shortid": "^2.2.16"
   },
   "scripts": {
-    "compile-page": "cr --emit-js --once --init-fn app.client/main! --reload-fn app.client/reload! --emit-path out-page",
+    "compile-page": "cr --emit-js --once --emit-path out-page",
     "release-page": "vite build --base=./",
-    "watch-page": "cr --emit-js --emit-path out-page/ --init-fn app.client/main! --reload-fn app.client/reload!"
+    "watch-page": "cr --emit-js --emit-path out-page/"
   },
   "devDependencies": {
     "bottom-tip": "^0.1.2",
