@@ -143,7 +143,7 @@
                   new-store $ twig-container db session records
                   changes $ diff-twig old-store new-store
                     {} $ :key :id
-                when config/dev? $ println "\"Changes for" sid "\":" changes (count records)
+                ; when config/dev? $ println "\"Changes for" sid "\":" changes (count records)
                 if
                   not= changes $ []
                   do
@@ -164,7 +164,7 @@
             println "\"Running mode:" $ if config/dev? "\"dev" "\"release"
             let
                 p? $ get-env "\"port"
-                port $ if (some? p?) (js/parseInt p?) (:port config/site)
+                port $ if (some? p?) (parse-float p?) (:port config/site)
               run-server! port
               println $ str "\"Server started on port:" port
             do (; "\"init it before doing multi-threading") (identity @*reader-reel)
