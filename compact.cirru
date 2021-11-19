@@ -115,7 +115,7 @@
           app.$meta :refer $ calcit-dirname
           calcit.std.fs :refer $ path-exists? check-write-file!
           calcit.std.time :refer $ set-interval
-          calcit.std.date :refer $ get-time! extract-time
+          calcit.std.date :refer $ Date get-time!
           calcit.std.path :refer $ join-path
       :defs $ {}
         |*initial-db $ quote
@@ -173,7 +173,7 @@
             on-control-c on-exit!
         |get-backup-path! $ quote
           defn get-backup-path! () $ let
-              now $ extract-time (get-time!)
+              now $ .extract (get-time!)
             join-path calcit-dirname "\"backups"
               str $ :month now
               str (:day now) "\"-snapshot.cirru"
@@ -183,7 +183,7 @@
           defn dispatch! (op op-data sid)
             let
                 op-id $ generate-id!
-                op-time $ str (get-time!)
+                op-time $ -> (get-time!) (.timestamp)
               if config/dev? $ println "\"Dispatch!" (str op) op-data sid
               if (= op :effect/persist) (persist-db!)
                 reset! *reel $ reel-reducer @*reel updater op op-data sid op-id op-time config/dev?
