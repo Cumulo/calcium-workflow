@@ -9,7 +9,7 @@
     "watch-page": "cr --emit-js"
   },
   "devDependencies": {
-    "bottom-tip": "^0.1.3-a1",
+    "bottom-tip": "^0.1.3",
     "url-parse": "^1.5.4",
     "vite": "^2.7.13"
   },
