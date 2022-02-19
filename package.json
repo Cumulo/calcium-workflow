@@ -1,7 +1,6 @@
 {
   "dependencies": {
-    "@calcit/procs": "^0.5.17",
-    "shortid": "^2.2.16"
+    "@calcit/procs": "^0.5.17"
   },
   "scripts": {
     "compile-page": "cr --emit-js --once",
