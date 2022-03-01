@@ -49,6 +49,8 @@
                         =< 8 nil
                         <> "\"demo page"
                         pre $ {}
+                          :style $ {} (:line-height 1.4) (:padding 4)
+                            :border $ str "\"1px solid #ddd"
                           :inner-text $ str "\"backend data" (format-cirru-edn store)
                       :profile $ comp-profile (:user store) (:data router)
                     comp-login $ >> states :login
@@ -543,12 +545,11 @@
                 when config/dev? $ js/console.log "\"Changes" (to-js-data changes)
                 reset! *store $ patch-twig @*store changes
         |simulate-login! $ quote
-          defn simulate-login! () $ let
-              raw $ .!getItem js/localStorage (:storage-key config/site)
-            if (some? raw)
-              do (println "\"Found storage.")
-                dispatch! :user/log-in $ parse-cirru-edn raw
-              do $ println "\"Found no storage."
+          defn simulate-login! () $ if-let
+            raw $ js/localStorage.getItem (:storage-key config/site)
+            do (println "\"Found storage.")
+              dispatch! :user/log-in $ parse-cirru-edn raw
+            do $ println "\"Found no storage."
         |reload! $ quote
           defn reload! () $ if (some? client-errors) (hud! "\"error" client-errors)
             do (hud! "\"inactive" nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!)
@@ -561,4 +562,4 @@
         |dev? $ quote
           def dev? $ = "\"dev" (get-env "\"mode")
         |site $ quote
-          def site $ {} (:port 5021) (:title "\"Calcium.") (:icon "\"http://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")
+          def site $ {} (:port 5021) (:title "\"Calcium") (:icon "\"https://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")
