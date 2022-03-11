@@ -93,13 +93,13 @@
           def user $ {} (:name nil) (:id nil) (:nickname nil) (:avatar nil) (:password nil)
         |session $ quote
           def session $ {} (:user-id nil) (:id nil) (:nickname nil)
-            :router $ do router
+            :router $ noted router
               {} (:name :home) (:data nil) (:router nil)
             :messages $ {}
         |database $ quote
           def database $ {}
-            :sessions $ do session ({})
-            :users $ do user ({})
+            :sessions $ noted session ({})
+            :users $ noted user ({})
         |router $ quote
           def router $ {} (:name nil) (:title nil)
             :data $ {}
