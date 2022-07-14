@@ -95,14 +95,14 @@
                 router-data $ :data router
               if (nil? store) (comp-offline)
                 div
-                  {} $ :style (merge ui/global ui/fullscreen ui/column)
+                  {} $ :class-name (str-spaced css/global css/fullscreen css/column)
                   comp-navigation (:logged-in? store) (:count store)
                   if (:logged-in? store)
                     case-default (:name router) (<> router)
                       :home $ div
-                        {} $ :style
-                          merge ui/expand $ {} (:padding "\"8px")
-                        input $ {} (:style ui/input)
+                        {} (:class-name css/expand)
+                          :style $ {} (:padding "\"8px")
+                        input $ {} (:class-name css/input)
                           :value $ :demo state
                         =< 8 nil
                         <> "\"demo page"
@@ -140,15 +140,20 @@
               <> "\"No connection..." $ {} (:font-family ui/font-fancy) (:font-size 24)
         |comp-status-color $ quote
           defcomp comp-status-color (color)
-            div $ {}
+            div $ {} (:class-name css-status-color)
               :style $ let
                   size 24
-                {} (:width size) (:height size) (:position :absolute) (:bottom 60) (:left 8) (:background-color color) (:border-radius "\"50%") (:opacity 0.6) (:pointer-events :none)
+                {} (:width size) (:height size) (:background-color color)
+        |css-status-color $ quote
+          defstyle css-status-color $ {}
+            "\"$0" $ {} (:position :absolute) (:bottom 60) (:left 8) (:border-radius "\"50%") (:opacity 0.6) (:pointer-events :none)
       :ns $ quote
         ns app.comp.container $ :require
           hsl.core :refer $ hsl
           respo-ui.core :as ui
+          respo-ui.css :as css
           respo.core :refer $ defcomp <> >> div span button input pre
+          respo.css :refer $ defstyle
           respo.comp.inspect :refer $ comp-inspect
           respo.comp.space :refer $ =<
           app.comp.navigation :refer $ comp-navigation
@@ -167,33 +172,28 @@
                 cursor $ :cursor states
                 state $ or (:data states) initial-state
               div
-                {} $ :style (merge ui/flex ui/center)
+                {} $ :class-name (str-spaced css/flex css/center)
                 div ({})
-                  div
-                    {} $ :style ({})
+                  div ({})
                     div ({})
-                      input $ {} (:placeholder "\"Username")
+                      input $ {} (:placeholder "\"Username") (:class-name css/input)
                         :value $ :username state
-                        :style ui/input
                         :on-input $ fn (e d!)
                           d! cursor $ assoc state :username (:value e)
                     =< nil 8
                     div ({})
-                      input $ {} (:placeholder "\"Password")
+                      input $ {} (:placeholder "\"Password") (:class-name css/input)
                         :value $ :password state
-                        :style ui/input
                         :on-input $ fn (e d!)
                           d! cursor $ assoc state :password (:value e)
                   =< nil 8
                   div
                     {} $ :style
                       {} $ :text-align :right
-                    span $ {} (:inner-text "\"Sign up")
-                      :style $ merge ui/link
+                    span $ {} (:inner-text "\"Sign up") (:class-name css/link)
                       :on-click $ on-submit (:username state) (:password state) true
                     =< 8 nil
-                    span $ {} (:inner-text "\"Log in")
-                      :style $ merge ui/link
+                    span $ {} (:inner-text "\"Log in") (:class-name css/link)
                       :on-click $ on-submit (:username state) (:password state) false
         |initial-state $ quote
           def initial-state $ {} (:username "\"") (:password "\"")
@@ -206,9 +206,11 @@
       :ns $ quote
         ns app.comp.login $ :require
           respo.core :refer $ defcomp <> div input button span
+          respo.css :refer $ defstyle
           respo.comp.space :refer $ =<
           respo.comp.inspect :refer $ comp-inspect
           respo-ui.core :as ui
+          respo-ui.css :as css
           app.schema :as schema
           app.config :as config
     |app.comp.navigation $ {}
@@ -216,10 +218,7 @@
         |comp-navigation $ quote
           defcomp comp-navigation (logged-in? count-members)
             div
-              {} $ :style
-                merge ui/row-center $ {} (:height 48) (:justify-content :space-between) (:padding "\"0 16px") (:font-size 16)
-                  :border-bottom $ str "\"1px solid " (hsl 0 0 0 0.1)
-                  :font-family ui/font-fancy
+              {} $ :class-name (str-spaced css/row-center css-navigation)
               div
                 {}
                   :on-click $ fn (e d!)
@@ -234,10 +233,17 @@
                 <> $ if logged-in? "\"Me" "\"Guest"
                 =< 8 nil
                 <> count-members
+        |css-navigation $ quote
+          defstyle css-navigation $ {}
+            "\"$0" $ {} (:height 48) (:justify-content :space-between) (:padding "\"0 16px") (:font-size 16)
+              :border-bottom $ str "\"1px solid " (hsl 0 0 0 0.1)
+              :font-family ui/font-fancy
       :ns $ quote
         ns app.comp.navigation $ :require
           respo.util.format :refer $ hsl
+          respo-ui.css :as css
           respo-ui.core :as ui
+          respo.css :refer $ defstyle
           respo.comp.space :refer $ =<
           respo.core :refer $ defcomp <> span div
           app.config :as config
@@ -246,57 +252,59 @@
         |comp-profile $ quote
           defcomp comp-profile (user members)
             div
-              {} $ :style
-                merge ui/flex $ {} (:padding 16)
+              {} (:class-name css/flex)
+                :style $ {} (:padding 16)
               div
-                {} $ :style
-                  {} (:font-family ui/font-fancy) (:font-size 32) (:font-weight 100)
+                {} (:class-name css/font-fancy)
+                  :style $ {} (:font-size 32) (:font-weight 100)
                 <> $ str "\"Hello! " (:name user)
               =< nil 16
               div
-                {} $ :style ui/row
+                {} $ :class-name css/row
                 <> "\"Members:"
                 =< 8 nil
                 list->
-                  {} $ :style ui/row
+                  {} $ :class-name css/row
                   -> members (.to-list)
                     map $ fn (pair)
                       let[] (k username) pair $ [] k
                         div
-                          {} $ :style
-                            {} (:padding "\"0 8px")
-                              :border $ str "\"1px solid " (hsl 0 0 80)
-                              :border-radius "\"16px"
-                              :margin "\"0 4px"
+                          {} $ :class-name css-member-label
                           <> username
               =< nil 48
               div ({})
                 button
-                  {}
-                    :style $ merge ui/button
+                  {} (:class-name css/button)
                     :on-click $ fn (e d!)
                       js/location.replace $ str js/location.origin "\"?time=" (js/Date.now)
                   <> "\"Refresh"
                 =< 8 nil
                 button
-                  {}
-                    :style $ merge ui/button
-                      {} (:color :red) (:border-color :red)
+                  {} (:class-name css/button)
+                    :style $ {} (:color :red) (:border-color :red)
                     :on-click $ fn (e dispatch!) (dispatch! :user/log-out nil)
                       .!removeItem js/localStorage $ :storage-key config/site
                   <> "\"Log out"
+        |css-member-label $ quote
+          defstyle css-member-label $ {}
+            "\"$0" $ {} (:padding "\"0 8px")
+              :border $ str "\"1px solid " (hsl 0 0 80)
+              :border-radius "\"16px"
+              :margin "\"0 4px"
       :ns $ quote
         ns app.comp.profile $ :require
           respo.util.format :refer $ hsl
           app.schema :as schema
           respo-ui.core :as ui
+          respo-ui.css :as css
           respo.core :refer $ defcomp list-> <> span div button
+          respo.css :refer $ defstyle
           respo.comp.space :refer $ =<
           app.config :as config
     |app.config $ {}
       :defs $ {}
         |dev? $ quote
-          def dev? $ = "\"dev" (get-env "\"mode")
+          def dev? $ = "\"dev" (get-env "\"mode" "\"release")
         |site $ quote
           def site $ {} (:port 5021) (:title "\"Calcium") (:icon "\"https://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")
       :ns $ quote (ns app.config)
