@@ -6,9 +6,9 @@ Calcium workflow
 
 ### Usages
 
-Install Node.js, Yarn, [Calcit](https://github.com/calcit-lang/calcit_runner.rs) to start.
+Install Node.js, Yarn, [Calcit](https://github.com/calcit-lang/calcit) to start.
 
-Notice that you need to clone dependencies into `~/.config/calcit/modules/` manually.
+Clone dependencies into `~/.config/calcit/modules/` with `caps` command from Calcit.
 
 Code with [calcit-editor](https://github.com/calcit-lang/editor).
 
@@ -17,10 +17,12 @@ Run frontend:
 ```bash
 # dev mode
 yarn
+caps
 cr --emit-js # watch compile page code
 yarn vite # for browser app
 
 # release mode
+caps --ci
 cr --emit-js -1
 yarn build --base=./
 ```
