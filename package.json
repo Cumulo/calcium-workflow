@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@calcit/procs": "^0.6.26"
+    "@calcit/procs": "^0.6.27"
   },
   "scripts": {
     "compile-page": "cr --emit-js --once",
@@ -10,7 +10,7 @@
   "devDependencies": {
     "bottom-tip": "^0.1.5",
     "url-parse": "^1.5.10",
-    "vite": "^4.2.1"
+    "vite": "^4.3.5"
   },
   "version": "0.0.1"
 }
