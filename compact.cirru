@@ -24,14 +24,20 @@
                 :on-close $ fn (event) (reset! *store nil) (js/console.error "\"Lost connection!")
                 :on-data on-server-data
         |dispatch! $ quote
-          defn dispatch! (op op-data)
+          defn dispatch! (op ? op-data)
             when
               and config/dev? $ not= op :states
               println "\"Dispatch" op op-data
-            case-default op
-              ws-send! $ {} (:kind :op) (:op op) (:data op-data)
-              :states $ reset! *states (update-states @*states op-data)
-              :effect/connect $ connect!
+            if (tag? op)
+              recur $ :: op op-data
+              tag-match op
+                  :states cursor s
+                  reset! *states $ update-states @*states cursor s
+                (:effect/connect) (connect!)
+                _ $ ws-send!
+                  {} (:kind :op)
+                    :op $ nth op 0
+                    :data $ nth op 1
         |main! $ quote
           defn main! ()
             println "\"Running mode:" $ if config/dev? "\"dev" "\"release"
