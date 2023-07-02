@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@calcit/procs": "^0.7.3"
+    "@calcit/procs": "^0.7.4"
   },
   "scripts": {
     "compile-page": "cr --emit-js --once",
