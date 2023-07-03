@@ -8,7 +8,7 @@
     |Respo/respo-ui.calcit |main
     |Respo/respo-message.calcit |main
     |Cumulo/cumulo-util.calcit |main
-    |Cumulo/cumulo-reel.calcit |main
+    |Cumulo/cumulo-reel.calcit |0.0.9
     |mvc-works/ws-edn.calcit |main
     |Respo/respo-feather.calcit |main
     |Respo/alerts.calcit |main
