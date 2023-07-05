@@ -52,11 +52,12 @@
           def mount-target $ js/document.querySelector "\".app"
         |on-server-data $ quote
           defn on-server-data (data)
-            case-default (:kind data) (println "\"unknown server data kind:" data)
-              :patch $ let
-                  changes $ :data data
-                when config/dev? $ js/console.log "\"Changes" (to-js-data changes)
-                reset! *store $ patch-twig @*store changes
+            tag-match data
+                :patch changes
+                do
+                  when config/dev? $ js/console.log "\"Changes" (to-js-data changes)
+                  reset! *store $ patch-twig @*store changes
+              _ $ eprintln "\"unknown server data kind:" data
         |reload! $ quote
           defn reload! () $ if (some? client-errors) (hud! "\"error" client-errors)
             do (hud! "\"inactive" nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!)
@@ -427,8 +428,7 @@
                 if
                   not= changes $ []
                   do
-                    wss-send! sid $ format-cirru-edn
-                      {} (:kind :patch) (:data changes)
+                    wss-send! sid $ format-cirru-edn (:: :patch changes)
                     swap! *client-caches assoc sid new-store
             new-twig-loop!
       :ns $ quote
