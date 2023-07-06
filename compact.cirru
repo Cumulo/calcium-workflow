@@ -34,13 +34,11 @@
                   :states cursor s
                   reset! *states $ update-states @*states cursor s
                 (:effect/connect) (connect!)
-                _ $ ws-send!
-                  {} (:kind :op)
-                    :op $ nth op 0
-                    :data $ nth op 1
+                _ $ ws-send! op
         |main! $ quote
           defn main! ()
             println "\"Running mode:" $ if config/dev? "\"dev" "\"release"
+            if config/dev? $ load-console-formatter!
             render-app!
             connect!
             add-watch *store :changes $ fn (store prev) (render-app!)
@@ -55,7 +53,7 @@
             tag-match data
                 :patch changes
                 do
-                  when config/dev? $ js/console.log "\"Changes" (to-js-data changes)
+                  when config/dev? $ js/console.log "\"Changes" changes
                   reset! *store $ patch-twig @*store changes
               _ $ eprintln "\"unknown server data kind:" data
         |reload! $ quote
@@ -71,8 +69,10 @@
         |simulate-login! $ quote
           defn simulate-login! () $ if-let
             raw $ js/localStorage.getItem (:storage-key config/site)
-            do (println "\"Found storage.")
-              dispatch! :user/log-in $ parse-cirru-edn raw
+            let
+                pair $ parse-cirru-edn raw
+              do (println "\"Found storage.")
+                dispatch! $ :: :user/log-in (nth pair 0) (nth pair 1)
             do $ println "\"Found no storage."
       :ns $ quote
         ns app.client $ :require
@@ -207,7 +207,7 @@
         |on-submit $ quote
           defn on-submit (username password signup?)
             fn (e dispatch!)
-              dispatch! (if signup? :user/sign-up :user/log-in) ([] username password)
+              dispatch! $ if signup? (:: :user/sign-up username password) (:: :user/log-in username password)
               .!setItem js/localStorage (:storage-key config/site)
                 format-cirru-edn $ [] username password
       :ns $ quote
@@ -289,8 +289,9 @@
                 button
                   {} (:class-name css/button)
                     :style $ {} (:color :red) (:border-color :red)
-                    :on-click $ fn (e dispatch!) (dispatch! :user/log-out nil)
-                      .!removeItem js/localStorage $ :storage-key config/site
+                    :on-click $ fn (e dispatch!)
+                      dispatch! $ :: :user/log-out
+                      js/localStorage.removeItem $ :storage-key config/site
                   <> "\"Log out"
         |css-member-label $ quote
           defstyle css-member-label $ {}
@@ -348,13 +349,15 @@
           defatom *reel $ merge reel-schema
             {} (:base @*initial-db) (:db @*initial-db)
         |dispatch! $ quote
-          defn dispatch! (op op-data sid)
+          defn dispatch! (op sid)
             let
                 op-id $ generate-id!
                 op-time $ -> (get-time!) (.timestamp)
-              if config/dev? $ println "\"Dispatch!" (str op) op-data sid
-              if (= op :effect/persist) (persist-db!)
-                reset! *reel $ reel-reducer @*reel updater op op-data sid op-id op-time config/dev?
+              if config/dev? $ println "\"Dispatch!" (str op) sid
+              tag-match op
+                  :effect/persist
+                  persist-db!
+                _ $ reset! *reel (reel-reducer @*reel updater op sid op-id op-time config/dev?)
         |get-backup-path! $ quote
           defn get-backup-path! () $ let
               now $ .extract (get-time!)
@@ -400,14 +403,16 @@
               fn (data)
                 tag-match data
                     :connect sid
-                    do (dispatch! :session/connect nil sid) (println "\"New client.")
+                    do
+                      dispatch! (:: :session/connect) sid
+                      println "\"New client."
                   (:message sid msg)
                     let
                         action $ parse-cirru-edn msg
-                      case-default (:kind action) (println "\"unknown action:" action)
-                        :op $ dispatch! (:op action) (:data action) sid
+                      dispatch! action sid
                   (:disconnect sid)
-                    do (println "\"Client closed!") (dispatch! :session/disconnect nil sid)
+                    do (println "\"Client closed!")
+                      dispatch! (:: :session/disconnect) sid
                   _ $ println "\"unknown data:" data
         |storage-file $ quote
           def storage-file $ if (empty? calcit-dirname)
@@ -488,21 +493,21 @@
     |app.updater $ {}
       :defs $ {}
         |updater $ quote
-          defn updater (db op op-data sid op-id op-time)
+          defn updater (db op sid op-id op-time)
             let
                 session $ get-in db ([] :sessions sid)
                 user $ if (some? session)
                   get-in db $ [] :users (:user-id session)
-                f $ case-default op
-                  fn (& args) (println "\"Unknown op:" op) db
-                  :session/connect session/connect
-                  :session/disconnect session/disconnect
-                  :session/remove-message session/remove-message
-                  :user/log-in user/log-in
-                  :user/sign-up user/sign-up
-                  :user/log-out user/log-out
-                  :router/change router/change
-              f db op-data sid op-id op-time
+              tag-match op
+                  :session/connect
+                  session/connect db sid op-id op-time
+                (:session/disconnect) (session/disconnect db sid op-id op-time)
+                (:session/remove-message data) (session/remove-message db data sid op-id op-time)
+                (:user/log-in username password) (user/log-in db username password sid op-id op-time)
+                (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
+                (:user/log-out) (user/log-out db sid op-id op-time)
+                (:router/change data) (router/change db data sid op-id op-time)
+                _ $ do (eprintln "\"Unknown op:" op) db
       :ns $ quote
         ns app.updater $ :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
           respo-message.updater :refer $ update-messages
@@ -515,11 +520,11 @@
     |app.updater.session $ {}
       :defs $ {}
         |connect $ quote
-          defn connect (db op-data sid op-id op-time)
+          defn connect (db sid op-id op-time)
             assoc-in db ([] :sessions sid)
               merge schema/session $ {} (:id sid)
         |disconnect $ quote
-          defn disconnect (db op-data sid op-id op-time)
+          defn disconnect (db sid op-id op-time)
             update db :sessions $ fn (session) (dissoc session sid)
         |remove-message $ quote
           defn remove-message (db op-data sid op-id op-time)
@@ -531,10 +536,8 @@
     |app.updater.user $ {}
       :defs $ {}
         |log-in $ quote
-          defn log-in (db op-data sid op-id op-time)
-            let-sugar
-                  [] username password
-                  , op-data
+          defn log-in (db username password sid op-id op-time)
+            let
                 maybe-user $ -> (:users db) (vals) (.to-list)
                   find $ fn (user)
                     and $ = username (:name user)
@@ -551,13 +554,11 @@
                       assoc messages op-id $ {} (:id op-id)
                         :text $ str "\"No user named: " username
         |log-out $ quote
-          defn log-out (db op-data sid op-id op-time)
+          defn log-out (db sid op-id op-time)
             assoc-in db ([] :sessions sid :user-id) nil
         |sign-up $ quote
-          defn sign-up (db op-data sid op-id op-time)
-            let-sugar
-                  [] username password
-                  , op-data
+          defn sign-up (db username password sid op-id op-time)
+            let
                 maybe-user $ find
                   vals $ :users db
                   fn (user)
