@@ -12,16 +12,20 @@
           defatom *states $ {}
             :states $ {}
               :cursor $ []
-        |*store $ quote (defatom *store nil)
+        |*store $ quote
+          defatom *store $ :: :loading
         |connect! $ quote
           defn connect! () $ let
               url-obj $ url-parse js/location.href true
               host $ either (-> url-obj .-query .-host) js/location.hostname
               port $ either (-> url-obj .-query .-port) (:port config/site)
+            reset! *store $ :: :loading
             ws-connect! (str "\"ws://" host "\":" port)
               {}
                 :on-open $ fn (event) (simulate-login!)
-                :on-close $ fn (event) (reset! *store nil) (js/console.error "\"Lost connection!")
+                :on-close $ fn (event)
+                  reset! *store $ :: :offline
+                  js/console.error "\"Lost connection!"
                 :on-data on-server-data
         |dispatch! $ quote
           defn dispatch! (op ? op-data)
@@ -44,7 +48,9 @@
             add-watch *store :changes $ fn (store prev) (render-app!)
             add-watch *states :changes $ fn (states prev) (render-app!)
             on-page-touch $ fn ()
-              if (nil? @*store) (connect!)
+              if
+                = @*store $ :: :offline
+                connect!
             println "\"App started!"
         |mount-target $ quote
           def mount-target $ js/document.querySelector "\".app"
@@ -91,16 +97,16 @@
       :defs $ {}
         |comp-container $ quote
           defcomp comp-container (states store)
-            let
-                state $ either (:data states)
-                  {} $ :demo "\""
-                session $ :session
-                  either store $ {}
-                router $ either
-                  :router $ either store ({})
-                  {}
-                router-data $ :data router
-              if (nil? store) (comp-offline)
+            if (tuple? store) (comp-offline store)
+              let
+                  state $ either (:data states)
+                    {} $ :demo "\""
+                  session $ :session
+                    either store $ {}
+                  router $ either
+                    :router $ either store ({})
+                    {}
+                  router-data $ :data router
                 div
                   {} $ :class-name (str-spaced css/global css/fullscreen css/column)
                   comp-navigation (:logged-in? store) (:count store)
@@ -128,23 +134,29 @@
                     fn (info d!) (d! :session/remove-message info)
                   when dev? $ comp-reel (:reel-length store) ({})
         |comp-offline $ quote
-          defcomp comp-offline () $ div
-            {} $ :style
-              merge ui/global ui/fullscreen ui/column-dispersive $ {}
-                :background-color $ :theme config/site
-            div $ {}
-              :style $ {} (:height 0)
-            div $ {}
-              :style $ {}
-                :background-image $ str "\"url(" (:icon config/site) "\")"
-                :width 128
-                :height 128
-                :background-size :contain
+          defcomp comp-offline (mark)
             div
-              {}
-                :style $ {} (:cursor :pointer) (:line-height "\"32px")
-                :on-click $ fn (e d!) (d! :effect/connect nil)
-              <> "\"No connection..." $ {} (:font-family ui/font-fancy) (:font-size 24)
+              {} $ :style
+                merge ui/global ui/fullscreen ui/column-dispersive $ {}
+                  :background-color $ :theme config/site
+              div $ {}
+                :style $ {} (:height 0)
+              div $ {}
+                :style $ {}
+                  :background-image $ str "\"url(" (:icon config/site) "\")"
+                  :width 128
+                  :height 128
+                  :background-size :contain
+              div
+                {}
+                  :style $ {} (:cursor :pointer) (:line-height "\"32px")
+                  :on-click $ fn (e d!) (d! :effect/connect nil)
+                <>
+                  tag-match mark
+                      :loading
+                      , "\"Loading..."
+                    (:offline) "\"No connection..."
+                  {} (:font-family ui/font-fancy) (:font-size 24)
         |comp-status-color $ quote
           defcomp comp-status-color (color)
             div $ {} (:class-name css-status-color)
