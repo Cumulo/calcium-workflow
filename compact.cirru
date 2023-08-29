@@ -6,7 +6,7 @@
     :server $ {} (:init-fn |app.server/main!) (:port 6001) (:reload-fn |app.server/reload!) (:storage-key |calcit.cirru)
       :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
   :files $ {}
-    |app.client $ {}
+    |app.client $ %{} :FileEntry
       :defs $ {}
         |*states $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -104,7 +104,7 @@
             "\"url-parse" :default url-parse
             "\"bottom-tip" :default hud!
             "\"./calcit.build-errors" :default client-errors
-    |app.comp.container $ {}
+    |app.comp.container $ %{} :FileEntry
       :defs $ {}
         |comp-container $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -199,7 +199,7 @@
             app.config :refer $ dev?
             app.schema :as schema
             app.config :as config
-    |app.comp.login $ {}
+    |app.comp.login $ %{} :FileEntry
       :defs $ {}
         |comp-login $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -252,7 +252,7 @@
             respo-ui.css :as css
             app.schema :as schema
             app.config :as config
-    |app.comp.navigation $ {}
+    |app.comp.navigation $ %{} :FileEntry
       :defs $ {}
         |comp-navigation $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -289,7 +289,7 @@
             respo.comp.space :refer $ =<
             respo.core :refer $ defcomp <> span div
             app.config :as config
-    |app.comp.profile $ {}
+    |app.comp.profile $ %{} :FileEntry
       :defs $ {}
         |comp-profile $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -347,7 +347,7 @@
             respo.css :refer $ defstyle
             respo.comp.space :refer $ =<
             app.config :as config
-    |app.config $ {}
+    |app.config $ %{} :FileEntry
       :defs $ {}
         |dev? $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -357,7 +357,7 @@
             def site $ {} (:port 5021) (:title "\"Calcium") (:icon "\"https://cdn.tiye.me/logo/cumulo.png") (:theme "\"#eeeeff") (:storage-key "\"calcium-storage") (:storage-file "\"storage.cirru")
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote (ns app.config)
-    |app.schema $ {}
+    |app.schema $ %{} :FileEntry
       :defs $ {}
         |database $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -380,7 +380,7 @@
             def user $ {} (:name nil) (:id nil) (:nickname nil) (:avatar nil) (:password nil)
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote (ns app.schema)
-    |app.server $ {}
+    |app.server $ %{} :FileEntry
       :defs $ {}
         |*client-caches $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -511,7 +511,7 @@
             calcit.std.time :refer $ set-interval
             calcit.std.date :refer $ Date get-time!
             calcit.std.path :refer $ join-path
-    |app.twig.container $ {}
+    |app.twig.container $ %{} :FileEntry
       :defs $ {}
         |twig-container $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -548,7 +548,7 @@
             app.twig.user :refer $ twig-user
             memof.alias :refer $ memof-call
             calcit.std.rand :refer $ rand-hex-color!
-    |app.twig.user $ {}
+    |app.twig.user $ %{} :FileEntry
       :defs $ {}
         |twig-user $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -556,7 +556,7 @@
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote
           ns app.twig.user $ :require
-    |app.updater $ {}
+    |app.updater $ %{} :FileEntry
       :defs $ {}
         |updater $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -579,7 +579,7 @@
         :code $ quote
           ns app.updater $ :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
             respo-message.updater :refer $ update-messages
-    |app.updater.router $ {}
+    |app.updater.router $ %{} :FileEntry
       :defs $ {}
         |change $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -587,7 +587,7 @@
               assoc-in db ([] :sessions sid :router) op-data
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote (ns app.updater.router)
-    |app.updater.session $ {}
+    |app.updater.session $ %{} :FileEntry
       :defs $ {}
         |connect $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -607,7 +607,7 @@
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote
           ns app.updater.session $ :require (app.schema :as schema)
-    |app.updater.user $ {}
+    |app.updater.user $ %{} :FileEntry
       :defs $ {}
         |log-in $ %{} :CodeEntry (:doc |)
           :code $ quote
