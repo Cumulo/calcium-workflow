@@ -6,7 +6,7 @@
     :server $ {} (:init-fn |app.server/main!) (:port 6001) (:reload-fn |app.server/reload!) (:storage-key |calcit.cirru)
       :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
   :files $ {}
-    |app.client $ {}
+    |app.client $ %{} :FileEntry
       :defs $ {}
         |*states $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541010211) (:by nil)
@@ -603,7 +603,7 @@
                     |T $ %{} :Leaf (:at 1626338248112) (:by |B1y7Rc-Zz) (:text "|\"./calcit.build-errors")
                     |j $ %{} :Leaf (:at 1626338250205) (:by |B1y7Rc-Zz) (:text |:default)
                     |r $ %{} :Leaf (:at 1626338252649) (:by |B1y7Rc-Zz) (:text |client-errors)
-    |app.comp.container $ {}
+    |app.comp.container $ %{} :FileEntry
       :defs $ {}
         |comp-container $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541010211) (:by nil)
@@ -1256,7 +1256,7 @@
                     |j $ %{} :Leaf (:at 1535564718729) (:by |B1y7Rc-Zz) (:text |app.config)
                     |r $ %{} :Leaf (:at 1535564719687) (:by |B1y7Rc-Zz) (:text |:as)
                     |v $ %{} :Leaf (:at 1535564721387) (:by |B1y7Rc-Zz) (:text |config)
-    |app.comp.login $ {}
+    |app.comp.login $ %{} :FileEntry
       :defs $ {}
         |comp-login $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541010211) (:by nil)
@@ -1633,7 +1633,7 @@
                     |j $ %{} :Leaf (:at 1527788913217) (:by |root) (:text |app.config)
                     |r $ %{} :Leaf (:at 1527788914516) (:by |root) (:text |:as)
                     |v $ %{} :Leaf (:at 1527788915188) (:by |root) (:text |config)
-    |app.comp.navigation $ {}
+    |app.comp.navigation $ %{} :FileEntry
       :defs $ {}
         |comp-navigation $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541010211) (:by nil)
@@ -1860,7 +1860,7 @@
                     |j $ %{} :Leaf (:at 1536561755369) (:by |B1y7Rc-Zz) (:text |app.config)
                     |r $ %{} :Leaf (:at 1536561758845) (:by |B1y7Rc-Zz) (:text |:as)
                     |v $ %{} :Leaf (:at 1536561761903) (:by |B1y7Rc-Zz) (:text |config)
-    |app.comp.profile $ {}
+    |app.comp.profile $ %{} :FileEntry
       :defs $ {}
         |comp-profile $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541010211) (:by nil)
@@ -2205,7 +2205,7 @@
                     |j $ %{} :Leaf (:at 1527788937835) (:by |root) (:text |app.config)
                     |r $ %{} :Leaf (:at 1527788938747) (:by |root) (:text |:as)
                     |v $ %{} :Leaf (:at 1527788939786) (:by |root) (:text |config)
-    |app.config $ {}
+    |app.config $ %{} :FileEntry
       :defs $ {}
         |dev? $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1521911283590) (:by |root)
@@ -2258,7 +2258,7 @@
           :data $ {}
             |T $ %{} :Leaf (:at 1527788708227) (:by |root) (:text |ns)
             |j $ %{} :Leaf (:at 1527788708227) (:by |root) (:text |app.config)
-    |app.schema $ {}
+    |app.schema $ %{} :FileEntry
       :defs $ {}
         |database $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -2395,7 +2395,7 @@
           :data $ {}
             |T $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |ns)
             |j $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |app.schema)
-    |app.server $ {}
+    |app.server $ %{} :FileEntry
       :defs $ {}
         |*client-caches $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3185,7 +3185,7 @@
                     |r $ %{} :Expr (:at 1636563108442) (:by |B1y7Rc-Zz)
                       :data $ {}
                         |T $ %{} :Leaf (:at 1636563204696) (:by |B1y7Rc-Zz) (:text |join-path)
-    |app.twig.container $ {}
+    |app.twig.container $ %{} :FileEntry
       :defs $ {}
         |twig-container $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3414,7 +3414,7 @@
                     |r $ %{} :Expr (:at 1636712086611) (:by |B1y7Rc-Zz)
                       :data $ {}
                         |T $ %{} :Leaf (:at 1636712086961) (:by |B1y7Rc-Zz) (:text |rand-hex-color!)
-    |app.twig.user $ {}
+    |app.twig.user $ %{} :FileEntry
       :defs $ {}
         |twig-user $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3437,7 +3437,7 @@
             |r $ %{} :Expr (:at 1500541255553) (:by nil)
               :data $ {}
                 |T $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |:require)
-    |app.updater $ {}
+    |app.updater $ %{} :FileEntry
       :defs $ {}
         |updater $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3637,7 +3637,7 @@
                     |v $ %{} :Expr (:at 1529231114849) (:by |root)
                       :data $ {}
                         |j $ %{} :Leaf (:at 1529231118760) (:by |root) (:text |update-messages)
-    |app.updater.router $ {}
+    |app.updater.router $ %{} :FileEntry
       :defs $ {}
         |change $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3667,7 +3667,7 @@
           :data $ {}
             |T $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |ns)
             |j $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |app.updater.router)
-    |app.updater.session $ {}
+    |app.updater.session $ %{} :FileEntry
       :defs $ {}
         |connect $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
@@ -3776,7 +3776,7 @@
                     |j $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |app.schema)
                     |r $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |:as)
                     |v $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |schema)
-    |app.updater.user $ {}
+    |app.updater.user $ %{} :FileEntry
       :defs $ {}
         |log-in $ %{} :CodeEntry (:doc |)
           :code $ %{} :Expr (:at 1500541255553) (:by nil)
