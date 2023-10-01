@@ -56,6 +56,9 @@
                 if
                   = @*store $ :: :offline
                   connect!
+              visibility-heartbeat $ fn ()
+                if (map? @*store)
+                  ws-send! $ :: :effect/ping
               println "\"App started!"
         |mount-target $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -68,6 +71,7 @@
                   do
                     when config/dev? $ js/console.log "\"Changes" changes
                     reset! *store $ patch-twig @*store changes
+                (:effect/pong) (do :ok)
                 _ $ eprintln "\"unknown server data kind:" data
         |reload! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -100,7 +104,7 @@
             app.config :as config
             ws-edn.client :refer $ ws-connect! ws-send!
             recollect.patch :refer $ patch-twig
-            cumulo-util.core :refer $ on-page-touch
+            cumulo-util.core :refer $ on-page-touch visibility-heartbeat
             "\"url-parse" :default url-parse
             "\"bottom-tip" :default hud!
             "\"./calcit.build-errors" :default client-errors
@@ -408,6 +412,8 @@
                 tag-match op
                     :effect/persist
                     persist-db!
+                  (:effect/ping)
+                    wss-send! sid $ format-cirru-edn (:: :effect/pong)
                   _ $ reset! *reel (reel-reducer @*reel updater op sid op-id op-time config/dev?)
         |get-backup-path! $ %{} :CodeEntry (:doc |)
           :code $ quote
