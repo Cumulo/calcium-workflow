@@ -3128,9 +3128,6 @@
                                       |r $ %{} :Leaf (:at 1544724852267) (:by |B1y7Rc-Zz) (:text |assoc)
                                       |v $ %{} :Leaf (:at 1544724852267) (:by |B1y7Rc-Zz) (:text |sid)
                                       |x $ %{} :Leaf (:at 1544724852267) (:by |B1y7Rc-Zz) (:text |new-store)
-              |x $ %{} :Expr (:at 1593532341963) (:by |B1y7Rc-Zz)
-                :data $ {}
-                  |T $ %{} :Leaf (:at 1593532341963) (:by |B1y7Rc-Zz) (:text |new-twig-loop!)
       :ns $ %{} :CodeEntry (:doc |)
         :code $ %{} :Expr (:at 1500541255553) (:by nil)
           :data $ {}
@@ -3194,7 +3191,6 @@
                     |r $ %{} :Leaf (:at 1593255058305) (:by |B1y7Rc-Zz) (:text |:refer)
                     |v $ %{} :Expr (:at 1593255058544) (:by |B1y7Rc-Zz)
                       :data $ {}
-                        |j $ %{} :Leaf (:at 1593255059229) (:by |B1y7Rc-Zz) (:text |new-twig-loop!)
                         |r $ %{} :Leaf (:at 1593255068726) (:by |B1y7Rc-Zz) (:text |clear-twig-caches!)
                 |yyyv $ %{} :Expr (:at 1635160833287) (:by |B1y7Rc-Zz)
                   :data $ {}
@@ -3304,7 +3300,6 @@
                                   |T $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |:user)
                                   |j $ %{} :Expr (:at 1500541255553) (:by nil)
                                     :data $ {}
-                                      |D $ %{} :Leaf (:at 1614221450763) (:by |B1y7Rc-Zz) (:text |memof-call)
                                       |T $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |twig-user)
                                       |j $ %{} :Expr (:at 1636643548623) (:by |B1y7Rc-Zz)
                                         :data $ {}
@@ -3352,7 +3347,6 @@
                                               |T $ %{} :Leaf (:at 1524070646898) (:by |root) (:text |:profile)
                                               |j $ %{} :Expr (:at 1524070654495) (:by |root)
                                                 :data $ {}
-                                                  |D $ %{} :Leaf (:at 1614221408482) (:by |B1y7Rc-Zz) (:text |memof-call)
                                                   |T $ %{} :Leaf (:at 1524070662619) (:by |root) (:text |twig-members)
                                                   |j $ %{} :Expr (:at 1524070665615) (:by |root)
                                                     :data $ {}
@@ -3448,13 +3442,6 @@
                     |v $ %{} :Expr (:at 1500541255553) (:by nil)
                       :data $ {}
                         |j $ %{} :Leaf (:at 1500541255553) (:by |root) (:text |twig-user)
-                |x $ %{} :Expr (:at 1614221379796) (:by |B1y7Rc-Zz)
-                  :data $ {}
-                    |j $ %{} :Leaf (:at 1614221395305) (:by |B1y7Rc-Zz) (:text |memof.alias)
-                    |r $ %{} :Leaf (:at 1614221396097) (:by |B1y7Rc-Zz) (:text |:refer)
-                    |v $ %{} :Expr (:at 1614221396290) (:by |B1y7Rc-Zz)
-                      :data $ {}
-                        |j $ %{} :Leaf (:at 1614221399308) (:by |B1y7Rc-Zz) (:text |memof-call)
                 |y $ %{} :Expr (:at 1636712076557) (:by |B1y7Rc-Zz)
                   :data $ {}
                     |T $ %{} :Leaf (:at 1636712084750) (:by |B1y7Rc-Zz) (:text |calcit.std.rand)

@@ -501,7 +501,6 @@
                     do
                       wss-send! sid $ format-cirru-edn (:: :patch changes)
                       swap! *client-caches assoc sid new-store
-              new-twig-loop!
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)
@@ -511,7 +510,7 @@
             app.twig.container :refer $ twig-container
             recollect.diff :refer $ diff-twig
             wss.core :refer $ wss-serve! wss-send! wss-each!
-            recollect.twig :refer $ new-twig-loop! clear-twig-caches!
+            recollect.twig :refer $ clear-twig-caches!
             app.$meta :refer $ calcit-dirname
             calcit.std.fs :refer $ path-exists? check-write-file!
             calcit.std.time :refer $ set-interval
@@ -529,14 +528,14 @@
                     :reel-length $ count records
                 merge base-data $ if logged-in?
                   {}
-                    :user $ memof-call twig-user
+                    :user $ twig-user
                       dissoc
                         get-in db $ [] :users (:user-id session)
                         , :tasks
                     :router $ assoc router :data
                       case-default (:name router) ({})
                         :home $ :pages db
-                        :profile $ memof-call twig-members (:sessions db) (:users db)
+                        :profile $ twig-members (:sessions db) (:users db)
                     :count $ count (:sessions db)
                     :color $ rand-hex-color!
                   {}
@@ -552,7 +551,6 @@
         :code $ quote
           ns app.twig.container $ :require
             app.twig.user :refer $ twig-user
-            memof.alias :refer $ memof-call
             calcit.std.rand :refer $ rand-hex-color!
     |app.twig.user $ %{} :FileEntry
       :defs $ {}
