@@ -124,7 +124,7 @@
                       {}
                     router-data $ :data router
                   div
-                    {} $ :class-name (str-spaced css/global css/fullscreen css/column)
+                    {} $ :class-name (str-spaced css/preset css/global css/fullscreen css/column)
                     comp-navigation (:logged-in? store) (:count store)
                     if (:logged-in? store)
                       case-default (:name router) (<> router)
