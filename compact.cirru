@@ -173,7 +173,8 @@
                         :loading
                         , "\"Loading..."
                       (:offline) "\"No connection..."
-                    {} (:font-family ui/font-fancy) (:font-size 24)
+                    {} (:font-family ui/font-fancy) (:font-size 16)
+                      :color $ hsl 0 0 50
         |comp-status-color $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-status-color (color)
@@ -188,7 +189,7 @@
       :ns $ %{} :CodeEntry (:doc |)
         :code $ quote
           ns app.comp.container $ :require
-            hsl.core :refer $ hsl
+            respo.util.format :refer $ hsl
             respo-ui.core :as ui
             respo-ui.css :as css
             respo.core :refer $ defcomp <> >> div span button input pre
@@ -526,6 +527,7 @@
                   router $ :router session
                   base-data $ {} (:logged-in? logged-in?) (:session session)
                     :reel-length $ count records
+                    :attached $ {} (:type :msg) (:content "|SOME data")
                 merge base-data $ if logged-in?
                   {}
                     :user $ twig-user
