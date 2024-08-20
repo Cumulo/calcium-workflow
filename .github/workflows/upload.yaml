@@ -19,7 +19,7 @@ jobs:
 
     - uses: calcit-lang/setup-cr@0.0.4
       with:
-        version: '0.9.2'
+        version: '0.9.4'
 
     - run: caps --ci && cr --entry server -1 ir
 
