@@ -1,6 +1,6 @@
 
 {}
-  :calcit-version |0.9.5
+  :calcit-version |0.9.9
   :dependencies $ {}
     |calcit-lang/lilac |main
     |calcit-lang/memof |main
@@ -13,5 +13,5 @@
     |mvc-works/ws-edn.calcit |main
     |Respo/respo-feather.calcit |main
     |Respo/alerts.calcit |main
-    |calcit-lang/calcit-wss |main
+    |calcit-lang/calcit-wss |0.2.6
     |calcit-lang/calcit.std |main
