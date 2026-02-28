@@ -4,6 +4,18 @@
 
 📚 **Related**: [Respo UI](./llms/Respo.md)
 
+查看 Calcit 命令行工具的用法:
+
+```bash
+cr docs agents
+```
+
+查看 Respo 模块的具体用法
+
+```bash
+cr libs readme respo.calcit -f docs/Respo-Agent.md
+```
+
 ---
 
 ## Quick Reference
@@ -105,19 +117,6 @@ defn twig-user (user)
         sort-by :created-at
         reverse
         take 20
-```
-
-#### 5. **Create/Update UI** (Respo component)
-
-See [Respo.md](./llms/Respo.md) for UI development.
-
-```cirru
-defn comp-task-list (tasks)
-  div ({} (:class-name css/task-list))
-    -> tasks vals
-      map $ fn (task)
-        [] (:id task)
-          comp-task-item task
 ```
 
 ---
@@ -605,5 +604,4 @@ When adding a feature:
 
 **Further Reading**:
 
-- UI components → [Respo.md](./llms/Respo.md)
 - Template source → https://github.com/Cumulo/calcium-workflow
