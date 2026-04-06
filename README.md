@@ -1,6 +1,4 @@
-
-Calcium workflow
-----
+## Calcium workflow
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
@@ -16,25 +14,27 @@ Run frontend:
 
 ```bash
 # dev mode
-yarn
+corepack enable && corepack prepare yarn@4.12.0 --activate
+yarn install --immutable
 caps
-cr --emit-js # watch compile page code
+yarn watch-page
 yarn vite # for browser app
 
 # release mode
 caps --ci
-cr --emit-js -1
-yarn build --base=./
+yarn install --immutable
+yarn compile-page
+yarn release-page
 ```
 
 Run backend in calcit-rs:
 
 ```bash
 # dev mode
-mode=dev cr --entry server
+mode=dev cr compact.cirru --entry server -w
 
 # release mode
-cr --entry server
+cr compact.cirru --entry server
 ```
 
 ### License

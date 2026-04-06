@@ -1,16 +1,17 @@
 {
   "dependencies": {
-    "@calcit/procs": "^0.11.7"
+    "@calcit/procs": "^0.12.14"
   },
+  "packageManager": "yarn@4.12.0",
   "scripts": {
-    "compile-page": "cr --once js",
-    "release-page": "vite build --base=./",
-    "watch-page": "cr js"
+    "compile-page": "cr compact.cirru js",
+    "release-page": "yarn vite build --base=./",
+    "watch-page": "cr compact.cirru js -w"
   },
   "devDependencies": {
     "bottom-tip": "^0.1.5",
     "url-parse": "^1.5.10",
-    "vite": "^7.3.1"
+    "vite": "^8.0.5"
   },
   "version": "0.0.1"
 }
