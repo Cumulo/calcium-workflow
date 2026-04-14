@@ -44,7 +44,7 @@
                 println |Dispatch op op-data
               if (tag? op)
                 recur $ :: op op-data
-                tag-match op
+                match op
                     :states cursor s
                     reset! *states $ update-states @*states cursor s
                   (:effect/connect) (connect!)
@@ -81,7 +81,7 @@
         |on-server-data $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn on-server-data (data)
-              tag-match data
+              match data
                   :patch changes
                   do
                     when config/dev? $ js/console.log |Changes changes
@@ -204,7 +204,7 @@
                     :on-click $ fn (e d!)
                       d! $ :: :effect/connect
                   <>
-                    tag-match mark
+                    match mark
                         :loading
                         , |Loading...
                       (:offline) "|No connection..."
@@ -474,7 +474,7 @@
                   op-id $ generate-id!
                   op-time $ -> (get-time!) (.timestamp)
                 if config/dev? $ println |Dispatch! (str op) sid
-                tag-match op
+                match op
                     :effect/persist
                     persist-db!
                   (:effect/ping)
@@ -558,7 +558,7 @@
             defn run-server! (port)
               wss-serve! (&{} :port port)
                 fn (data)
-                  tag-match data
+                  match data
                       :connect sid
                       do
                         dispatch! (:: :session/connect) sid
@@ -685,7 +685,7 @@
                   session $ get-in db ([] :sessions sid)
                   user $ if (some? session)
                     get-in db $ [] :users (:user-id session)
-                tag-match op
+                match op
                     :session/connect
                     session/connect db sid op-id op-time
                   (:session/disconnect) (session/disconnect db sid op-id op-time)
