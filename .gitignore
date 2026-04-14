@@ -17,3 +17,5 @@ backups/
 
 .yarn/*.gz
 
+
+.calcit-snippets
