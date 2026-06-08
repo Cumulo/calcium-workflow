@@ -258,13 +258,17 @@
                         input $ {} (:placeholder |Username) (:class-name css/input)
                           :value $ :username state
                           :on-input $ fn (e d!)
-                            d! cursor 1 $ assoc state :username (:value e)
+                            let
+                                value $ :value e
+                              d! cursor 1 $ assoc state :username $ if (string? value) value |
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
                           :value $ :password state
                           :on-input $ fn (e d!)
-                            d! cursor $ assoc state :password (:value e)
+                            let
+                                value $ :value e
+                              d! cursor $ assoc state :password $ if (string? value) value |
                     =< nil 8
                     div
                       {} $ :style
