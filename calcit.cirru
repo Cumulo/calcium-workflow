@@ -55,7 +55,7 @@
               :args $ [] 'app.schema/Op :dynamic
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn main! () (bind-type :dispatch-op Op)
+            defn main! () $ with-type-slot (:dispatch-op Op)
               println "|Running mode:" $ if config/dev? |dev |release
               if config/dev? $ load-console-formatter!
               render-app!
@@ -501,7 +501,7 @@
               :args $ []
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn main! () (bind-type :dispatch-op Op)
+            defn main! () $ with-type-slot (:dispatch-op Op)
               println "|Running mode:" $ if config/dev? |dev |release
               let
                   p? $ get-env |port
