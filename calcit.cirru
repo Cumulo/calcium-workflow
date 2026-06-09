@@ -1,5 +1,5 @@
 
-{} (:about "|Machine-generated snapshot. AI AGENTS: never edit this file directly — changes will be overwritten on recompile. Inspect via `cr query`; modify via `cr edit` / `cr tree`. MANDATORY first step: run `cr docs agents --full`.") (:package |app)
+{} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app)
   :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!) (:version |0.0.1)
     :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
   :entries $ {}
@@ -45,7 +45,7 @@
               if (tag? op)
                 recur $ :: op op-data
                 match op
-                    :states cursor s
+                  (:states cursor s)
                     reset! *states $ update-states @*states cursor s
                   (:effect/connect) (connect!)
                   _ $ ws-send! op
@@ -82,7 +82,7 @@
           :code $ quote
             defn on-server-data (data)
               match data
-                  :patch changes
+                (:patch changes)
                   do
                     when config/dev? $ js/console.log |Changes changes
                     reset! *store $ patch-twig @*store changes
@@ -205,8 +205,7 @@
                       d! $ :: :effect/connect
                   <>
                     match mark
-                        :loading
-                        , |Loading...
+                      (:loading) |Loading...
                       (:offline) "|No connection..."
                     {} (:font-family ui/font-fancy) (:font-size 16)
                       :color $ hsl 0 0 50
@@ -260,7 +259,8 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor 1 $ assoc state :username $ if (string? value) value |
+                              d! cursor 1 $ assoc state :username
+                                if (string? value) value |
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
@@ -268,7 +268,8 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor $ assoc state :password $ if (string? value) value |
+                              d! cursor $ assoc state :password
+                                if (string? value) value |
                     =< nil 8
                     div
                       {} $ :style
@@ -479,8 +480,7 @@
                   op-time $ -> (get-time!) (.timestamp)
                 if config/dev? $ println |Dispatch! (str op) sid
                 match op
-                    :effect/persist
-                    persist-db!
+                  (:effect/persist) (persist-db!)
                   (:effect/ping)
                     wss-send! sid $ format-cirru-edn (:: :effect/pong)
                   _ $ reset! *reel (reel-reducer @*reel updater op sid op-id op-time config/dev?)
@@ -563,7 +563,7 @@
               wss-serve! (&{} :port port)
                 fn (data)
                   match data
-                      :connect sid
+                    (:connect sid)
                       do
                         dispatch! (:: :session/connect) sid
                         println "|New client."
@@ -690,8 +690,7 @@
                   user $ if (some? session)
                     get-in db $ [] :users (:user-id session)
                 match op
-                    :session/connect
-                    session/connect db sid op-id op-time
+                  (:session/connect) (session/connect db sid op-id op-time)
                   (:session/disconnect) (session/disconnect db sid op-id op-time)
                   (:session/remove-message data) (session/remove-message db data sid op-id op-time)
                   (:user/log-in username password) (user/log-in db username password sid op-id op-time)
