@@ -1,6 +1,6 @@
 
 {} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app)
-  :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!) (:version |0.0.1)
+  :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!) (:version |0.0.2)
     :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
   :entries $ {}
     :server $ {} (:init-fn |app.server/main!) (:reload-fn |app.server/reload!) (:version |0.0.0)
@@ -72,8 +72,9 @@
               println "|App started!"
           :examples $ []
           :schema $ :: :fn
-            {} (:return :unit)
+            {} (:return :dynamic)
               :args $ []
+              :features $ #{} :js-ffi
         |mount-target $ %{} :CodeEntry (:doc |) (:schema :dynamic)
           :code $ quote
             def mount-target $ js/document.querySelector |.app
