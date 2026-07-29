@@ -561,7 +561,8 @@
         |run-server! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn run-server! (port)
-              wss-serve! (&{} :port port)
+              wss-serve!
+                {} $ :port port
                 fn (data)
                   match data
                     (:connect sid)
