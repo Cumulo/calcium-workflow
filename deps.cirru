@@ -6,10 +6,10 @@
     |Respo/respo-feather.calcit |0.4.1
     |Respo/respo-message.calcit |0.0.10
     |Respo/respo-ui.calcit |0.6.5
-    |Respo/respo.calcit |0.16.50
+    |Respo/respo.calcit |0.16.57
     |calcit-lang/calcit-wss |0.2.10
     |calcit-lang/calcit.std |0.2.14
     |calcit-lang/lilac |0.5.1
-    |calcit-lang/memof |0.0.24
+    |calcit-lang/memof |0.0.26
     |calcit-lang/recollect |0.0.22
     |mvc-works/ws-edn.calcit |0.0.13
