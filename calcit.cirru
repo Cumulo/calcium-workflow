@@ -56,20 +56,21 @@
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn main! () $ with-type-slot (:dispatch-op Op)
-              println "|Running mode:" $ if config/dev? |dev |release
-              if config/dev? $ load-console-formatter!
-              render-app!
-              connect!
-              add-watch *store :changes $ fn (store prev) (render-app!)
-              add-watch *states :changes $ fn (states prev) (render-app!)
-              on-page-touch $ fn ()
-                if
-                  = @*store $ :: :offline
-                  connect!
-              visibility-heartbeat $ fn ()
-                if (map? @*store)
-                  ws-send! $ :: :effect/ping
-              println "|App started!"
+              do
+                println "|Running mode:" $ if config/dev? |dev |release
+                if config/dev? $ load-console-formatter!
+                render-app!
+                connect!
+                add-watch *store :changes $ fn (store prev) (render-app!)
+                add-watch *states :changes $ fn (states prev) (render-app!)
+                on-page-touch $ fn ()
+                  if
+                    = @*store $ :: :offline
+                    connect!
+                visibility-heartbeat $ fn ()
+                  if (map? @*store)
+                    ws-send! $ :: :effect/ping
+                println "|App started!"
           :examples $ []
           :schema $ :: :fn
             {} (:return :dynamic)
