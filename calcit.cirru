@@ -10,6 +10,9 @@
   :files $ {}
     |app.client $ %{} :FileEntry
       :defs $ {}
+        |*connected? $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote (defatom *connected? false)
+          :examples $ []
         |*states $ %{} :CodeEntry (:doc |) (:schema :dynamic)
           :code $ quote
             defatom *states $ {}
@@ -53,8 +56,8 @@
               ws-connect! (str |ws:// host |: port)
                 {}
                   :on-open $ fn (event)
-                    do (send-activity!) (simulate-login!)
-                  :on-close $ fn (event)
+                    do (reset! *connected? true) (send-activity!) (simulate-login!)
+                  :on-close $ fn (event) (reset! *connected? false)
                     reset! *store $ :: :offline
                     js/console.error "|Lost connection!"
                   :on-data on-server-data
@@ -93,10 +96,9 @@
                   = @*store $ :: :offline
                   connect!
               js/window.addEventListener |visibilitychange $ fn (event)
-                when (map? @*store) (send-activity!)
+                when @*connected? $ send-activity!
               visibility-heartbeat $ fn ()
-                when (map? @*store)
-                  ws-send! $ :: :sync/heartbeat @*sync-revision
+                when @*connected? $ ws-send! (:: :sync/heartbeat @*sync-revision)
               println "|App started!"
           :examples $ []
           :schema $ :: :fn
