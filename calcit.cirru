@@ -2,9 +2,11 @@
 {} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app)
   :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!) (:version |0.0.2)
     :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
+    :type-slots $ {} (:dispatch-op |app.schema/Op)
   :entries $ {}
     :server $ {} (:init-fn |app.server/main!) (:reload-fn |app.server/reload!) (:version |0.0.0)
       :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
+      :type-slots $ {} (:dispatch-op |app.schema/Op)
   :files $ {}
     |app.client $ %{} :FileEntry
       :defs $ {}
@@ -55,22 +57,21 @@
               :args $ [] 'app.schema/Op :dynamic
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn main! () $ with-type-slot (:dispatch-op Op)
-              do
-                println "|Running mode:" $ if config/dev? |dev |release
-                if config/dev? $ load-console-formatter!
-                render-app!
-                connect!
-                add-watch *store :changes $ fn (store prev) (render-app!)
-                add-watch *states :changes $ fn (states prev) (render-app!)
-                on-page-touch $ fn ()
-                  if
-                    = @*store $ :: :offline
-                    connect!
-                visibility-heartbeat $ fn ()
-                  if (map? @*store)
-                    ws-send! $ :: :effect/ping
-                println "|App started!"
+            defn main! () $ do
+              println "|Running mode:" $ if config/dev? |dev |release
+              if config/dev? $ load-console-formatter!
+              render-app!
+              connect!
+              add-watch *store :changes $ fn (store prev) (render-app!)
+              add-watch *states :changes $ fn (states prev) (render-app!)
+              on-page-touch $ fn ()
+                if
+                  = @*store $ :: :offline
+                  connect!
+              visibility-heartbeat $ fn ()
+                if (map? @*store)
+                  ws-send! $ :: :effect/ping
+              println "|App started!"
           :examples $ []
           :schema $ :: :fn
             {} (:return :dynamic)
@@ -503,7 +504,7 @@
               :args $ []
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn main! () $ with-type-slot (:dispatch-op Op)
+            defn main! ()
               println "|Running mode:" $ if config/dev? |dev |release
               let
                   p? $ get-env |port
