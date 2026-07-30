@@ -609,7 +609,7 @@
           :examples $ []
           :schema $ :: :fn
             {} (:return :unit)
-              :args $ [] :map
+              :args $ [] 'cumulo-reel.core/ReelState
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)
