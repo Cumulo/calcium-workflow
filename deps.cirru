@@ -11,5 +11,5 @@
     |calcit-lang/calcit.std |0.2.14
     |calcit-lang/lilac |0.5.1
     |calcit-lang/memof |0.0.26
-    |calcit-lang/recollect |0.0.22
+    |calcit-lang/recollect |0.0.23
     |mvc-works/ws-edn.calcit |0.0.13

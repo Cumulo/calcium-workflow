@@ -578,6 +578,7 @@
                     (:disconnect sid)
                       do (println "|Client closed!")
                         dispatch! (:: :session/disconnect) sid
+                        swap! *client-caches dissoc sid
                     _ $ println "|unknown data:" data
           :examples $ []
           :schema $ :: :fn
