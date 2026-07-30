@@ -20,6 +20,29 @@
           :code $ quote
             defatom *store $ :: :loading
           :examples $ []
+        |*sync-revision $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote (defatom *sync-revision 0)
+          :examples $ []
+        |ack-sync! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn ack-sync! (revision)
+              ws-send! $ :: :sync/ack revision
+          :examples $ []
+        |apply-server-patch! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn apply-server-patch! (base-revision revision changes)
+              if (= base-revision @*sync-revision)
+                let
+                    result $ try
+                      :: :ok $ patch-twig @*store changes
+                      fn (error) (:: :error error)
+                  match result
+                    (:ok next-store)
+                      do (reset! *store next-store) (reset! *sync-revision revision) (ack-sync! revision)
+                    (:error error)
+                      do (js/console.error |Failed-to-apply-server-patch error) (request-snapshot!)
+                do (js/console.warn |Sync-revision-mismatch base-revision @*sync-revision) (request-snapshot!)
+          :examples $ []
         |connect! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
@@ -29,7 +52,8 @@
               reset! *store $ :: :loading
               ws-connect! (str |ws:// host |: port)
                 {}
-                  :on-open $ fn (event) (simulate-login!)
+                  :on-open $ fn (event)
+                    do (send-activity!) (simulate-login!)
                   :on-close $ fn (event)
                     reset! *store $ :: :offline
                     js/console.error "|Lost connection!"
@@ -68,9 +92,11 @@
                 if
                   = @*store $ :: :offline
                   connect!
+              js/window.addEventListener |visibilitychange $ fn (event)
+                when (map? @*store) (send-activity!)
               visibility-heartbeat $ fn ()
-                if (map? @*store)
-                  ws-send! $ :: :effect/ping
+                when (map? @*store)
+                  ws-send! $ :: :sync/heartbeat @*sync-revision
               println "|App started!"
           :examples $ []
           :schema $ :: :fn
@@ -85,10 +111,12 @@
           :code $ quote
             defn on-server-data (data)
               match data
-                (:patch changes)
+                (:snapshot revision store)
+                  do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
+                (:patch base-revision revision changes)
                   do
                     when config/dev? $ js/console.log |Changes changes
-                    reset! *store $ patch-twig @*store changes
+                    apply-server-patch! base-revision revision changes
                 (:effect/pong) (do :ok)
                 _ $ eprintln "|unknown server data kind:" data
           :examples $ []
@@ -115,6 +143,16 @@
           :schema $ :: :fn
             {} (:return :unit)
               :args $ []
+        |request-snapshot! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn request-snapshot! () $ ws-send! (:: :sync/resume @*sync-revision)
+          :examples $ []
+        |send-activity! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn send-activity! () $ if (= |visible js/document.visibilityState)
+              ws-send! $ :: :sync/active @*sync-revision
+              ws-send! $ :: :sync/idle @*sync-revision
+          :examples $ []
         |simulate-login! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn simulate-login! () $ if-let
@@ -459,6 +497,14 @@
           :code $ quote
             defatom *client-caches $ {}
           :examples $ []
+        |*client-states $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defatom *client-states $ {}
+          :examples $ []
+        |*dirty-clients $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defatom *dirty-clients $ #{}
+          :examples $ []
         |*initial-db $ %{} :CodeEntry (:doc |) (:schema :dynamic)
           :code $ quote
             defatom *initial-db $ if
@@ -474,6 +520,28 @@
           :code $ quote
             defatom *reel $ merge reel-schema
               {} (:base @*initial-db) (:db @*initial-db)
+          :examples $ []
+        |*shared-twig-cache $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defatom *shared-twig-cache $ {} (:revision -1) (:value nil)
+          :examples $ []
+        |*sync-revision $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote (defatom *sync-revision 0)
+          :examples $ []
+        |acknowledge-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn acknowledge-client! (sid revision)
+              let
+                  state $ get @*client-states sid
+                when
+                  = revision $ :sent-rev state
+                  swap! *client-states update sid $ fn (current)
+                    merge current $ {} (:acked-rev revision) (:sent-rev nil) (:in-flight? false)
+                  when
+                    >
+                      either (:dirty-rev state) 0
+                      , revision
+                    swap! *dirty-clients include sid
           :examples $ []
         |dispatch! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -502,6 +570,45 @@
           :schema $ :: :fn
             {} (:return :string)
               :args $ []
+        |get-shared-twig $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn get-shared-twig (reel revision)
+              let
+                  cached @*shared-twig-cache
+                if
+                  = revision $ :revision cached
+                  :value cached
+                  let
+                      value $ twig-shared (:db reel) (:records reel)
+                    reset! *shared-twig-cache $ {} (:revision revision) (:value value)
+                    , value
+          :examples $ []
+        |handle-client-message! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn handle-client-message! (action sid)
+              match action
+                (:sync/active client-revision) (mark-client-active! sid client-revision false)
+                (:sync/heartbeat client-revision) (touch-client! sid client-revision)
+                (:sync/idle client-revision) (mark-client-idle! sid client-revision)
+                (:sync/resume client-revision) (mark-client-active! sid client-revision true)
+                (:sync/ack revision) (acknowledge-client! sid revision)
+                _ $ dispatch! action sid
+          :examples $ []
+        |heartbeat-timeout $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote (def heartbeat-timeout 12000)
+          :examples $ []
+        |invalidate-sync-caches! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn invalidate-sync-caches! ()
+              reset! *shared-twig-cache $ {} (:revision -1) (:value nil)
+              reset! *client-caches $ {}
+              wss-each! $ fn (sid)
+                swap! *client-states update sid $ fn (state)
+                  merge state $ {} (:needs-snapshot? true) (:in-flight? false) (:sent-rev nil)
+                when
+                  = :active $ :status (get @*client-states sid)
+                  swap! *dirty-clients include sid
+          :examples $ []
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn main! ()
@@ -513,12 +620,63 @@
                 println $ str "|Server started on port:" port
               do (; "|init it before doing multi-threading") (identity @*reader-reel)
               set-interval 200 $ fn () (render-loop!)
+              set-interval 5000 $ fn () (sweep-idle-clients!)
               set-interval 600000 $ fn () (persist-db!)
               on-control-c on-exit!
           :examples $ []
           :schema $ :: :fn
             {} (:return :unit)
               :args $ []
+        |mark-client-active! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn mark-client-active! (sid client-revision force-snapshot?)
+              let
+                  state $ get @*client-states sid
+                  resumed? $ or force-snapshot?
+                    not= :active $ :status state
+                  next-state $ merge
+                    {} (:status :active)
+                      :last-heartbeat $ now-ms
+                      :acked-rev client-revision
+                      :sent-rev nil
+                      :dirty-rev @*sync-revision
+                      :in-flight? false
+                      :needs-snapshot? true
+                    , state
+                      {} (:status :active)
+                        :last-heartbeat $ now-ms
+                        :acked-rev $ if resumed? client-revision (:acked-rev state)
+                        :sent-rev $ if resumed? nil (:sent-rev state)
+                        :in-flight? $ if resumed? false (:in-flight? state)
+                        :needs-snapshot? $ or resumed? (:needs-snapshot? state)
+                swap! *client-states assoc sid next-state
+                when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
+          :examples $ []
+        |mark-client-idle! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn mark-client-idle! (sid client-revision)
+              when
+                some? $ get @*client-states sid
+                swap! *client-states update sid $ fn (state)
+                  merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:sent-rev nil) (:needs-snapshot? true)
+                swap! *client-caches dissoc sid
+                swap! *dirty-clients exclude sid
+          :examples $ []
+        |mark-clients-dirty! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn mark-clients-dirty! (revision)
+              wss-each! $ fn (sid)
+                let
+                    state $ get @*client-states sid
+                  swap! *client-states assoc-in ([] sid :dirty-rev) revision
+                  when
+                    = :active $ :status state
+                    swap! *dirty-clients include sid
+          :examples $ []
+        |now-ms $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn now-ms () $ -> (get-time!) (.timestamp)
+          :examples $ []
         |on-exit! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn on-exit! () (persist-db!) (; println "|exit code is...") (quit! 0)
@@ -526,6 +684,9 @@
           :schema $ :: :fn
             {} (:return :dynamic)
               :args $ []
+        |patch-operation-limit $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote (def patch-operation-limit 64)
+          :examples $ []
         |persist-db! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn persist-db! () $ let
@@ -544,17 +705,21 @@
             defn reload! () (println "|Code updated..")
               if (not config/dev?) (raise "|reloading only happens in dev mode")
               clear-twig-caches!
+              invalidate-sync-caches!
               reset! *reel $ refresh-reel @*reel @*initial-db updater
-              sync-clients! @*reader-reel
+              render-loop!
           :examples $ []
           :schema $ :: :fn
             {} (:return :unit)
               :args $ []
         |render-loop! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn render-loop! () $ when
-              not $ identical? @*reader-reel @*reel
-              reset! *reader-reel @*reel
+            defn render-loop! ()
+              when
+                not $ identical? @*reader-reel @*reel
+                reset! *reader-reel @*reel
+                swap! *sync-revision inc
+                mark-clients-dirty! @*sync-revision
               sync-clients! @*reader-reel
           :examples $ []
           :schema $ :: :fn
@@ -569,16 +734,25 @@
                   match data
                     (:connect sid)
                       do
+                        swap! *client-states assoc sid $ {} (:status :idle)
+                          :last-heartbeat $ now-ms
+                          :acked-rev 0
+                          :sent-rev nil
+                          :dirty-rev @*sync-revision
+                          :in-flight? false
+                          :needs-snapshot? true
                         dispatch! (:: :session/connect) sid
                         println "|New client."
                     (:message sid msg)
                       let
                           action $ parse-cirru-edn msg
-                        dispatch! action sid
+                        handle-client-message! action sid
                     (:disconnect sid)
                       do (println "|Client closed!")
                         dispatch! (:: :session/disconnect) sid
                         swap! *client-caches dissoc sid
+                        swap! *client-states dissoc sid
+                        swap! *dirty-clients exclude sid
                     _ $ println "|unknown data:" data
           :examples $ []
           :schema $ :: :fn
@@ -590,28 +764,80 @@
               str calcit-dirname $ :storage-file config/site
               str calcit-dirname |/ $ :storage-file config/site
           :examples $ []
+        |sweep-idle-clients! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn sweep-idle-clients! () $ let
+                current-time $ now-ms
+              wss-each! $ fn (sid)
+                let
+                    state $ get @*client-states sid
+                    last-heartbeat $ either (:last-heartbeat state) 0
+                  when
+                    and
+                      = :active $ :status state
+                      > (- current-time last-heartbeat) heartbeat-timeout
+                    mark-client-idle! sid $ :acked-rev state
+          :examples $ []
+        |sync-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn sync-client! (sid reel revision) (swap! *dirty-clients exclude sid)
+              let
+                  state $ get @*client-states sid
+                when
+                  and
+                    = :active $ :status state
+                    not $ :in-flight? state
+                  let
+                      db $ :db reel
+                      records $ :records reel
+                      session $ get-in db ([] :sessions sid)
+                      shared $ get-shared-twig reel revision
+                      old-store $ get @*client-caches sid
+                      new-store $ twig-container db session records shared
+                      needs-snapshot? $ or (:needs-snapshot? state) (nil? old-store)
+                      changes $ if needs-snapshot? ([])
+                        diff-twig old-store new-store $ {} (:key :id)
+                      send-snapshot? $ or needs-snapshot?
+                        > (count changes) patch-operation-limit
+                      base-revision $ either (:acked-rev state) 0
+                    if send-snapshot?
+                      do
+                        wss-send! sid $ format-cirru-edn (:: :snapshot revision new-store)
+                        swap! *client-caches assoc sid new-store
+                        swap! *client-states update sid $ fn (current)
+                          merge current $ {} (:sent-rev revision) (:in-flight? true) (:needs-snapshot? false)
+                      if
+                        not= changes $ []
+                        do
+                          wss-send! sid $ format-cirru-edn (:: :patch base-revision revision changes)
+                          swap! *client-caches assoc sid new-store
+                          swap! *client-states update sid $ fn (current)
+                            merge current $ {} (:sent-rev revision) (:in-flight? true) (:needs-snapshot? false)
+                        swap! *client-caches assoc sid new-store
+          :examples $ []
         |sync-clients! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn sync-clients! (reel)
-              wss-each! $ fn (sid)
+              when
+                not $ empty? @*dirty-clients
                 let
-                    db $ :db reel
-                    records $ :records reel
-                    session $ get-in db ([] :sessions sid)
-                    old-store $ or (get @*client-caches sid) nil
-                    new-store $ twig-container db session records
-                    changes $ diff-twig old-store new-store
-                      {} $ :key :id
-                  ; when config/dev? $ println "|Changes for" sid |: changes (count records)
-                  if
-                    not= changes $ []
-                    do
-                      wss-send! sid $ format-cirru-edn (:: :patch changes)
-                      swap! *client-caches assoc sid new-store
+                    revision @*sync-revision
+                  wss-each! $ fn (sid)
+                    when (includes? @*dirty-clients sid) (sync-client! sid reel revision)
           :examples $ []
           :schema $ :: :fn
             {} (:return :unit)
               :args $ [] 'cumulo-reel.core/ReelState
+        |touch-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn touch-client! (sid client-revision)
+              let
+                  state $ get @*client-states sid
+                if
+                  = :active $ :status state
+                  swap! *client-states assoc-in ([] sid :last-heartbeat) (now-ms)
+                  mark-client-active! sid client-revision true
+          :examples $ []
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)
@@ -619,7 +845,7 @@
             app.updater :refer $ updater
             cumulo-reel.core :refer $ reel-reducer refresh-reel reel-schema
             app.config :as config
-            app.twig.container :refer $ twig-container
+            app.twig.container :refer $ twig-container twig-shared
             recollect.diff :refer $ diff-twig
             wss.core :refer $ wss-serve! wss-send! wss-each!
             recollect.twig :refer $ clear-twig-caches!
@@ -632,13 +858,13 @@
       :defs $ {}
         |twig-container $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn twig-container (db session records)
+            defn twig-container (db session records shared)
               let
                   logged-in? $ some? (:user-id session)
                   router $ :router session
                   base-data $ {} (:logged-in? logged-in?) (:session session)
-                    :reel-length $ count records
-                    :attached $ {} (:type :msg) (:content "|SOME data")
+                    :reel-length $ :reel-length shared
+                    :attached $ :attached shared
                 merge base-data $ if logged-in?
                   {}
                     :user $ twig-user
@@ -647,15 +873,15 @@
                         , :tasks
                     :router $ assoc router :data
                       case-default (:name router) ({})
-                        :home $ :pages db
-                        :profile $ twig-members (:sessions db) (:users db)
-                    :count $ count (:sessions db)
-                    :color $ rand-hex-color!
+                        :home $ :pages shared
+                        :profile $ :members shared
+                    :count $ :session-count shared
+                    :color |#aaa
                   {}
           :examples $ []
           :schema $ :: :fn
             {} (:return :map)
-              :args $ [] :map :map :dynamic
+              :args $ [] :map :map :dynamic :map
         |twig-members $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn twig-members (sessions users)
@@ -668,11 +894,20 @@
           :schema $ :: :fn
             {} (:return :map)
               :args $ [] :map :map
+        |twig-shared $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :code $ quote
+            defn twig-shared (db records)
+              {}
+                :reel-length $ count records
+                :attached $ {} (:type :msg) (:content "|SOME data")
+                :pages $ :pages db
+                :members $ twig-members (:sessions db) (:users db)
+                :session-count $ count (:sessions db)
+          :examples $ []
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.twig.container $ :require
             app.twig.user :refer $ twig-user
-            calcit.std.rand :refer $ rand-hex-color!
     |app.twig.user $ %{} :FileEntry
       :defs $ {}
         |twig-user $ %{} :CodeEntry (:doc |)
