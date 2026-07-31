@@ -1,11 +1,11 @@
 
-{} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app)
-  :configs $ {} (:init-fn |app.client/main!) (:reload-fn |app.client/reload!) (:version |0.0.2)
-    :modules $ [] |respo.calcit/ |lilac/ |recollect/ |memof/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
-    :type-slots $ {} (:dispatch-op |app.schema/Op)
+{} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app) (:version |0.0.3)
   :entries $ {}
-    :server $ {} (:init-fn |app.server/main!) (:reload-fn |app.server/reload!) (:version |0.0.0)
-      :modules $ [] |lilac/ |recollect/ |memof/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
+    :default $ {} (:description |) (:init-fn 'app.client/main!) (:mode :native) (:reload-fn 'app.client/reload!)
+      :modules $ [] |respo.calcit/ |recollect/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
+      :type-slots $ {} (:dispatch-op |app.schema/Op)
+    :server $ {} (:description |) (:init-fn 'app.server/main!) (:mode :native) (:reload-fn 'app.server/reload!)
+      :modules $ [] |recollect/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
       :type-slots $ {} (:dispatch-op |app.schema/Op)
   :files $ {}
     |app.client $ %{} :FileEntry
@@ -822,10 +822,12 @@
             defn sync-clients! (reel)
               when
                 not $ empty? @*dirty-clients
+                begin-twig-frame!
                 let
                     revision @*sync-revision
                   wss-each! $ fn (sid)
                     when (includes? @*dirty-clients sid) (sync-client! sid reel revision)
+                finish-twig-frame!
           :examples $ []
           :schema $ :: :fn
             {} (:return :unit)
@@ -856,6 +858,7 @@
             calcit.std.time :refer $ set-interval
             calcit.std.date :refer $ Date get-time!
             calcit.std.path :refer $ join-path
+            recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
     |app.twig.container $ %{} :FileEntry
       :defs $ {}
         |twig-container $ %{} :CodeEntry (:doc |)
@@ -869,7 +872,7 @@
                     :attached $ :attached shared
                 merge base-data $ if logged-in?
                   {}
-                    :user $ twig-user
+                    :user $ memo-twig-by1 (:user-id session) twig-user
                       dissoc
                         get-in db $ [] :users (:user-id session)
                         , :tasks
@@ -910,6 +913,7 @@
         :code $ quote
           ns app.twig.container $ :require
             app.twig.user :refer $ twig-user
+            recollect.memo :refer $ memo-twig-by1
     |app.twig.user $ %{} :FileEntry
       :defs $ {}
         |twig-user $ %{} :CodeEntry (:doc |)
