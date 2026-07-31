@@ -168,7 +168,7 @@ defn twig-your-feature (db session)
 
 - ✅ Filter by `session` (never send all users' data)
 - ✅ Remove sensitive fields (`:password`, etc.)
-- ✅ Consider `defn-memoized` for expensive calculations
+- ✅ Use Recollect's typed Twig memo helpers for expensive pure projections
 - ❌ Don't return entire `db`
 
 ### 3. **Wiring Pattern** (Connect to Dispatcher)
@@ -338,12 +338,14 @@ cr -1 js
 
 ```cirru
 ns app.twig.analytics $ :require
-  memof.alias :refer $ defn-memoized
+  recollect.memo :refer $ memo-twig-by1
 
-; ✅ Memoize expensive calculations called in render loop
-defn-memoized compute-user-stats (user-data timestamp)
+defn compute-user-stats (user-data)
   ; Heavy computation...
   ...
+
+; ✅ Stable logical key + typed unary builder
+memo-twig-by1 (:id user-data) compute-user-stats user-data
 ```
 
 **Use when**:
@@ -356,6 +358,11 @@ defn-memoized compute-user-stats (user-data timestamp)
 
 - Function has side effects
 - Arguments always change
+
+The server owns `begin-twig-frame!`/`finish-twig-frame!` around one complete
+dirty-client synchronization pass. Feature twigs should not open nested frames.
+Use Respo's memo helpers for UI components, and keep revision/protocol caches
+explicit. Do not add the generic `memof` module back to application projects.
 
 ### Optimize Diffs
 
