@@ -620,7 +620,7 @@
                   port $ if (some? p?) (parse-float p?) (:port config/site)
                 run-server! port
                 println $ str "|Server started on port:" port
-              do (; "|init it before doing multi-threading") (identity @*reader-reel)
+              do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
               set-interval 200 $ fn () (render-loop!)
               set-interval 5000 $ fn () (sweep-idle-clients!)
               set-interval 600000 $ fn () (persist-db!)
