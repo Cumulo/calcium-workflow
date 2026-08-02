@@ -1,7 +1,7 @@
 
 {} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app) (:version |0.0.3)
   :entries $ {}
-    :default $ {} (:description |) (:init-fn 'app.client/main!) (:mode :native) (:reload-fn 'app.client/reload!)
+    :default $ {} (:description |) (:init-fn 'app.client/main!) (:mode :js) (:reload-fn 'app.client/reload!)
       :modules $ [] |respo.calcit/ |recollect/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
       :type-slots $ {} (:dispatch-op |app.schema/Op)
     :server $ {} (:description |) (:init-fn 'app.server/main!) (:mode :native) (:reload-fn 'app.server/reload!)
@@ -10,28 +10,33 @@
   :files $ {}
     |app.client $ %{} :FileEntry
       :defs $ {}
-        |*connected? $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |*connected? $ %{} :CodeEntry (:doc |)
           :code $ quote (defatom *connected? false)
           :examples $ []
-        |*states $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*states $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *states $ {}
               :states $ {}
                 :cursor $ []
           :examples $ []
-        |*store $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*store $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *store $ :: :loading
           :examples $ []
-        |*sync-revision $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*sync-revision $ %{} :CodeEntry (:doc |)
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
-        |ack-sync! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |ack-sync! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn ack-sync! (revision)
               ws-send! $ :: :sync/ack revision
           :examples $ []
-        |apply-server-patch! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |apply-server-patch! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn apply-server-patch! (base-revision revision changes)
               if (= base-revision @*sync-revision)
@@ -46,6 +51,7 @@
                       do (js/console.error |Failed-to-apply-server-patch error) (request-snapshot!)
                 do (js/console.warn |Sync-revision-mismatch base-revision @*sync-revision) (request-snapshot!)
           :examples $ []
+          :schema $ :: 'Dynamic
         |connect! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
@@ -62,8 +68,8 @@
                     js/console.error "|Lost connection!"
                   :on-data on-server-data
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
         |dispatch! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -79,9 +85,9 @@
                   (:effect/connect) (connect!)
                   _ $ ws-send! op
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :dynamic)
-              :args $ [] 'app.schema/Op :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
+              :args $ [] 'app.schema/Op 'Dynamic
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn main! () $ do
@@ -101,14 +107,15 @@
                 when @*connected? $ ws-send! (:: :sync/heartbeat @*sync-revision)
               println "|App started!"
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :dynamic)
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
               :args $ []
               :features $ #{} :js-ffi
-        |mount-target $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |mount-target $ %{} :CodeEntry (:doc |)
           :code $ quote
             def mount-target $ js/document.querySelector |.app
           :examples $ []
+          :schema $ :: 'Dynamic
         |on-server-data $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn on-server-data (data)
@@ -122,9 +129,9 @@
                 (:effect/pong) (do :ok)
                 _ $ eprintln "|unknown server data kind:" data
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
-              :args $ [] :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Dynamic
         |reload! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn reload! () $ if (some? client-errors) (hud! |error client-errors)
@@ -133,8 +140,8 @@
                 add-watch *states :changes $ fn (states prev) (render-app!)
                 println "|Code updated."
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
         |render-app! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -142,19 +149,21 @@
               comp-container (:states @*states) @*store
               , dispatch!
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
-        |request-snapshot! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |request-snapshot! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn request-snapshot! () $ ws-send! (:: :sync/resume @*sync-revision)
           :examples $ []
-        |send-activity! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |send-activity! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn send-activity! () $ if (= |visible js/document.visibilityState)
               ws-send! $ :: :sync/active @*sync-revision
               ws-send! $ :: :sync/idle @*sync-revision
           :examples $ []
+          :schema $ :: 'Dynamic
         |simulate-login! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn simulate-login! () $ if-let
@@ -165,8 +174,8 @@
                   dispatch! $ :: :user/log-in (nth pair 0) (nth pair 1)
               do $ println "|Found no storage."
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
@@ -185,7 +194,7 @@
             |./calcit.build-errors :default client-errors
     |app.comp.container $ %{} :FileEntry
       :defs $ {}
-        |comp-container $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |comp-container $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-container (states store)
               if (tuple? store) (comp-offline store)
@@ -226,7 +235,8 @@
                         d! $ :: :session/remove-message info
                     when dev? $ comp-reel (:reel-length store) ({})
           :examples $ []
-        |comp-offline $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |comp-offline $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-offline (mark)
               div
@@ -253,7 +263,8 @@
                     {} (:font-family ui/font-fancy) (:font-size 16)
                       :color $ hsl 0 0 50
           :examples $ []
-        |comp-status-color $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |comp-status-color $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-status-color (color)
               div $ {} (:class-name css-status-color)
@@ -261,11 +272,13 @@
                     size 24
                   {} (:width size) (:height size) (:background-color color)
           :examples $ []
-        |css-status-color $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |css-status-color $ %{} :CodeEntry (:doc |)
           :code $ quote
             defstyle css-status-color $ {}
               |$0 $ {} (:position :absolute) (:bottom 60) (:left 8) (:border-radius |50%) (:opacity 0.6) (:pointer-events :none)
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.comp.container $ :require
@@ -286,7 +299,7 @@
             app.config :as config
     |app.comp.login $ %{} :FileEntry
       :defs $ {}
-        |comp-login $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |comp-login $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-login (states)
               let
@@ -323,10 +336,12 @@
                       span $ {} (:inner-text "|Log in") (:class-name css/link)
                         :on-click $ on-submit (:username state) (:password state) false
           :examples $ []
-        |initial-state $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |initial-state $ %{} :CodeEntry (:doc |)
           :code $ quote
             def initial-state $ {} (:username |) (:password |)
           :examples $ []
+          :schema $ :: 'Dynamic
         |on-submit $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn on-submit (username password signup?)
@@ -335,9 +350,9 @@
                 .!setItem js/localStorage (:storage-key config/site)
                   format-cirru-edn $ [] username password
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :fn)
-              :args $ [] :string :string :bool
+          :schema $ :: 'Fn
+            {} (:return 'Fn)
+              :args $ [] 'String 'String 'Bool
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.comp.login $ :require
@@ -351,7 +366,7 @@
             app.config :as config
     |app.comp.navigation $ %{} :FileEntry
       :defs $ {}
-        |comp-navigation $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |comp-navigation $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-navigation (logged-in? count-members)
               div
@@ -373,13 +388,15 @@
                   =< 8 nil
                   <> count-members
           :examples $ []
-        |css-navigation $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |css-navigation $ %{} :CodeEntry (:doc |)
           :code $ quote
             defstyle css-navigation $ {}
               |$0 $ {} (:height 48) (:justify-content :space-between) (:padding "|0 16px") (:font-size 16)
                 :border-bottom $ str "|1px solid " (hsl 0 0 0 0.1)
                 :font-family ui/font-fancy
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.comp.navigation $ :require
@@ -392,7 +409,7 @@
             app.config :as config
     |app.comp.profile $ %{} :FileEntry
       :defs $ {}
-        |comp-profile $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |comp-profile $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-profile (user members)
               div
@@ -431,7 +448,8 @@
                         js/localStorage.removeItem $ :storage-key config/site
                     <> "|Log out"
           :examples $ []
-        |css-member-label $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |css-member-label $ %{} :CodeEntry (:doc |)
           :code $ quote
             defstyle css-member-label $ {}
               |$0 $ {} (:padding "|0 8px")
@@ -439,6 +457,7 @@
                 :border-radius |16px
                 :margin "|0 4px"
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.comp.profile $ :require
@@ -452,62 +471,73 @@
             app.config :as config
     |app.config $ %{} :FileEntry
       :defs $ {}
-        |dev? $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |dev? $ %{} :CodeEntry (:doc |)
           :code $ quote
             def dev? $ = |dev (get-env |mode |release)
           :examples $ []
-        |site $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |site $ %{} :CodeEntry (:doc |)
           :code $ quote
             def site $ {} (:port 5021) (:title |Calcium) (:icon |https://cdn.tiye.me/logo/cumulo.png) (:theme |#eeeeff) (:storage-key |calcium-storage) (:storage-file |storage.cirru)
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote (ns app.config)
     |app.schema $ %{} :FileEntry
       :defs $ {}
-        |Op $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |Op $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message :dynamic) (:user/log-in :string :string) (:user/sign-up :string :string) (:user/log-out) (:router/change :dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
+            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'Dynamic) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'Dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
+              (:states 'Dynamic 'Dynamic)
           :examples $ []
-        |database $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |database $ %{} :CodeEntry (:doc |)
           :code $ quote
             def database $ {}
               :sessions $ noted session ({})
               :users $ noted user ({})
           :examples $ []
-        |router $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |router $ %{} :CodeEntry (:doc |)
           :code $ quote
             def router $ {} (:name nil) (:title nil)
               :data $ {}
               :router nil
           :examples $ []
-        |session $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |session $ %{} :CodeEntry (:doc |)
           :code $ quote
             def session $ {} (:user-id nil) (:id nil) (:nickname nil)
               :router $ noted router
                 {} (:name :home) (:data nil) (:router nil)
               :messages $ {}
           :examples $ []
-        |user $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |user $ %{} :CodeEntry (:doc |)
           :code $ quote
             def user $ {} (:name nil) (:id nil) (:nickname nil) (:avatar nil) (:password nil)
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote (ns app.schema)
     |app.server $ %{} :FileEntry
       :defs $ {}
-        |*client-caches $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |*client-caches $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *client-caches $ {}
           :examples $ []
-        |*client-states $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*client-states $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *client-states $ {}
           :examples $ []
-        |*dirty-clients $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*dirty-clients $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *dirty-clients $ #{}
           :examples $ []
-        |*initial-db $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*initial-db $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *initial-db $ if
               path-exists? $ w-log storage-file
@@ -515,22 +545,27 @@
                 merge schema/database $ parse-cirru-edn (read-file storage-file)
               do (println "|Found no data") schema/database
           :examples $ []
-        |*reader-reel $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*reader-reel $ %{} :CodeEntry (:doc |)
           :code $ quote (defatom *reader-reel @*reel)
           :examples $ []
-        |*reel $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*reel $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *reel $ merge reel-schema
               {} (:base @*initial-db) (:db @*initial-db)
           :examples $ []
-        |*shared-twig-cache $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*shared-twig-cache $ %{} :CodeEntry (:doc |)
           :code $ quote
             defatom *shared-twig-cache $ {} (:revision -1) (:value nil)
           :examples $ []
-        |*sync-revision $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |*sync-revision $ %{} :CodeEntry (:doc |)
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
-        |acknowledge-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |acknowledge-client! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn acknowledge-client! (sid revision)
               let
@@ -545,6 +580,7 @@
                       , revision
                     swap! *dirty-clients include sid
           :examples $ []
+          :schema $ :: 'Dynamic
         |dispatch! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn dispatch! (op sid)
@@ -558,9 +594,9 @@
                     wss-send! sid $ format-cirru-edn (:: :effect/pong)
                   _ $ reset! *reel (reel-reducer @*reel updater op sid op-id op-time config/dev?)
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :dynamic)
-              :args $ [] 'app.schema/Op :string
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
+              :args $ [] 'app.schema/Op 'String
         |get-backup-path! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn get-backup-path! () $ let
@@ -569,10 +605,10 @@
                 str $ :month now
                 str (:day now) |-snapshot.cirru
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :string)
+          :schema $ :: 'Fn
+            {} (:return 'String)
               :args $ []
-        |get-shared-twig $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |get-shared-twig $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn get-shared-twig (reel revision)
               let
@@ -585,7 +621,8 @@
                     reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                     , value
           :examples $ []
-        |handle-client-message! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |handle-client-message! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn handle-client-message! (action sid)
               match action
@@ -596,10 +633,12 @@
                 (:sync/ack revision) (acknowledge-client! sid revision)
                 _ $ dispatch! action sid
           :examples $ []
-        |heartbeat-timeout $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |heartbeat-timeout $ %{} :CodeEntry (:doc |)
           :code $ quote (def heartbeat-timeout 12000)
           :examples $ []
-        |invalidate-sync-caches! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |invalidate-sync-caches! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn invalidate-sync-caches! ()
               reset! *shared-twig-cache $ {} (:revision -1) (:value nil)
@@ -611,6 +650,7 @@
                   = :active $ :status (get @*client-states sid)
                   swap! *dirty-clients include sid
           :examples $ []
+          :schema $ :: 'Dynamic
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn main! ()
@@ -626,10 +666,10 @@
               set-interval 600000 $ fn () (persist-db!)
               on-control-c on-exit!
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
-        |mark-client-active! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |mark-client-active! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn mark-client-active! (sid client-revision force-snapshot?)
               let
@@ -654,7 +694,8 @@
                 swap! *client-states assoc sid next-state
                 when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
           :examples $ []
-        |mark-client-idle! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |mark-client-idle! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn mark-client-idle! (sid client-revision)
               when
@@ -664,7 +705,8 @@
                 swap! *client-caches dissoc sid
                 swap! *dirty-clients exclude sid
           :examples $ []
-        |mark-clients-dirty! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |mark-clients-dirty! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn mark-clients-dirty! (revision)
               wss-each! $ fn (sid)
@@ -675,20 +717,23 @@
                     = :active $ :status state
                     swap! *dirty-clients include sid
           :examples $ []
-        |now-ms $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |now-ms $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn now-ms () $ -> (get-time!) (.timestamp)
           :examples $ []
+          :schema $ :: 'Dynamic
         |on-exit! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn on-exit! () (persist-db!) (; println "|exit code is...") (quit! 0)
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :dynamic)
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
               :args $ []
-        |patch-operation-limit $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |patch-operation-limit $ %{} :CodeEntry (:doc |)
           :code $ quote (def patch-operation-limit 64)
           :examples $ []
+          :schema $ :: 'Dynamic
         |persist-db! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn persist-db! () $ let
@@ -699,8 +744,8 @@
               check-write-file! storage-path file-content
               check-write-file! backup-path file-content
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
         |reload! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -711,8 +756,8 @@
               reset! *reel $ refresh-reel @*reel @*initial-db updater
               render-loop!
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
         |render-loop! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -724,8 +769,8 @@
                 mark-clients-dirty! @*sync-revision
               sync-clients! @*reader-reel
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ []
         |run-server! $ %{} :CodeEntry (:doc |)
           :code $ quote
@@ -757,16 +802,17 @@
                         swap! *dirty-clients exclude sid
                     _ $ println "|unknown data:" data
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
-              :args $ [] :number
-        |storage-file $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Number
+        |storage-file $ %{} :CodeEntry (:doc |)
           :code $ quote
             def storage-file $ if (empty? calcit-dirname)
               str calcit-dirname $ :storage-file config/site
               str calcit-dirname |/ $ :storage-file config/site
           :examples $ []
-        |sweep-idle-clients! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |sweep-idle-clients! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn sweep-idle-clients! () $ let
                 current-time $ now-ms
@@ -780,7 +826,8 @@
                       > (- current-time last-heartbeat) heartbeat-timeout
                     mark-client-idle! sid $ :acked-rev state
           :examples $ []
-        |sync-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Dynamic
+        |sync-client! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn sync-client! (sid reel revision) (swap! *dirty-clients exclude sid)
               let
@@ -817,6 +864,7 @@
                             merge current $ {} (:sent-rev revision) (:in-flight? true) (:needs-snapshot? false)
                         swap! *client-caches assoc sid new-store
           :examples $ []
+          :schema $ :: 'Dynamic
         |sync-clients! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn sync-clients! (reel)
@@ -829,10 +877,10 @@
                     when (includes? @*dirty-clients sid) (sync-client! sid reel revision)
                 finish-twig-frame!
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :unit)
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
               :args $ [] 'cumulo-reel.core/ReelState
-        |touch-client! $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+        |touch-client! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn touch-client! (sid client-revision)
               let
@@ -842,6 +890,7 @@
                   swap! *client-states assoc-in ([] sid :last-heartbeat) (now-ms)
                   mark-client-active! sid client-revision true
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)
@@ -884,9 +933,9 @@
                     :color |#aaa
                   {}
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :map :dynamic :map
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'Map 'Dynamic 'Map
         |twig-members $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn twig-members (sessions users)
@@ -896,10 +945,10 @@
                     get-in users $ [] (:user-id session) :name
                 pairs-map
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :map
-        |twig-shared $ %{} :CodeEntry (:doc |) (:schema :dynamic)
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'Map
+        |twig-shared $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn twig-shared (db records)
               {}
@@ -909,6 +958,7 @@
                 :members $ twig-members (:sessions db) (:users db)
                 :session-count $ count (:sessions db)
           :examples $ []
+          :schema $ :: 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.twig.container $ :require
@@ -920,9 +970,9 @@
           :code $ quote
             defn twig-user (user) (dissoc user :password)
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.twig.user $ :require
@@ -945,9 +995,9 @@
                   (:router/change data) (router/change db data sid op-id op-time)
                   _ $ do (eprintln "|Unknown op:" op) db
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :dynamic)
-              :args $ [] :map 'app.schema/Op :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
+              :args $ [] 'Map 'app.schema/Op 'String 'String 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.updater $ :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
@@ -960,9 +1010,9 @@
             defn change (db op-data sid op-id op-time)
               assoc-in db ([] :sessions sid :router) op-data
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :dynamic :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'Dynamic 'String 'String 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote (ns app.updater.router)
     |app.updater.session $ %{} :FileEntry
@@ -973,17 +1023,17 @@
               assoc-in db ([] :sessions sid)
                 merge schema/session $ {} (:id sid)
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'String 'String 'Dynamic
         |disconnect $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn disconnect (db sid op-id op-time)
               update db :sessions $ fn (session) (dissoc session sid)
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'String 'String 'Dynamic
         |remove-message $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn remove-message (db op-data sid op-id op-time)
@@ -991,9 +1041,9 @@
                 fn (messages)
                   dissoc messages $ :id op-data
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :dynamic :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'Dynamic 'String 'String 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.updater.session $ :require (app.schema :as schema)
@@ -1019,17 +1069,17 @@
                         assoc messages op-id $ {} (:id op-id)
                           :text $ str "|No user named: " username
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :string :string :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'String 'String 'String 'String 'Dynamic
         |log-out $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn log-out (db sid op-id op-time)
               assoc-in db ([] :sessions sid :user-id) nil
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'String 'String 'Dynamic
         |sign-up $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
@@ -1050,9 +1100,9 @@
                         :password $ md5 password
                         :avatar nil
           :examples $ []
-          :schema $ :: :fn
-            {} (:return :map)
-              :args $ [] :map :string :string :string :string :dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Map)
+              :args $ [] 'Map 'String 'String 'String 'String 'Dynamic
       :ns $ %{} :NsEntry (:doc |)
         :code $ quote
           ns app.updater.user $ :require
