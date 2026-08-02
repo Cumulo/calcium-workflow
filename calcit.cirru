@@ -788,7 +788,7 @@
                           :dirty-rev @*sync-revision
                           :in-flight? false
                           :needs-snapshot? true
-                        dispatch! (:: :session/connect) sid
+                        dispatch! (%:: schema/Op :session/connect) sid
                         println "|New client."
                     (:message sid msg)
                       let
@@ -796,7 +796,7 @@
                         handle-client-message! action sid
                     (:disconnect sid)
                       do (println "|Client closed!")
-                        dispatch! (:: :session/disconnect) sid
+                        dispatch! (%:: schema/Op :session/disconnect) sid
                         swap! *client-caches dissoc sid
                         swap! *client-states dissoc sid
                         swap! *dirty-clients exclude sid
