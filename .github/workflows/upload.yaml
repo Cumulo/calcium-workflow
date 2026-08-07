@@ -24,7 +24,7 @@ jobs:
 
       - uses: calcit-lang/setup-cr@0.0.9
 
-      - run: caps --ci && cr --entry server ir
+      - run: caps --ci && cr --entry server --check-only
 
       - run: yarn install --immutable && yarn compile-page && yarn release-page
 

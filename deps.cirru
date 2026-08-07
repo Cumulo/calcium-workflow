@@ -5,7 +5,7 @@
     |Respo/alerts.calcit |0.10.14
     |Respo/respo-feather.calcit |0.4.1
     |Respo/respo-message.calcit |0.0.11
-    |Respo/respo-ui.calcit |0.7.0
+    |Respo/respo-ui.calcit |0.7.1
     |Respo/respo.calcit |0.16.63
     |calcit-lang/calcit-wss |0.2.10
     |calcit-lang/calcit.std |0.2.14
