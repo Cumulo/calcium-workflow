@@ -320,10 +320,7 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor 1 $ assoc state :username
-                                option:fold value
-                                  fn () |
-                                  fn (input-value) input-value
+                              d! cursor 1 $ assoc state :username (value .unwrap-or |)
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
@@ -331,10 +328,7 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor $ assoc state :password
-                                option:fold value
-                                  fn () |
-                                  fn (input-value) input-value
+                              d! cursor $ assoc state :password (value .unwrap-or |)
                     =< nil 8
                     div
                       {} $ :style
@@ -390,9 +384,8 @@
                         {} $ :name :home
                     :style $ {} (:cursor :pointer)
                   <>
-                    option:fold (:title config/site)
-                      fn () |Calcium
-                      fn (title) title
+                      :title config/site
+                      , .unwrap-or |Calcium
                     , nil
                 div
                   {}
@@ -489,9 +482,10 @@
       :defs $ {}
         |dev? $ %{} :CodeEntry (:doc |)
           :code $ quote
-            def dev? $ option:fold (get-env |mode)
-              fn () $ = |dev |release
-              fn (mode) (= |dev mode)
+            def dev? $ if-let
+              mode $ get-env |mode
+              (= |dev mode)
+              (= |dev |release)
           :examples $ []
           :schema $ :: 'Dynamic
         |site $ %{} :CodeEntry (:doc |)
@@ -674,9 +668,10 @@
             defn main! () $ do
               println "|Running mode:" $ if config/dev? |dev |release
               let
-                  port $ option:fold (get-env |port)
-                    fn () $ :port config/site
-                    fn (value) (parse-float value)
+                  port $ if-let
+                    value $ get-env |port
+                    parse-float value
+                    :port config/site
                 run-server! port
                 println $ str "|Server started on port:" port
               do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
@@ -934,8 +929,10 @@
             defn twig-container (db session records shared)
               let
                   logged-in? $ some? (:user-id session)
-                  router $ option:unwrap-or (:router session)
-                    {} (:name :home) (:data nil) (:router nil)
+                  router $ if-let
+                    router-data $ :router session
+                    , router-data
+                      {} (:name :home) (:data nil) (:router nil)
                   base-data $ {} (:logged-in? logged-in?) (:session session)
                     :reel-length $ :reel-length shared
                     :attached $ :attached shared
@@ -1073,15 +1070,24 @@
           :code $ quote
             defn log-in (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (:users db) ({})
+                  users $
+                    :users db
+                    , .unwrap-or ({})
                   maybe-user $ -> users (vals) (.to-list)
                     find $ fn (user)
                       and $ = username (:name user)
                 update-in db ([] :sessions sid)
                   fn (session)
-                    option:fold maybe-user
-                      (fn () (update session :messages (fn (messages) (assoc messages op-id ({} (:id op-id) (:text (str "|No user named: " username)))))))
-                      (fn (user) (if (= (md5 password) (:password user)) (assoc session :user-id (:id user)) (update session :messages (fn (messages) (assoc messages op-id ({} (:id op-id) (:text (str "|Wrong password for " username))))))))
+                    if-let (user maybe-user)
+                      if
+                        = (md5 password) (:password user)
+                        assoc session :user-id $ :id user
+                        update session :messages $ fn (messages)
+                          assoc messages op-id $ {} (:id op-id)
+                            :text $ str "|Wrong password for " username
+                      update session :messages $ fn (messages)
+                        assoc messages op-id $ {} (:id op-id)
+                          :text $ str "|No user named: " username
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
@@ -1098,13 +1104,23 @@
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (:users db) ({})
+                  users $
+                    :users db
+                    , .unwrap-or ({})
                   maybe-user $ find (vals users)
                     fn (user)
                       = username $ :name user
-                option:fold maybe-user
-                  (fn () (-> db (assoc-in ([] :sessions sid :user-id) op-id) (assoc-in ([] :users op-id) ({} (:id op-id) (:name username) (:nickname username) (:password (md5 password)) (:avatar nil)))))
-                  (fn (user) (update-in db ([] :sessions sid :messages) (fn (messages) (assoc messages op-id ({} (:id op-id) (:text (str "|Name is taken: " username)))))))
+                if-let (user maybe-user)
+                  update-in db ([] :sessions sid :messages)
+                    fn (messages)
+                      assoc messages op-id $ {} (:id op-id)
+                        :text $ str "|Name is taken: " username
+                  -> db
+                    assoc-in ([] :sessions sid :user-id) op-id
+                    assoc-in ([] :users op-id)
+                      {} (:id op-id) (:name username) (:nickname username)
+                        :password $ md5 password
+                        :avatar nil
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
