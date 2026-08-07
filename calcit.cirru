@@ -55,9 +55,13 @@
         |connect! $ %{} :CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
-                url-obj $ url-parse js/location.href true
-                host $ either (-> url-obj .-query .-host) js/location.hostname
-                port $ either (-> url-obj .-query .-port) (:port config/site)
+                url-object $ unsafe-coerce (url-parse js/location.href true) 'JsObject
+                query $ unsafe-coerce (.-query url-object) 'JsObject
+                host-value $ .-host query
+                port-value $ .-port query
+                host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
+                port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
+                  str $ :port config/site
               reset! *store $ :: :loading
               ws-connect! (str |ws:// host |: port)
                 {}
@@ -166,13 +170,14 @@
           :schema $ :: 'Dynamic
         |simulate-login! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn simulate-login! () $ if-let
-              raw $ js/localStorage.getItem (:storage-key config/site)
-              let
-                  pair $ parse-cirru-edn raw
-                do (println "|Found storage.")
-                  dispatch! $ :: :user/log-in (nth pair 0) (nth pair 1)
-              do $ println "|Found no storage."
+            defn simulate-login! () $ let
+                raw $ js/localStorage.getItem (:storage-key config/site)
+              if (js-present? raw)
+                let
+                    pair $ parse-cirru-edn (unsafe-coerce raw 'String)
+                  do (println "|Found storage.")
+                    dispatch! $ %:: app.schema/Op :user/log-in (nth pair 0) (nth pair 1)
+                println "|Found no storage."
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -197,7 +202,7 @@
         |comp-container $ %{} :CodeEntry (:doc |)
           :code $ quote
             defcomp comp-container (states store)
-              if (tuple? store) (comp-offline store)
+              if (enum? store) (comp-offline store)
                 let
                     state $ either (:data states)
                       {} $ :demo |
@@ -232,7 +237,7 @@
                       get-in store $ [] :session :messages
                       {}
                       fn (info d!)
-                        d! $ :: :session/remove-message info
+                        d! $ %:: app.schema/Op :session/remove-message info
                     when dev? $ comp-reel (:reel-length store) ({})
           :examples $ []
           :schema $ :: 'Dynamic
@@ -255,7 +260,7 @@
                   {}
                     :style $ {} (:cursor :pointer) (:line-height |32px)
                     :on-click $ fn (e d!)
-                      d! $ :: :effect/connect
+                      d! $ %:: app.schema/Op :effect/connect
                   <>
                     match mark
                       (:loading) |Loading...
@@ -315,8 +320,7 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor 1 $ assoc state :username
-                                if (string? value) value |
+                              d! cursor 1 $ assoc state :username (value .unwrap-or |)
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
@@ -324,8 +328,7 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor $ assoc state :password
-                                if (string? value) value |
+                              d! cursor $ assoc state :password (value .unwrap-or |)
                     =< nil 8
                     div
                       {} $ :style
@@ -346,9 +349,12 @@
           :code $ quote
             defn on-submit (username password signup?)
               fn (e dispatch!)
-                dispatch! $ if signup? (:: :user/sign-up username password) (:: :user/log-in username password)
-                .!setItem js/localStorage (:storage-key config/site)
-                  format-cirru-edn $ [] username password
+                dispatch! $ if signup? (%:: app.schema/Op :user/sign-up username password) (%:: app.schema/Op :user/log-in username password)
+                when (js-present? js/localStorage)
+                  let
+                      storage $ unsafe-coerce js/localStorage 'JsObject
+                    .!setItem storage (:storage-key config/site)
+                      format-cirru-edn $ [] username password
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Fn)
@@ -374,15 +380,18 @@
                 div
                   {}
                     :on-click $ fn (e d!)
-                      d! $ :: :router/change
+                      d! $ %:: app.schema/Op :router/change
                         {} $ :name :home
                     :style $ {} (:cursor :pointer)
-                  <> (:title config/site) nil
+                  <>
+                      :title config/site
+                      , .unwrap-or |Calcium
+                    , nil
                 div
                   {}
                     :style $ {} (:cursor |pointer)
                     :on-click $ fn (e d!)
-                      d! $ :: :router/change
+                      d! $ %:: app.schema/Op :router/change
                         {} $ :name :profile
                   <> $ if logged-in? |Me |Guest
                   =< 8 nil
@@ -444,7 +453,7 @@
                     {} (:class-name css/button)
                       :style $ {} (:color :red) (:border-color :red)
                       :on-click $ fn (e dispatch!)
-                        dispatch! $ :: :user/log-out
+                        dispatch! $ %:: app.schema/Op :user/log-out
                         js/localStorage.removeItem $ :storage-key config/site
                     <> "|Log out"
           :examples $ []
@@ -473,7 +482,10 @@
       :defs $ {}
         |dev? $ %{} :CodeEntry (:doc |)
           :code $ quote
-            def dev? $ = |dev (get-env |mode |release)
+            def dev? $ if-let
+              mode $ get-env |mode
+              (= |dev mode)
+              (= |dev |release)
           :examples $ []
           :schema $ :: 'Dynamic
         |site $ %{} :CodeEntry (:doc |)
@@ -653,11 +665,13 @@
           :schema $ :: 'Dynamic
         |main! $ %{} :CodeEntry (:doc |)
           :code $ quote
-            defn main! ()
+            defn main! () $ do
               println "|Running mode:" $ if config/dev? |dev |release
               let
-                  p? $ get-env |port
-                  port $ if (some? p?) (parse-float p?) (:port config/site)
+                  port $ if-let
+                    value $ get-env |port
+                    parse-float value
+                    :port config/site
                 run-server! port
                 println $ str "|Server started on port:" port
               do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
@@ -915,7 +929,10 @@
             defn twig-container (db session records shared)
               let
                   logged-in? $ some? (:user-id session)
-                  router $ :router session
+                  router $ if-let
+                    router-data $ :router session
+                    , router-data
+                      {} (:name :home) (:data nil) (:router nil)
                   base-data $ {} (:logged-in? logged-in?) (:session session)
                     :reel-length $ :reel-length shared
                     :attached $ :attached shared
@@ -1053,15 +1070,18 @@
           :code $ quote
             defn log-in (db username password sid op-id op-time)
               let
-                  maybe-user $ -> (:users db) (vals) (.to-list)
+                  users $
+                    :users db
+                    , .unwrap-or ({})
+                  maybe-user $ -> users (vals) (.to-list)
                     find $ fn (user)
                       and $ = username (:name user)
                 update-in db ([] :sessions sid)
                   fn (session)
-                    if (some? maybe-user)
+                    if-let (user maybe-user)
                       if
-                        = (md5 password) (:password maybe-user)
-                        assoc session :user-id $ :id maybe-user
+                        = (md5 password) (:password user)
+                        assoc session :user-id $ :id user
                         update session :messages $ fn (messages)
                           assoc messages op-id $ {} (:id op-id)
                             :text $ str "|Wrong password for " username
@@ -1084,11 +1104,13 @@
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
               let
-                  maybe-user $ find
-                    vals $ :users db
+                  users $
+                    :users db
+                    , .unwrap-or ({})
+                  maybe-user $ find (vals users)
                     fn (user)
                       = username $ :name user
-                if (some? maybe-user)
+                if-let (user maybe-user)
                   update-in db ([] :sessions sid :messages)
                     fn (messages)
                       assoc messages op-id $ {} (:id op-id)
