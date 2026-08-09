@@ -316,10 +316,10 @@ cr query search app.updater/updater -p "tag-match" -l
 cr --check-only
 
 # Run once and exit
-cr -1
+cr
 
 # Compile JS once
-cr -1 js
+cr js
 ```
 
 ### Server Logs (set `dev? true` in config)
@@ -423,7 +423,7 @@ dispatch! $ :: :router/change ({} (:name :profile))
 ```bash
 # Development cycle
 cr --check-only              # Fast syntax check
-cr -1                        # Run once
+cr                           # Run once
 cr js                        # Watch compile
 mode=dev cr --entry server   # Dev server
 
@@ -506,7 +506,7 @@ comp-messages (:messages session)
 cr --check-only  # Syntax only (fast)
 
 cr --check-only  # Syntax only (fast)
-cr -1            # Run full cycle once
+cr               # Run full cycle once
 ```
 
 ---

@@ -61,7 +61,7 @@
                 port-value $ .-port query
                 host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
                 port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
-                  str $ :port config/site
+                  str $ option:unwrap (:port config/site)
               reset! *store $ :: :loading
               ws-connect! (str |ws:// host |: port)
                 {}
@@ -120,18 +120,29 @@
             def mount-target $ js/document.querySelector |.app
           :examples $ []
           :schema $ :: 'Dynamic
+        |normalize-server-message $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn normalize-server-message (data)
+              if (enum? data)
+                assoc data 0 $ turn-tag
+                  option:unwrap $ nth data 0
+                data
+          :examples $ []
+          :schema $ :: 'Dynamic
         |on-server-data $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn on-server-data (data)
-              match data
-                (:snapshot revision store)
-                  do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
-                (:patch base-revision revision changes)
-                  do
-                    when config/dev? $ js/console.log |Changes changes
-                    apply-server-patch! base-revision revision changes
-                (:effect/pong) (do :ok)
-                _ $ eprintln "|unknown server data kind:" data
+              let
+                  message $ normalize-server-message data
+                match message
+                  (:snapshot revision store)
+                    do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
+                  (:patch base-revision revision changes)
+                    do
+                      when config/dev? $ js/console.log |Changes changes
+                      apply-server-patch! base-revision revision changes
+                  (:effect/pong) (do :ok)
+                  _ $ eprintln "|unknown server data kind:" message
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -150,7 +161,9 @@
         |render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn render-app! () $ render! mount-target
-              comp-container (:states @*states) @*store
+              comp-container
+                option:unwrap-or (:states @*states) ({})
+                , @*store
               , dispatch!
           :examples $ []
           :schema $ :: 'Fn
@@ -171,12 +184,15 @@
         |simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn simulate-login! () $ let
-                raw $ js/localStorage.getItem (:storage-key config/site)
+                raw $ js/localStorage.getItem
+                  option:unwrap $ :storage-key config/site
               if (js-present? raw)
                 let
                     pair $ parse-cirru-edn (unsafe-coerce raw 'String)
                   do (println "|Found storage.")
-                    dispatch! $ %:: app.schema/Op :user/log-in (nth pair 0) (nth pair 1)
+                    dispatch! $ %:: app.schema/Op :user/log-in
+                      option:unwrap $ nth pair 0
+                      option:unwrap $ nth pair 1
                 println "|Found no storage."
           :examples $ []
           :schema $ :: 'Fn
@@ -204,41 +220,46 @@
             defcomp comp-container (states store)
               if (enum? store) (comp-offline store)
                 let
-                    state $ either (:data states)
+                    state $ option:unwrap-or (:data states)
                       {} $ :demo |
-                    session $ :session
-                      either store $ {}
-                    router $ either
-                      :router $ either store ({})
-                      {}
-                    router-data $ :data router
+                    session $ option:unwrap (:session store)
+                    router $ option:unwrap-or (:router store) ({})
+                    router-data $ option:unwrap-or (:data router) nil
+                    logged-in? $ option:unwrap (:logged-in? store)
                   div
                     {} $ :class-name (str-spaced css/preset css/global css/fullscreen css/column)
-                    comp-navigation (:logged-in? store) (:count store)
-                    if (:logged-in? store)
-                      case-default (:name router) (<> router)
+                    comp-navigation logged-in? $ option:unwrap-or (:count store) 0
+                    if logged-in?
+                      case-default
+                        option:unwrap $ :name router
+                        <> router
                         :home $ div
                           {} (:class-name css/expand)
                             :style $ {} (:padding |8px)
                           input $ {} (:class-name css/input)
-                            :value $ :demo state
+                            :value $ option:unwrap-or (:demo state) |
                           =< 8 nil
                           <> "|demo page"
                           pre $ {}
                             :style $ {} (:line-height 1.4) (:padding 4)
                               :border $ str "|1px solid #ddd"
                             :inner-text $ str "|backend data" (format-cirru-edn store)
-                        :profile $ comp-profile (:user store) (:data router)
+                        :profile $ comp-profile
+                          option:unwrap $ :user store
+                          , router-data
                       comp-login $ >> states :login
-                    comp-status-color $ :color store
-                    when dev? $ comp-inspect |Store store
-                      {} (:bottom 0) (:left 0) (:max-width |100%)
-                    comp-messages
+                    comp-status-color $ option:unwrap-or (:color store) |transparent
+                    if dev?
+                      comp-inspect |Store store $ {} (:bottom 0) (:left 0) (:max-width |100%)
+                      div $ {}
+                    comp-session-messages $ option:unwrap-or
                       get-in store $ [] :session :messages
                       {}
-                      fn (info d!)
-                        d! $ %:: app.schema/Op :session/remove-message info
-                    when dev? $ comp-reel (:reel-length store) ({})
+                    if dev?
+                      comp-reel
+                        option:unwrap $ :reel-length store
+                        {}
+                      div $ {}
           :examples $ []
           :schema $ :: 'Dynamic
         |comp-offline $ %{} 'CodeEntry (:doc |)
@@ -247,12 +268,14 @@
               div
                 {} $ :style
                   merge ui/global ui/fullscreen ui/column-dispersive $ {}
-                    :background-color $ :theme config/site
+                    :background-color $ option:unwrap (:theme config/site)
                 div $ {}
                   :style $ {} (:height 0)
                 div $ {}
                   :style $ {}
-                    :background-image $ str "|url(" (:icon config/site) "|)"
+                    :background-image $ str "|url("
+                      option:unwrap $ :icon config/site
+                      , "|)"
                     :width 128
                     :height 128
                     :background-size :contain
@@ -267,6 +290,30 @@
                       (:offline) "|No connection..."
                     {} (:font-family ui/font-fancy) (:font-size 16)
                       :color $ hsl 0 0 50
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |comp-session-messages $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defcomp comp-session-messages (messages)
+              list->
+                {} $ :style
+                  {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
+                -> messages .to-list $ map
+                  fn (pair)
+                    let[] (id message) pair $ [] id
+                      div
+                        {}
+                          :style $ {} (:padding 8) (:margin-bottom 8)
+                            :background-color $ hsl 0 80 95
+                            :border $ str "|1px solid " (hsl 0 70 80)
+                            :border-radius 4
+                            :cursor :pointer
+                          :on-click $ fn (e d!)
+                            d! $ %:: schema/Op :session/remove-message
+                              {} $ :id id
+                        <>
+                          option:unwrap-or (:text message) |
+                          , nil
           :examples $ []
           :schema $ :: 'Dynamic
         |comp-status-color $ %{} 'CodeEntry (:doc |)
@@ -290,14 +337,13 @@
             respo.util.format :refer $ hsl
             respo-ui.core :as ui
             respo-ui.css :as css
-            respo.core :refer $ defcomp <> >> div span button input pre
+            respo.core :refer $ defcomp <> >> div span button input pre list->
             respo.css :refer $ defstyle
             respo.comp.inspect :refer $ comp-inspect
             respo.comp.space :refer $ =<
             app.comp.navigation :refer $ comp-navigation
             app.comp.profile :refer $ comp-profile
             app.comp.login :refer $ comp-login
-            respo-message.comp.messages :refer $ comp-messages
             cumulo-reel.comp.reel :refer $ comp-reel
             app.config :refer $ dev?
             app.schema :as schema
@@ -308,23 +354,23 @@
           :code $ quote
             defcomp comp-login (states)
               let
-                  cursor $ :cursor states
-                  state $ or (:data states) initial-state
+                  cursor $ option:unwrap-or (:cursor states) ([])
+                  state $ option:unwrap-or (:data states) initial-state
                 div
                   {} $ :class-name (str-spaced css/flex css/center)
                   div ({})
                     div ({})
                       div ({})
                         input $ {} (:placeholder |Username) (:class-name css/input)
-                          :value $ :username state
+                          :value $ option:unwrap-or (:username state) |
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
-                              d! cursor 1 $ assoc state :username (value .unwrap-or |)
+                              d! cursor $ assoc state :username (value .unwrap-or |)
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
-                          :value $ :password state
+                          :value $ option:unwrap-or (:password state) |
                           :on-input $ fn (e d!)
                             let
                                 value $ :value e
@@ -334,10 +380,16 @@
                       {} $ :style
                         {} $ :text-align :right
                       span $ {} (:inner-text "|Sign up") (:class-name css/link)
-                        :on-click $ on-submit (:username state) (:password state) true
+                        :on-click $ on-submit
+                          option:unwrap-or (:username state) |
+                          option:unwrap-or (:password state) |
+                          , true
                       =< 8 nil
                       span $ {} (:inner-text "|Log in") (:class-name css/link)
-                        :on-click $ on-submit (:username state) (:password state) false
+                        :on-click $ on-submit
+                          option:unwrap-or (:username state) |
+                          option:unwrap-or (:password state) |
+                          , false
           :examples $ []
           :schema $ :: 'Dynamic
         |initial-state $ %{} 'CodeEntry (:doc |)
@@ -353,7 +405,8 @@
                 when (js-present? js/localStorage)
                   let
                       storage $ unsafe-coerce js/localStorage 'JsObject
-                    .!setItem storage (:storage-key config/site)
+                    .!setItem storage
+                      option:unwrap $ :storage-key config/site
                       format-cirru-edn $ [] username password
           :examples $ []
           :schema $ :: 'Fn
@@ -427,7 +480,8 @@
                 div
                   {} (:class-name css/font-fancy)
                     :style $ {} (:font-size 32) (:font-weight 100)
-                  <> $ str "|Hello! " (:name user)
+                  <> $ str "|Hello! "
+                    option:unwrap-or (:name user) |
                 =< nil 16
                 div
                   {} $ :class-name css/row
@@ -454,7 +508,7 @@
                       :style $ {} (:color :red) (:border-color :red)
                       :on-click $ fn (e dispatch!)
                         dispatch! $ %:: app.schema/Op :user/log-out
-                        js/localStorage.removeItem $ :storage-key config/site
+                        js/localStorage.removeItem $ option:unwrap (:storage-key config/site)
                     <> "|Log out"
           :examples $ []
           :schema $ :: 'Dynamic
@@ -482,10 +536,8 @@
       :defs $ {}
         |dev? $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            def dev? $ if-let
-              mode $ get-env |mode
-              (= |dev mode)
-              (= |dev |release)
+            def dev? $ = |dev
+              option:unwrap-or (get-env |mode) |release
           :examples $ []
           :schema $ :: 'Dynamic
         |site $ %{} 'CodeEntry (:doc |)
@@ -581,14 +633,14 @@
           :code $ quote
             defn acknowledge-client! (sid revision)
               let
-                  state $ get @*client-states sid
+                  state $ option:unwrap (get @*client-states sid)
                 when
-                  = revision $ :sent-rev state
+                  = revision $ option:unwrap (:sent-rev state)
                   swap! *client-states update sid $ fn (current)
                     merge current $ {} (:acked-rev revision) (:sent-rev nil) (:in-flight? false)
                   when
                     >
-                      either (:dirty-rev state) 0
+                      option:unwrap-or (:dirty-rev state) 0
                       , revision
                     swap! *dirty-clients include sid
           :examples $ []
@@ -626,8 +678,8 @@
               let
                   cached @*shared-twig-cache
                 if
-                  = revision $ :revision cached
-                  :value cached
+                  = revision $ option:unwrap (:revision cached)
+                  option:unwrap $ :value cached
                   let
                       value $ twig-shared (:db reel) (:records reel)
                     reset! *shared-twig-cache $ {} (:revision revision) (:value value)
@@ -659,7 +711,8 @@
                 swap! *client-states update sid $ fn (state)
                   merge state $ {} (:needs-snapshot? true) (:in-flight? false) (:sent-rev nil)
                 when
-                  = :active $ :status (get @*client-states sid)
+                  = :active $ option:unwrap
+                    :status $ option:unwrap (get @*client-states sid)
                   swap! *dirty-clients include sid
           :examples $ []
           :schema $ :: 'Dynamic
@@ -671,7 +724,7 @@
                   port $ if-let
                     value $ get-env |port
                     parse-float value
-                    :port config/site
+                    option:unwrap $ :port config/site
                 run-server! port
                 println $ str "|Server started on port:" port
               do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
@@ -687,9 +740,9 @@
           :code $ quote
             defn mark-client-active! (sid client-revision force-snapshot?)
               let
-                  state $ get @*client-states sid
+                  state $ option:unwrap-or (get @*client-states sid) ({})
                   resumed? $ or force-snapshot?
-                    not= :active $ :status state
+                    not= :active $ option:unwrap-or (:status state) :idle
                   next-state $ merge
                     {} (:status :active)
                       :last-heartbeat $ now-ms
@@ -701,10 +754,14 @@
                     , state
                       {} (:status :active)
                         :last-heartbeat $ now-ms
-                        :acked-rev $ if resumed? client-revision (:acked-rev state)
-                        :sent-rev $ if resumed? nil (:sent-rev state)
-                        :in-flight? $ if resumed? false (:in-flight? state)
-                        :needs-snapshot? $ or resumed? (:needs-snapshot? state)
+                        :acked-rev $ if resumed? client-revision
+                          option:unwrap-or (:acked-rev state) client-revision
+                        :sent-rev $ if resumed? nil
+                          option:unwrap-or (:sent-rev state) nil
+                        :in-flight? $ if resumed? false
+                          option:unwrap-or (:in-flight? state) false
+                        :needs-snapshot? $ or resumed?
+                          option:unwrap-or (:needs-snapshot? state) false
                 swap! *client-states assoc sid next-state
                 when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
           :examples $ []
@@ -725,10 +782,10 @@
             defn mark-clients-dirty! (revision)
               wss-each! $ fn (sid)
                 let
-                    state $ get @*client-states sid
+                    state $ option:unwrap (get @*client-states sid)
                   swap! *client-states assoc-in ([] sid :dirty-rev) revision
                   when
-                    = :active $ :status state
+                    = :active $ option:unwrap (:status state)
                     swap! *dirty-clients include sid
           :examples $ []
           :schema $ :: 'Dynamic
@@ -822,8 +879,8 @@
         |storage-file $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def storage-file $ if (empty? calcit-dirname)
-              str calcit-dirname $ :storage-file config/site
-              str calcit-dirname |/ $ :storage-file config/site
+              str calcit-dirname $ option:unwrap (:storage-file config/site)
+              str calcit-dirname |/ $ option:unwrap (:storage-file config/site)
           :examples $ []
           :schema $ :: 'Dynamic
         |sweep-idle-clients! $ %{} 'CodeEntry (:doc |)
@@ -832,37 +889,40 @@
                 current-time $ now-ms
               wss-each! $ fn (sid)
                 let
-                    state $ get @*client-states sid
-                    last-heartbeat $ either (:last-heartbeat state) 0
+                    state $ option:unwrap (get @*client-states sid)
+                    last-heartbeat $ option:unwrap-or (:last-heartbeat state) 0
                   when
                     and
-                      = :active $ :status state
+                      = :active $ option:unwrap (:status state)
                       > (- current-time last-heartbeat) heartbeat-timeout
-                    mark-client-idle! sid $ :acked-rev state
+                    mark-client-idle! sid $ option:unwrap-or (:acked-rev state) 0
           :examples $ []
           :schema $ :: 'Dynamic
         |sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sync-client! (sid reel revision) (swap! *dirty-clients exclude sid)
               let
-                  state $ get @*client-states sid
+                  state $ option:unwrap (get @*client-states sid)
                 when
                   and
-                    = :active $ :status state
-                    not $ :in-flight? state
+                    = :active $ option:unwrap (:status state)
+                    not $ option:unwrap-or (:in-flight? state) false
                   let
                       db $ :db reel
                       records $ :records reel
-                      session $ get-in db ([] :sessions sid)
+                      session $ option:unwrap
+                        get-in db $ [] :sessions sid
                       shared $ get-shared-twig reel revision
-                      old-store $ get @*client-caches sid
+                      old-store $ option:unwrap-or (get @*client-caches sid) nil
                       new-store $ twig-container db session records shared
-                      needs-snapshot? $ or (:needs-snapshot? state) (nil? old-store)
+                      needs-snapshot? $ or
+                        option:unwrap-or (:needs-snapshot? state) true
+                        nil? old-store
                       changes $ if needs-snapshot? ([])
                         diff-twig old-store new-store $ {} (:key :id)
                       send-snapshot? $ or needs-snapshot?
                         > (count changes) patch-operation-limit
-                      base-revision $ either (:acked-rev state) 0
+                      base-revision $ option:unwrap-or (:acked-rev state) 0
                     if send-snapshot?
                       do
                         wss-send! sid $ format-cirru-edn (:: :snapshot revision new-store)
@@ -898,9 +958,9 @@
           :code $ quote
             defn touch-client! (sid client-revision)
               let
-                  state $ get @*client-states sid
+                  state $ option:unwrap (get @*client-states sid)
                 if
-                  = :active $ :status state
+                  = :active $ option:unwrap (:status state)
                   swap! *client-states assoc-in ([] sid :last-heartbeat) (now-ms)
                   mark-client-active! sid client-revision true
           :examples $ []
@@ -928,25 +988,28 @@
           :code $ quote
             defn twig-container (db session records shared)
               let
-                  logged-in? $ some? (:user-id session)
+                  user-id $ option:unwrap-or (:user-id session) nil
+                  logged-in? $ some? user-id
                   router $ if-let
                     router-data $ :router session
                     , router-data
                       {} (:name :home) (:data nil) (:router nil)
                   base-data $ {} (:logged-in? logged-in?) (:session session)
-                    :reel-length $ :reel-length shared
-                    :attached $ :attached shared
+                    :reel-length $ option:unwrap (:reel-length shared)
+                    :attached $ option:unwrap (:attached shared)
                 merge base-data $ if logged-in?
                   {}
-                    :user $ memo-twig-by1 (:user-id session) twig-user
+                    :user $ memo-twig-by1 user-id twig-user
                       dissoc
-                        get-in db $ [] :users (:user-id session)
+                        option:unwrap $ get-in db ([] :users user-id)
                         , :tasks
                     :router $ assoc router :data
-                      case-default (:name router) ({})
-                        :home $ :pages shared
-                        :profile $ :members shared
-                    :count $ :session-count shared
+                      case-default
+                        option:unwrap $ :name router
+                        {}
+                        :home $ option:unwrap-or (:pages shared) nil
+                        :profile $ option:unwrap (:members shared)
+                    :count $ option:unwrap (:session-count shared)
                     :color |#aaa
                   {}
           :examples $ []
@@ -959,7 +1022,11 @@
               -> sessions (.to-list)
                 map $ fn (pair)
                   let[] (k session) pair $ [] k
-                    get-in users $ [] (:user-id session) :name
+                    option:unwrap-or
+                      get-in users $ []
+                        option:unwrap $ :user-id session
+                        , :name
+                      , nil
                 pairs-map
           :examples $ []
           :schema $ :: 'Fn
@@ -968,12 +1035,15 @@
         |twig-shared $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn twig-shared (db records)
-              {}
-                :reel-length $ count records
-                :attached $ {} (:type :msg) (:content "|SOME data")
-                :pages $ :pages db
-                :members $ twig-members (:sessions db) (:users db)
-                :session-count $ count (:sessions db)
+              let
+                  sessions $ option:unwrap (:sessions db)
+                  users $ option:unwrap (:users db)
+                {}
+                  :reel-length $ count records
+                  :attached $ {} (:type :msg) (:content "|SOME data")
+                  :pages $ option:unwrap-or (:pages db) nil
+                  :members $ twig-members sessions users
+                  :session-count $ count sessions
           :examples $ []
           :schema $ :: 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
@@ -998,19 +1068,15 @@
         |updater $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn updater (db op sid op-id op-time)
-              let
-                  session $ get-in db ([] :sessions sid)
-                  user $ if (some? session)
-                    get-in db $ [] :users (:user-id session)
-                match op
-                  (:session/connect) (session/connect db sid op-id op-time)
-                  (:session/disconnect) (session/disconnect db sid op-id op-time)
-                  (:session/remove-message data) (session/remove-message db data sid op-id op-time)
-                  (:user/log-in username password) (user/log-in db username password sid op-id op-time)
-                  (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
-                  (:user/log-out) (user/log-out db sid op-id op-time)
-                  (:router/change data) (router/change db data sid op-id op-time)
-                  _ $ do (eprintln "|Unknown op:" op) db
+              match op
+                (:session/connect) (session/connect db sid op-id op-time)
+                (:session/disconnect) (session/disconnect db sid op-id op-time)
+                (:session/remove-message data) (session/remove-message db data sid op-id op-time)
+                (:user/log-in username password) (user/log-in db username password sid op-id op-time)
+                (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
+                (:user/log-out) (user/log-out db sid op-id op-time)
+                (:router/change data) (router/change db data sid op-id op-time)
+                _ $ do (eprintln "|Unknown op:" op) db
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
@@ -1046,7 +1112,7 @@
         |disconnect $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn disconnect (db sid op-id op-time)
-              update db :sessions $ fn (session) (dissoc session sid)
+              update db :sessions $ fn (sessions) (dissoc sessions sid)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
@@ -1056,7 +1122,8 @@
             defn remove-message (db op-data sid op-id op-time)
               update-in db ([] :sessions sid :messages)
                 fn (messages)
-                  dissoc messages $ :id op-data
+                  dissoc (option:unwrap messages)
+                    option:unwrap $ :id op-data
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
@@ -1070,24 +1137,25 @@
           :code $ quote
             defn log-in (db username password sid op-id op-time)
               let
-                  users $
-                    :users db
-                    , .unwrap-or ({})
-                  maybe-user $ -> users (vals) (.to-list)
+                  users $ option:unwrap-or (:users db) ({})
+                  maybe-user $ -> users vals .to-list
                     find $ fn (user)
-                      and $ = username (:name user)
+                      = username $ option:unwrap (:name user)
                 update-in db ([] :sessions sid)
                   fn (session)
-                    if-let (user maybe-user)
-                      if
-                        = (md5 password) (:password user)
-                        assoc session :user-id $ :id user
-                        update session :messages $ fn (messages)
+                    let
+                        session-data $ option:unwrap session
+                      if-let (user maybe-user)
+                        if
+                          = (md5 password)
+                            option:unwrap $ :password user
+                          assoc session-data :user-id $ option:unwrap (:id user)
+                          update session-data :messages $ fn (messages)
+                            assoc messages op-id $ {} (:id op-id)
+                              :text $ str "|Wrong password for " username
+                        update session-data :messages $ fn (messages)
                           assoc messages op-id $ {} (:id op-id)
-                            :text $ str "|Wrong password for " username
-                      update session :messages $ fn (messages)
-                        assoc messages op-id $ {} (:id op-id)
-                          :text $ str "|No user named: " username
+                            :text $ str "|No user named: " username
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
@@ -1104,16 +1172,14 @@
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
               let
-                  users $
-                    :users db
-                    , .unwrap-or ({})
+                  users $ option:unwrap-or (:users db) ({})
                   maybe-user $ find (vals users)
                     fn (user)
-                      = username $ :name user
+                      = username $ option:unwrap (:name user)
                 if-let (user maybe-user)
                   update-in db ([] :sessions sid :messages)
                     fn (messages)
-                      assoc messages op-id $ {} (:id op-id)
+                      assoc (option:unwrap messages) op-id $ {} (:id op-id)
                         :text $ str "|Name is taken: " username
                   -> db
                     assoc-in ([] :sessions sid :user-id) op-id
