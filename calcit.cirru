@@ -61,7 +61,7 @@
                 port-value $ .-port query
                 host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
                 port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
-                  str $ option:unwrap (:port config/site)
+                  str $ option:unwrap (get config/site :port)
               reset! *store $ :: :loading
               ws-connect! (str |ws:// host |: port)
                 {}
@@ -160,11 +160,15 @@
               :args $ []
         |render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn render-app! () $ render! mount-target
-              comp-container
-                option:unwrap-or (:states @*states) ({})
-                , @*store
-              , dispatch!
+            defn render-app! () $ let
+                states $ option:unwrap-or (get @*states :states) ({})
+                store @*store
+                app $ if (enum? store) (comp-offline store)
+                  if
+                    and (struct? store) (&struct:matches? store schema/Store)
+                    comp-container states $ unsafe-coerce store 'app.schema/Store
+                    div ({}) (<> "|Invalid store payload")
+              render! mount-target app dispatch!
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -185,7 +189,7 @@
           :code $ quote
             defn simulate-login! () $ let
                 raw $ js/localStorage.getItem
-                  option:unwrap $ :storage-key config/site
+                  option:unwrap $ get config/site :storage-key
               if (js-present? raw)
                 let
                     pair $ parse-cirru-edn (unsafe-coerce raw 'String)
@@ -201,9 +205,9 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.client $ :require
-            respo.core :refer $ render! clear-cache! realize-ssr!
+            respo.core :refer $ render! clear-cache! realize-ssr! div <>
             respo.cursor :refer $ update-states
-            app.comp.container :refer $ comp-container
+            app.comp.container :refer $ comp-container comp-offline
             app.schema :as schema
             app.schema :refer $ Op
             app.config :as config
@@ -218,63 +222,59 @@
         |comp-container $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defcomp comp-container (states store)
-              if (enum? store) (comp-offline store)
-                let
-                    state $ option:unwrap-or (:data states)
-                      {} $ :demo |
-                    session $ option:unwrap (:session store)
-                    router $ option:unwrap-or (:router store) ({})
-                    router-data $ option:unwrap-or (:data router) nil
-                    logged-in? $ option:unwrap (:logged-in? store)
-                  div
-                    {} $ :class-name (str-spaced css/preset css/global css/fullscreen css/column)
-                    comp-navigation logged-in? $ option:unwrap-or (:count store) 0
-                    if logged-in?
-                      case-default
-                        option:unwrap $ :name router
-                        <> router
-                        :home $ div
-                          {} (:class-name css/expand)
-                            :style $ {} (:padding |8px)
-                          input $ {} (:class-name css/input)
-                            :value $ option:unwrap-or (:demo state) |
-                          =< 8 nil
-                          <> "|demo page"
-                          pre $ {}
-                            :style $ {} (:line-height 1.4) (:padding 4)
-                              :border $ str "|1px solid #ddd"
-                            :inner-text $ str "|backend data" (format-cirru-edn store)
-                        :profile $ comp-profile
-                          option:unwrap $ :user store
-                          , router-data
-                      comp-login $ >> states :login
-                    comp-status-color $ option:unwrap-or (:color store) |transparent
-                    if dev?
-                      comp-inspect |Store store $ {} (:bottom 0) (:left 0) (:max-width |100%)
-                      div $ {}
-                    comp-session-messages $ option:unwrap-or
-                      get-in store $ [] :session :messages
-                      {}
-                    if dev?
-                      comp-reel
-                        option:unwrap $ :reel-length store
-                        {}
-                      div $ {}
+              let
+                  state $ option:unwrap-or (get states :data)
+                    {} $ :demo |
+                  session $ :session store
+                  router $ :router store
+                  router-data $ option:unwrap-or (:data router) ({})
+                  logged-in? $ :logged-in? store
+                div
+                  {} $ :class-name (str-spaced css/preset css/global css/fullscreen css/column)
+                  comp-navigation logged-in? $ :count store
+                  if logged-in?
+                    case-default (:name router)
+                      <> $ str router
+                      :home $ div
+                        {} (:class-name css/expand)
+                          :style $ {} (:padding |8px)
+                        input $ {} (:class-name css/input)
+                          :value $ option:unwrap-or (get state :demo) |
+                        =< 8 nil
+                        <> "|demo page"
+                        pre $ {}
+                          :style $ {} (:line-height 1.4) (:padding 4)
+                            :border $ str "|1px solid #ddd"
+                          :inner-text $ str "|backend data" (format-cirru-edn store)
+                      :profile $ comp-profile
+                        option:unwrap $ :user store
+                        , router-data
+                    comp-login $ >> states :login
+                  comp-status-color $ :color store
+                  if dev?
+                    comp-inspect |Store store $ {} (:bottom 0) (:left 0) (:max-width |100%)
+                    div $ {}
+                  comp-session-messages $ :messages session
+                  if dev?
+                    comp-reel (:reel-length store) ({})
+                    div $ {}
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'respo.schema/Component)
+              :args $ [] 'Map 'app.schema/Store
         |comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defcomp comp-offline (mark)
               div
                 {} $ :style
                   merge ui/global ui/fullscreen ui/column-dispersive $ {}
-                    :background-color $ option:unwrap (:theme config/site)
+                    :background-color $ option:unwrap (get config/site :theme)
                 div $ {}
                   :style $ {} (:height 0)
                 div $ {}
                   :style $ {}
                     :background-image $ str "|url("
-                      option:unwrap $ :icon config/site
+                      option:unwrap $ get config/site :icon
                       , "|)"
                     :width 128
                     :height 128
@@ -298,24 +298,27 @@
               list->
                 {} $ :style
                   {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
-                -> messages .to-list $ map
-                  fn (pair)
-                    let[] (id message) pair $ [] id
-                      div
-                        {}
-                          :style $ {} (:padding 8) (:margin-bottom 8)
-                            :background-color $ hsl 0 80 95
-                            :border $ str "|1px solid " (hsl 0 70 80)
-                            :border-radius 4
-                            :cursor :pointer
-                          :on-click $ fn (e d!)
-                            d! $ %:: schema/Op :session/remove-message
-                              {} $ :id id
-                        <>
-                          option:unwrap-or (:text message) |
-                          , nil
+                -> messages
+                  map-kv $ fn (id message)
+                    hint-fn $ {}
+                      :args $ [] 'String 'app.schema/MessageView
+                      :return 'List
+                    [] id $ div
+                      {}
+                        :style $ {} (:padding 8) (:margin-bottom 8)
+                          :background-color $ hsl 0 80 95
+                          :border $ str "|1px solid " (hsl 0 70 80)
+                          :border-radius 4
+                          :cursor :pointer
+                        :on-click $ fn (e d!)
+                          d! $ %:: schema/Op :session/remove-message
+                            {} $ :id id
+                      <> (:text message) nil
+                  .to-list
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'respo.schema/Component)
+              :args $ [] (:: 'Map 'String 'app.schema/MessageView)
         |comp-status-color $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defcomp comp-status-color (color)
@@ -354,26 +357,26 @@
           :code $ quote
             defcomp comp-login (states)
               let
-                  cursor $ option:unwrap-or (:cursor states) ([])
-                  state $ option:unwrap-or (:data states) initial-state
+                  cursor $ option:unwrap-or (get states :cursor) ([])
+                  state $ option:unwrap-or (get states :data) initial-state
                 div
                   {} $ :class-name (str-spaced css/flex css/center)
                   div ({})
                     div ({})
                       div ({})
                         input $ {} (:placeholder |Username) (:class-name css/input)
-                          :value $ option:unwrap-or (:username state) |
+                          :value $ option:unwrap-or (get state :username) |
                           :on-input $ fn (e d!)
                             let
-                                value $ :value e
+                                value $ get e :value
                               d! cursor $ assoc state :username (value .unwrap-or |)
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
-                          :value $ option:unwrap-or (:password state) |
+                          :value $ option:unwrap-or (get state :password) |
                           :on-input $ fn (e d!)
                             let
-                                value $ :value e
+                                value $ get e :value
                               d! cursor $ assoc state :password (value .unwrap-or |)
                     =< nil 8
                     div
@@ -381,14 +384,14 @@
                         {} $ :text-align :right
                       span $ {} (:inner-text "|Sign up") (:class-name css/link)
                         :on-click $ on-submit
-                          option:unwrap-or (:username state) |
-                          option:unwrap-or (:password state) |
+                          option:unwrap-or (get state :username) |
+                          option:unwrap-or (get state :password) |
                           , true
                       =< 8 nil
                       span $ {} (:inner-text "|Log in") (:class-name css/link)
                         :on-click $ on-submit
-                          option:unwrap-or (:username state) |
-                          option:unwrap-or (:password state) |
+                          option:unwrap-or (get state :username) |
+                          option:unwrap-or (get state :password) |
                           , false
           :examples $ []
           :schema $ :: 'Dynamic
@@ -406,7 +409,7 @@
                   let
                       storage $ unsafe-coerce js/localStorage 'JsObject
                     .!setItem storage
-                      option:unwrap $ :storage-key config/site
+                      option:unwrap $ get config/site :storage-key
                       format-cirru-edn $ [] username password
           :examples $ []
           :schema $ :: 'Fn
@@ -437,8 +440,7 @@
                         {} $ :name :home
                     :style $ {} (:cursor :pointer)
                   <>
-                      :title config/site
-                      , .unwrap-or |Calcium
+                    option:unwrap-or (get config/site :title) |Calcium
                     , nil
                 div
                   {}
@@ -480,8 +482,7 @@
                 div
                   {} (:class-name css/font-fancy)
                     :style $ {} (:font-size 32) (:font-weight 100)
-                  <> $ str "|Hello! "
-                    option:unwrap-or (:name user) |
+                  <> $ str "|Hello! " (:name user)
                 =< nil 16
                 div
                   {} $ :class-name css/row
@@ -508,10 +509,12 @@
                       :style $ {} (:color :red) (:border-color :red)
                       :on-click $ fn (e dispatch!)
                         dispatch! $ %:: app.schema/Op :user/log-out
-                        js/localStorage.removeItem $ option:unwrap (:storage-key config/site)
+                        js/localStorage.removeItem $ option:unwrap (get config/site :storage-key)
                     <> "|Log out"
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'respo.schema/Component)
+              :args $ [] 'app.schema/UserView 'Map
         |css-member-label $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstyle css-member-label $ {}
@@ -549,10 +552,65 @@
         :code $ quote (ns app.config)
     |app.schema $ %{} 'FileEntry
       :defs $ {}
+        |AttachedView $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct AttachedView (:type :tag) (:content :string)
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |MessageView $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct MessageView (:id :string) (:text :string)
+          :examples $ []
+          :schema $ :: 'Dynamic
         |Op $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'Dynamic) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'Dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
               (:states 'Dynamic 'Dynamic)
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |RouterView $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct RouterView (:name :tag)
+              :data $ :: 'Option 'Map
+              :router $ :: 'Option 'Map
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |SessionView $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct SessionView
+              :user-id $ :: :optional :string
+              :id $ :: :optional :string
+              :nickname $ :: :optional :string
+              :router $ quote app.schema/RouterView
+              :messages $ :: :map :string (quote app.schema/MessageView)
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |SharedTwig $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct SharedTwig (:reel-length :number)
+              :attached $ quote app.schema/AttachedView
+              :pages $ :: 'Option 'Map
+              :members :map
+              :session-count :number
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |Store $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct Store (:logged-in? :bool)
+              :session $ quote app.schema/SessionView
+              :reel-length :number
+              :attached $ quote app.schema/AttachedView
+              :user $ :: 'Option 'app.schema/UserView
+              :router $ quote app.schema/RouterView
+              :count :number
+              :color :string
+          :examples $ []
+          :schema $ :: 'Dynamic
+        |UserView $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defstruct UserView (:name :string) (:id :string)
+              :nickname $ :: :optional :string
+              :avatar $ :: :optional :string
           :examples $ []
           :schema $ :: 'Dynamic
         |database $ %{} 'CodeEntry (:doc |)
@@ -988,34 +1046,85 @@
           :code $ quote
             defn twig-container (db session records shared)
               let
-                  user-id $ option:unwrap-or (:user-id session) nil
+                  user-id $ option:unwrap-or (get session :user-id) nil
                   logged-in? $ some? user-id
                   router $ if-let
-                    router-data $ :router session
+                    router-data $ get session :router
                     , router-data
                       {} (:name :home) (:data nil) (:router nil)
-                  base-data $ {} (:logged-in? logged-in?) (:session session)
-                    :reel-length $ option:unwrap (:reel-length shared)
-                    :attached $ option:unwrap (:attached shared)
-                merge base-data $ if logged-in?
-                  {}
-                    :user $ memo-twig-by1 user-id twig-user
+                  router-name $ option:unwrap (get router :name)
+                  router-parent $ if-let
+                    value $ get router :router
+                    %:: Option :some $ unsafe-coerce value 'Map
+                    %:: Option :none
+                  session-router-data $ if-let
+                    value $ get router :data
+                    %:: Option :some $ unsafe-coerce value 'Map
+                    %:: Option :none
+                  session-router $ %{} RouterView (:name router-name) (:data session-router-data) (:router router-parent)
+                  router-data $ if logged-in?
+                    case-default router-name (%:: Option :none)
+                      :home $ :pages shared
+                      :profile $ %:: Option :some (:members shared)
+                    %:: Option :none
+                  router-view $ %{} RouterView (:name router-name) (:data router-data) (:router router-parent)
+                  messages-view $ ->
+                    option:unwrap-or (get session :messages) ({})
+                    .to-list
+                    map $ fn (pair)
+                      let[] (id message) pair $ [] id
+                        %{} MessageView
+                          :id $ option:unwrap-or (get message :id) id
+                          :text $ option:unwrap-or (get message :text) |
+                    pairs-map
+                  session-view $ %{} SessionView (:user-id user-id)
+                    :id $ option:unwrap-or (get session :id) nil
+                    :nickname $ option:unwrap-or (get session :nickname) nil
+                    :router session-router
+                    :messages messages-view
+                  user-option $ if logged-in?
+                    %:: Option :some $ memo-twig-by1 user-id twig-user
                       dissoc
                         option:unwrap $ get-in db ([] :users user-id)
                         , :tasks
-                    :router $ assoc router :data
-                      case-default
-                        option:unwrap $ :name router
-                        {}
-                        :home $ option:unwrap-or (:pages shared) nil
-                        :profile $ option:unwrap (:members shared)
-                    :count $ option:unwrap (:session-count shared)
-                    :color |#aaa
-                  {}
+                    %:: Option :none
+                %{} Store (:logged-in? logged-in?) (:session session-view)
+                  :reel-length $ :reel-length shared
+                  :attached $ :attached shared
+                  :user user-option
+                  :router router-view
+                  :count $ if logged-in? (:session-count shared) 0
+                  :color $ if logged-in? |#aaa |transparent
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Map 'Dynamic 'Map
+            {} (:return 'app.schema/Store)
+              :args $ [] 'Map 'Map 'Dynamic 'app.schema/SharedTwig
+          :tests $ []
+            %{} 'TestEntry (:name |typed-store-roundtrip)
+              :code $ quote
+                let
+                    db $ {}
+                      :sessions $ {}
+                      :users $ {}
+                    session $ {} (:user-id nil) (:id |s1) (:nickname nil)
+                      :router $ {} (:name :home) (:data nil) (:router nil)
+                      :messages $ {}
+                        |m1 $ {} (:id |m1) (:text |hello)
+                    shared $ twig-shared db ([])
+                    store $ twig-container db session ([]) shared
+                    decoded $ parse-cirru-edn (format-cirru-edn store)
+                    typed-store $ unsafe-coerce store 'app.schema/Store
+                    message $ option:unwrap
+                      get
+                        :messages $ :session typed-store
+                        , |m1
+                    typed-message $ unsafe-coerce message 'app.schema/MessageView
+                  assert= true $ &struct:matches? store Store
+                  assert= true $ &struct:matches? decoded Store
+                  assert= true $ &struct:matches? message MessageView
+                  assert= 0 $ :count typed-store
+                  assert= |hello $ :text typed-message
+              :tags $ #{} :twig :type
         |twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn twig-members (sessions users)
@@ -1024,7 +1133,7 @@
                   let[] (k session) pair $ [] k
                     option:unwrap-or
                       get-in users $ []
-                        option:unwrap $ :user-id session
+                        option:unwrap $ get session :user-id
                         , :name
                       , nil
                 pairs-map
@@ -1036,33 +1145,46 @@
           :code $ quote
             defn twig-shared (db records)
               let
-                  sessions $ option:unwrap (:sessions db)
-                  users $ option:unwrap (:users db)
-                {}
+                  sessions $ option:unwrap (get db :sessions)
+                  users $ option:unwrap (get db :users)
+                  pages $ if-let
+                    value $ get db :pages
+                    %:: Option :some $ unsafe-coerce value 'Map
+                    %:: Option :none
+                %{} SharedTwig
                   :reel-length $ count records
-                  :attached $ {} (:type :msg) (:content "|SOME data")
-                  :pages $ option:unwrap-or (:pages db) nil
+                  :attached $ %{} AttachedView (:type :msg) (:content "|SOME data")
+                  :pages pages
                   :members $ twig-members sessions users
                   :session-count $ count sessions
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'app.schema/SharedTwig)
+              :args $ [] 'Map 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.twig.container $ :require
             app.twig.user :refer $ twig-user
             recollect.memo :refer $ memo-twig-by1
+            app.schema :refer $ AttachedView MessageView RouterView SessionView SharedTwig Store
     |app.twig.user $ %{} 'FileEntry
       :defs $ {}
         |twig-user $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn twig-user (user) (dissoc user :password)
+            defn twig-user (user)
+              %{} UserView
+                :name $ option:unwrap (get user :name)
+                :id $ option:unwrap (get user :id)
+                :nickname $ option:unwrap-or (get user :nickname) nil
+                :avatar $ option:unwrap-or (get user :avatar) nil
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
+            {} (:return 'app.schema/UserView)
               :args $ [] 'Map
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.twig.user $ :require
+            app.schema :refer $ UserView
     |app.updater $ %{} 'FileEntry
       :defs $ {}
         |updater $ %{} 'CodeEntry (:doc |)
