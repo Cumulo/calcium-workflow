@@ -677,7 +677,7 @@
             defatom *reel $ merge reel-schema
               {} (:base @*initial-db) (:db @*initial-db)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'cumulo-reel.core/ReelState
         |*shared-twig-cache $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defatom *shared-twig-cache $ {} (:revision -1) (:value nil)
@@ -872,7 +872,7 @@
             defn persist-db! () $ let
                 file-content $ format-cirru-edn
                   assoc
-                    option:unwrap $ get @*reel :db
+                    :db $ unsafe-coerce @*reel 'cumulo-reel.core/ReelState
                     , :sessions $ {}
                 storage-path storage-file
                 backup-path $ get-backup-path!
