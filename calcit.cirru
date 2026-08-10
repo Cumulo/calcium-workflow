@@ -167,7 +167,14 @@
                   if
                     and (struct? store) (&struct:matches? store schema/Store)
                     comp-container states $ unsafe-coerce store 'app.schema/Store
-                    div ({}) (<> "|Invalid store payload")
+                    do
+                      js/console.error |Invalid-store-payload
+                        {}
+                          :struct? $ struct? store
+                          :store-schema-match? $ if (struct? store) (&struct:matches? store schema/Store) false
+                          :cirru-edn $ format-cirru-edn store
+                        , store
+                      div ({}) (<> "|Invalid store payload")
               render! mount-target app dispatch!
           :examples $ []
           :schema $ :: 'Fn
