@@ -1273,10 +1273,10 @@
                             option:unwrap $ :password user
                           assoc session-data :user-id $ option:unwrap (:id user)
                           update session-data :messages $ fn (messages)
-                            assoc messages op-id $ {} (:id op-id)
+                            assoc (option:unwrap messages) op-id $ {} (:id op-id)
                               :text $ str "|Wrong password for " username
                         update session-data :messages $ fn (messages)
-                          assoc messages op-id $ {} (:id op-id)
+                          assoc (option:unwrap messages) op-id $ {} (:id op-id)
                             :text $ str "|No user named: " username
           :examples $ []
           :schema $ :: 'Fn
