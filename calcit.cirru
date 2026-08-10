@@ -579,7 +579,7 @@
           :code $ quote
             defstruct SessionView
               :user-id $ :: :optional :string
-              :id $ :: :optional :string
+              :id $ :: :optional :number
               :nickname $ :: :optional :string
               :router $ quote app.schema/RouterView
               :messages $ :: :map :string (quote app.schema/MessageView)
@@ -718,7 +718,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
-              :args $ [] 'app.schema/Op 'String
+              :args $ [] 'app.schema/Op 'Number
         |get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn get-backup-path! () $ let
@@ -741,13 +741,13 @@
                   = revision $ option:unwrap (get cached :revision)
                   option:unwrap $ get cached :value
                   let
-                      value $ twig-shared
-                        option:unwrap $ get reel :db
-                        option:unwrap $ get reel :records
+                      value $ twig-shared (:db reel) (:records reel)
                     reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                     , value
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
+              :args $ [] 'cumulo-reel.core/ReelState 'Number
         |handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn handle-client-message! (action sid)
@@ -971,8 +971,8 @@
                     = :active $ option:unwrap (get state :status)
                     not $ option:unwrap-or (get state :in-flight?) false
                   let
-                      db $ option:unwrap (get reel :db)
-                      records $ option:unwrap (get reel :records)
+                      db $ :db reel
+                      records $ :records reel
                       session $ option:unwrap
                         get-in db $ [] :sessions sid
                       shared $ get-shared-twig reel revision
@@ -1001,7 +1001,9 @@
                             merge current $ {} (:sent-rev revision) (:in-flight? true) (:needs-snapshot? false)
                         swap! *client-caches assoc sid new-store
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Dynamic)
+              :args $ [] 'Dynamic 'cumulo-reel.core/ReelState 'Number
         |sync-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sync-clients! (reel)
@@ -1207,7 +1209,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
-              :args $ [] 'Map 'app.schema/Op 'String 'String 'Dynamic
+              :args $ [] 'Map 'app.schema/Op 'Number 'String 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater $ :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
@@ -1222,7 +1224,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'Dynamic 'String 'String 'Dynamic
+              :args $ [] 'Map 'Dynamic 'Number 'String 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote (ns app.updater.router)
     |app.updater.session $ %{} 'FileEntry
@@ -1235,7 +1237,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'Dynamic
+              :args $ [] 'Map 'Number 'String 'Dynamic
         |disconnect $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn disconnect (db sid op-id op-time)
@@ -1243,7 +1245,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'Dynamic
+              :args $ [] 'Map 'Number 'String 'Dynamic
         |remove-message $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn remove-message (db op-data sid op-id op-time)
@@ -1254,7 +1256,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'Dynamic 'String 'String 'Dynamic
+              :args $ [] 'Map 'Dynamic 'Number 'String 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater.session $ :require (app.schema :as schema)
@@ -1286,7 +1288,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'String 'String 'Dynamic
+              :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
         |log-out $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn log-out (db sid op-id op-time)
@@ -1294,7 +1296,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'Dynamic
+              :args $ [] 'Map 'Number 'String 'Dynamic
         |sign-up $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
@@ -1317,7 +1319,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'String 'String 'Dynamic
+              :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater.user $ :require
