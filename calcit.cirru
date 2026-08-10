@@ -71,6 +71,7 @@
                     reset! *store $ :: :offline
                     js/console.error "|Lost connection!"
                   :on-data on-server-data
+                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -172,7 +173,6 @@
                         {}
                           :struct? $ struct? store
                           :store-schema-match? $ if (struct? store) (&struct:matches? store schema/Store) false
-                          :cirru-edn $ format-cirru-edn store
                         , store
                       div ({}) (<> "|Invalid store payload")
               render! mount-target app dispatch!
