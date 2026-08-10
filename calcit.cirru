@@ -785,7 +785,10 @@
               let
                   port $ if-let
                     value $ get-env |port
-                    parse-float value
+                    match (parse-float value)
+                      (:ok parsed) parsed
+                      (:err _)
+                        option:unwrap $ get config/site :port
                     option:unwrap $ get config/site :port
                 do (run-server! port)
                   println $ str "|Server started on port:" port
