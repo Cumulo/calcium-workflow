@@ -1062,11 +1062,13 @@
                   router-name $ option:unwrap (get router :name)
                   router-parent $ if-let
                     value $ get router :router
-                    %:: Option :some $ unsafe-coerce value 'Map
+                    if (nil? value) (%:: Option :none)
+                      %:: Option :some $ unsafe-coerce value 'Map
                     %:: Option :none
                   session-router-data $ if-let
                     value $ get router :data
-                    %:: Option :some $ unsafe-coerce value 'Map
+                    if (nil? value) (%:: Option :none)
+                      %:: Option :some $ unsafe-coerce value 'Map
                     %:: Option :none
                   session-router $ %{} RouterView (:name router-name) (:data session-router-data) (:router router-parent)
                   router-data $ if logged-in?
@@ -1113,7 +1115,7 @@
                     db $ {}
                       :sessions $ {}
                       :users $ {}
-                    session $ {} (:user-id nil) (:id |s1) (:nickname nil)
+                    session $ {} (:user-id nil) (:id 1) (:nickname nil)
                       :router $ {} (:name :home) (:data nil) (:router nil)
                       :messages $ {}
                         |m1 $ {} (:id |m1) (:text |hello)
