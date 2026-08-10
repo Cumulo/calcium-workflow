@@ -781,7 +781,9 @@
                   merge state $ {} (:needs-snapshot? true) (:in-flight? false) (:sent-rev nil)
                 when
                   = :active $ option:unwrap
-                    :status $ option:unwrap (get @*client-states sid)
+                    get
+                      option:unwrap $ get @*client-states sid
+                      , :status
                   swap! *dirty-clients include sid
           :examples $ []
           :schema $ :: 'Dynamic
