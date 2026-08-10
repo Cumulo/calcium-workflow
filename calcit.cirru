@@ -693,12 +693,12 @@
               let
                   state $ option:unwrap (get @*client-states sid)
                 when
-                  = revision $ option:unwrap (:sent-rev state)
+                  = revision $ option:unwrap (get state :sent-rev)
                   swap! *client-states update sid $ fn (current)
                     merge current $ {} (:acked-rev revision) (:sent-rev nil) (:in-flight? false)
                   when
                     >
-                      option:unwrap-or (:dirty-rev state) 0
+                      option:unwrap-or (get state :dirty-rev) 0
                       , revision
                     swap! *dirty-clients include sid
           :examples $ []
@@ -724,8 +724,10 @@
             defn get-backup-path! () $ let
                 now $ .extract (get-time!)
               join-path calcit-dirname |backups
-                str $ :month now
-                str (:day now) |-snapshot.cirru
+                str $ option:unwrap (get now :month)
+                str
+                  option:unwrap $ get now :day
+                  , |-snapshot.cirru
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'String)
@@ -736,10 +738,12 @@
               let
                   cached @*shared-twig-cache
                 if
-                  = revision $ option:unwrap (:revision cached)
-                  option:unwrap $ :value cached
+                  = revision $ option:unwrap (get cached :revision)
+                  option:unwrap $ get cached :value
                   let
-                      value $ twig-shared (:db reel) (:records reel)
+                      value $ twig-shared
+                        option:unwrap $ get reel :db
+                        option:unwrap $ get reel :records
                     reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                     , value
           :examples $ []
@@ -782,9 +786,9 @@
                   port $ if-let
                     value $ get-env |port
                     parse-float value
-                    option:unwrap $ :port config/site
-                run-server! port
-                println $ str "|Server started on port:" port
+                    option:unwrap $ get config/site :port
+                do (run-server! port)
+                  println $ str "|Server started on port:" port
               do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
               set-interval 200 $ fn () (render-loop!)
               set-interval 5000 $ fn () (sweep-idle-clients!)
@@ -800,7 +804,7 @@
               let
                   state $ option:unwrap-or (get @*client-states sid) ({})
                   resumed? $ or force-snapshot?
-                    not= :active $ option:unwrap-or (:status state) :idle
+                    not= :active $ option:unwrap-or (get state :status) :idle
                   next-state $ merge
                     {} (:status :active)
                       :last-heartbeat $ now-ms
@@ -813,13 +817,13 @@
                       {} (:status :active)
                         :last-heartbeat $ now-ms
                         :acked-rev $ if resumed? client-revision
-                          option:unwrap-or (:acked-rev state) client-revision
+                          option:unwrap-or (get state :acked-rev) client-revision
                         :sent-rev $ if resumed? nil
-                          option:unwrap-or (:sent-rev state) nil
+                          option:unwrap-or (get state :sent-rev) nil
                         :in-flight? $ if resumed? false
-                          option:unwrap-or (:in-flight? state) false
+                          option:unwrap-or (get state :in-flight?) false
                         :needs-snapshot? $ or resumed?
-                          option:unwrap-or (:needs-snapshot? state) false
+                          option:unwrap-or (get state :needs-snapshot?) false
                 swap! *client-states assoc sid next-state
                 when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
           :examples $ []
@@ -828,7 +832,7 @@
           :code $ quote
             defn mark-client-idle! (sid client-revision)
               when
-                some? $ get @*client-states sid
+                option:some? $ get @*client-states sid
                 swap! *client-states update sid $ fn (state)
                   merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:sent-rev nil) (:needs-snapshot? true)
                 swap! *client-caches dissoc sid
@@ -843,7 +847,7 @@
                     state $ option:unwrap (get @*client-states sid)
                   swap! *client-states assoc-in ([] sid :dirty-rev) revision
                   when
-                    = :active $ option:unwrap (:status state)
+                    = :active $ option:unwrap (get state :status)
                     swap! *dirty-clients include sid
           :examples $ []
           :schema $ :: 'Dynamic
@@ -867,11 +871,12 @@
           :code $ quote
             defn persist-db! () $ let
                 file-content $ format-cirru-edn
-                  assoc (:db @*reel) :sessions $ {}
+                  assoc
+                    option:unwrap $ get @*reel :db
+                    , :sessions $ {}
                 storage-path storage-file
                 backup-path $ get-backup-path!
-              check-write-file! storage-path file-content
-              check-write-file! backup-path file-content
+              do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -937,8 +942,8 @@
         |storage-file $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def storage-file $ if (empty? calcit-dirname)
-              str calcit-dirname $ option:unwrap (:storage-file config/site)
-              str calcit-dirname |/ $ option:unwrap (:storage-file config/site)
+              str calcit-dirname $ option:unwrap (get config/site :storage-file)
+              str calcit-dirname |/ $ option:unwrap (get config/site :storage-file)
           :examples $ []
           :schema $ :: 'Dynamic
         |sweep-idle-clients! $ %{} 'CodeEntry (:doc |)
@@ -948,12 +953,12 @@
               wss-each! $ fn (sid)
                 let
                     state $ option:unwrap (get @*client-states sid)
-                    last-heartbeat $ option:unwrap-or (:last-heartbeat state) 0
+                    last-heartbeat $ option:unwrap-or (get state :last-heartbeat) 0
                   when
                     and
-                      = :active $ option:unwrap (:status state)
+                      = :active $ option:unwrap (get state :status)
                       > (- current-time last-heartbeat) heartbeat-timeout
-                    mark-client-idle! sid $ option:unwrap-or (:acked-rev state) 0
+                    mark-client-idle! sid $ option:unwrap-or (get state :acked-rev) 0
           :examples $ []
           :schema $ :: 'Dynamic
         |sync-client! $ %{} 'CodeEntry (:doc |)
@@ -963,24 +968,24 @@
                   state $ option:unwrap (get @*client-states sid)
                 when
                   and
-                    = :active $ option:unwrap (:status state)
-                    not $ option:unwrap-or (:in-flight? state) false
+                    = :active $ option:unwrap (get state :status)
+                    not $ option:unwrap-or (get state :in-flight?) false
                   let
-                      db $ :db reel
-                      records $ :records reel
+                      db $ option:unwrap (get reel :db)
+                      records $ option:unwrap (get reel :records)
                       session $ option:unwrap
                         get-in db $ [] :sessions sid
                       shared $ get-shared-twig reel revision
                       old-store $ option:unwrap-or (get @*client-caches sid) nil
                       new-store $ twig-container db session records shared
                       needs-snapshot? $ or
-                        option:unwrap-or (:needs-snapshot? state) true
+                        option:unwrap-or (get state :needs-snapshot?) true
                         nil? old-store
                       changes $ if needs-snapshot? ([])
                         diff-twig old-store new-store $ {} (:key :id)
                       send-snapshot? $ or needs-snapshot?
                         > (count changes) patch-operation-limit
-                      base-revision $ option:unwrap-or (:acked-rev state) 0
+                      base-revision $ option:unwrap-or (get state :acked-rev) 0
                     if send-snapshot?
                       do
                         wss-send! sid $ format-cirru-edn (:: :snapshot revision new-store)
@@ -1018,7 +1023,7 @@
               let
                   state $ option:unwrap (get @*client-states sid)
                 if
-                  = :active $ option:unwrap (:status state)
+                  = :active $ option:unwrap (get state :status)
                   swap! *client-states assoc-in ([] sid :last-heartbeat) (now-ms)
                   mark-client-active! sid client-revision true
           :examples $ []
@@ -1245,7 +1250,7 @@
               update-in db ([] :sessions sid :messages)
                 fn (messages)
                   dissoc (option:unwrap messages)
-                    option:unwrap $ :id op-data
+                    option:unwrap $ get op-data :id
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
@@ -1259,10 +1264,10 @@
           :code $ quote
             defn log-in (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (:users db) ({})
+                  users $ option:unwrap-or (get db :users) ({})
                   maybe-user $ -> users vals .to-list
                     find $ fn (user)
-                      = username $ option:unwrap (:name user)
+                      = username $ option:unwrap (get user :name)
                 update-in db ([] :sessions sid)
                   fn (session)
                     let
@@ -1270,8 +1275,8 @@
                       if-let (user maybe-user)
                         if
                           = (md5 password)
-                            option:unwrap $ :password user
-                          assoc session-data :user-id $ option:unwrap (:id user)
+                            option:unwrap $ get user :password
+                          assoc session-data :user-id $ option:unwrap (get user :id)
                           update session-data :messages $ fn (messages)
                             assoc (option:unwrap messages) op-id $ {} (:id op-id)
                               :text $ str "|Wrong password for " username
@@ -1294,10 +1299,10 @@
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (:users db) ({})
+                  users $ option:unwrap-or (get db :users) ({})
                   maybe-user $ find (vals users)
                     fn (user)
-                      = username $ option:unwrap (:name user)
+                      = username $ option:unwrap (get user :name)
                 if-let (user maybe-user)
                   update-in db ([] :sessions sid :messages)
                     fn (messages)
