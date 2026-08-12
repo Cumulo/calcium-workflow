@@ -616,8 +616,8 @@
         |UserView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct UserView (:name 'String) (:id 'String)
-              :nickname $ :: 'Optional 'String
-              :avatar $ :: 'Optional 'String
+              :nickname $ :: 'Option 'String
+              :avatar $ :: 'Option 'String
           :examples $ []
           :schema $ :: 'Dynamic
         |database $ %{} 'CodeEntry (:doc |)
