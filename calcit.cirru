@@ -561,12 +561,12 @@
       :defs $ {}
         |AttachedView $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct AttachedView (:type :tag) (:content :string)
+            defstruct AttachedView (:type 'Tag) (:content 'String)
           :examples $ []
           :schema $ :: 'Dynamic
         |MessageView $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct MessageView (:id :string) (:text :string)
+            defstruct MessageView (:id 'String) (:text 'String)
           :examples $ []
           :schema $ :: 'Dynamic
         |Op $ %{} 'CodeEntry (:doc |)
@@ -577,7 +577,7 @@
           :schema $ :: 'Dynamic
         |RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct RouterView (:name :tag)
+            defstruct RouterView (:name 'Tag)
               :data $ :: 'Option 'Map
               :router $ :: 'Option 'Map
           :examples $ []
@@ -585,39 +585,39 @@
         |SessionView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SessionView
-              :user-id $ :: :optional :string
-              :id $ :: :optional :number
-              :nickname $ :: :optional :string
+              :user-id $ :: 'Optional 'String
+              :id $ :: 'Optional 'Number
+              :nickname $ :: 'Optional 'String
               :router $ quote app.schema/RouterView
-              :messages $ :: :map :string (quote app.schema/MessageView)
+              :messages $ :: 'Map 'String (quote app.schema/MessageView)
           :examples $ []
           :schema $ :: 'Dynamic
         |SharedTwig $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct SharedTwig (:reel-length :number)
+            defstruct SharedTwig (:reel-length 'Number)
               :attached $ quote app.schema/AttachedView
               :pages $ :: 'Option 'Map
-              :members :map
-              :session-count :number
+              :members 'Map
+              :session-count 'Number
           :examples $ []
           :schema $ :: 'Dynamic
         |Store $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct Store (:logged-in? :bool)
+            defstruct Store (:logged-in? 'Bool)
               :session $ quote app.schema/SessionView
-              :reel-length :number
+              :reel-length 'Number
               :attached $ quote app.schema/AttachedView
               :user $ :: 'Option 'app.schema/UserView
               :router $ quote app.schema/RouterView
-              :count :number
-              :color :string
+              :count 'Number
+              :color 'String
           :examples $ []
           :schema $ :: 'Dynamic
         |UserView $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defstruct UserView (:name :string) (:id :string)
-              :nickname $ :: :optional :string
-              :avatar $ :: :optional :string
+            defstruct UserView (:name 'String) (:id 'String)
+              :nickname $ :: 'Optional 'String
+              :avatar $ :: 'Optional 'String
           :examples $ []
           :schema $ :: 'Dynamic
         |database $ %{} 'CodeEntry (:doc |)
