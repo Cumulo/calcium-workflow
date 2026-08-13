@@ -14,10 +14,29 @@ const current = {
   codeDynamic: reports.weak.kinds["code-dynamic"] ?? 0,
   codeNil: reports.weak.kinds["code-nil"] ?? 0,
   declaredOptional: reports.weak.intents["declared-optional"] ?? 0,
+  unresolved: reports.weak.intents["unresolved"] ?? 0,
   deprecatedCalls: reports.deprecated.calls,
 };
 
-const failures = Object.keys(baseline).filter((key) => current[key] > baseline[key]);
+const failures = [];
+for (const key of Object.keys(current)) {
+  if (!(key in baseline)) {
+    failures.push(`${key}: missing baseline metric`);
+    continue;
+  }
+  if (!Number.isFinite(baseline[key])) {
+    failures.push(`${key}: baseline is not a finite number`);
+    continue;
+  }
+  if (!Number.isFinite(current[key])) {
+    failures.push(`${key}: current value is not a finite number`);
+    continue;
+  }
+  if (current[key] > baseline[key]) failures.push(`${key}: ${current[key]} > ${baseline[key]}`);
+}
+for (const key of Object.keys(baseline)) {
+  if (!(key in current)) failures.push(`${key}: unknown baseline metric`);
+}
 for (const key of Object.keys(current)) {
   console.log(`${key}: ${current[key]} (baseline ${baseline[key] ?? "unset"})`);
 }
