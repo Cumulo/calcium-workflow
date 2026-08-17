@@ -209,6 +209,22 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        |visibility-heartbeat $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn visibility-heartbeat (cb ? duration)
+              unsafe-coerce
+                flipped js/setInterval (option:unwrap-or duration 3000)
+                  fn () $ let
+                      document-node $ unsafe-coerce js/document 'JsObject
+                    when
+                      = |visible $ .-visibilityState document-node
+                      cb
+                , 'Number
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ [] 'Fn (:: 'Option 'Number)
+              :features $ #{} :js-ffi
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.client $ :require
@@ -220,7 +236,7 @@
             app.config :as config
             ws-edn.client :refer $ ws-connect! ws-send!
             recollect.patch :refer $ patch-twig
-            cumulo-util.core :refer $ on-page-touch visibility-heartbeat
+            cumulo-util.core :refer $ on-page-touch
             |url-parse :default url-parse
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
