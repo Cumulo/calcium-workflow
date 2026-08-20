@@ -1,8 +1,8 @@
 
 {} (:calcit-version |0.13.27)
   :version |0.0.5
-  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |codex/upgrade-calcit-0.13.19)
-    |Cumulo/cumulo-util.calcit |codex/fix-option-duration
+  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.24)
+    |Cumulo/cumulo-util.calcit |0.0.13
     |Respo/alerts.calcit |0.10.17
     |Respo/respo-feather.calcit |0.4.4
     |Respo/respo-message.calcit |0.0.13
