@@ -1,10 +1,12 @@
 
-{} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app) (:version |0.0.3)
+{} (:about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `cr query` to inspect and `cr edit`/`cr tree` to modify. Run `cr docs agents --full` first. Manual edits must follow format and schema conventions, then run `cr edit format`.") (:package |app)
   :entries $ {}
     :default $ {} (:description |) (:init-fn 'app.client/main!) (:mode :js) (:reload-fn 'app.client/reload!)
-      :modules $ [] |respo.calcit/ |recollect/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/
+      :feature-policy $ {}
+      :modules $ [] |respo.calcit/ |recollect/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/ |js-ffi/
       :type-slots $ {} (:dispatch-op |app.schema/Op)
     :server $ {} (:description |) (:init-fn 'app.server/main!) (:mode :native) (:reload-fn 'app.server/reload!)
+      :feature-policy $ {}
       :modules $ [] |recollect/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
       :type-slots $ {} (:dispatch-op |app.schema/Op)
   :files $ {}
@@ -209,6 +211,22 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        |visibility-heartbeat $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn visibility-heartbeat (cb ? duration)
+              unsafe-coerce
+                flipped js/setInterval (option:unwrap-or duration 3000)
+                  fn () $ let
+                      document-node $ unsafe-coerce js/document 'JsObject
+                    when
+                      = |visible $ .-visibilityState document-node
+                      cb
+                , 'Number
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ [] 'Fn (:: 'Option 'Number)
+              :features $ #{} :js-ffi
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.client $ :require
@@ -220,7 +238,7 @@
             app.config :as config
             ws-edn.client :refer $ ws-connect! ws-send!
             recollect.patch :refer $ patch-twig
-            cumulo-util.core :refer $ on-page-touch visibility-heartbeat
+            cumulo-util.core :refer $ on-page-touch
             |url-parse :default url-parse
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
@@ -563,25 +581,24 @@
           :code $ quote
             defstruct AttachedView (:type 'Tag) (:content 'String)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |MessageView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct MessageView (:id 'String) (:text 'String)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |Op $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'Dynamic) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'Dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
-              (:states 'Dynamic 'Dynamic)
+            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'Dynamic) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'Dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:states 'Dynamic 'Dynamic)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct RouterView (:name 'Tag)
               :data $ :: 'Option 'Map
               :router $ :: 'Option 'Map
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |SessionView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SessionView
@@ -591,7 +608,7 @@
               :router $ quote app.schema/RouterView
               :messages $ :: 'Map 'String (quote app.schema/MessageView)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |SharedTwig $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SharedTwig (:reel-length 'Number)
@@ -600,7 +617,7 @@
               :members 'Map
               :session-count 'Number
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |Store $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct Store (:logged-in? 'Bool)
@@ -612,14 +629,14 @@
               :count 'Number
               :color 'String
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |UserView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct UserView (:name 'String) (:id 'String)
               :nickname $ :: 'Option 'String
               :avatar $ :: 'Option 'String
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Enum
         |database $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def database $ {}
