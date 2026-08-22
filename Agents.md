@@ -7,13 +7,13 @@
 查看 Calcit 命令行工具的用法:
 
 ```bash
-cr docs agents
+calcit docs agents
 ```
 
 查看 Respo 模块的具体用法
 
 ```bash
-cr libs readme respo.calcit -f docs/Respo-Agent.md
+calcit libs readme respo.calcit -f docs/Respo-Agent.md
 ```
 
 ---
@@ -54,8 +54,8 @@ app.comp.*          # ← ADD your UI components here
 #### 1. **Update Schema** (Define data structure)
 
 ```bash
-cr query def app.schema/user
-cr tree append-child app.schema/user -p "1" -e ":tasks (noted task ({}))"
+calcit query def app.schema/user
+calcit tree append-child app.schema/user -p "1" -e ":tasks (noted task ({}))"
 ```
 
 Add to `app.schema` namespace if needed:
@@ -72,7 +72,7 @@ def task
 #### 2. **Create Updater** (Business logic - pure function)
 
 ```bash
-cr edit def app.updater.task/add-task -e \
+calcit edit def app.updater.task/add-task -e \
   'defn add-task (db title sid op-id op-time)
     let
         user-id $ get-in db ([] :sessions sid :user-id)
@@ -90,18 +90,18 @@ cr edit def app.updater.task/add-task -e \
 
 ```bash
 # Find insertion point
-cr query def app.updater/updater
-cr tree show app.updater/updater -p "2"
+calcit query def app.updater/updater
+calcit tree show app.updater/updater -p "2"
 
 # Add new branch
-cr tree insert-before app.updater/updater -p "2,8" -e \
+calcit tree insert-before app.updater/updater -p "2,8" -e \
   '(:task/add title) (task/add-task db title sid op-id op-time)'
 ```
 
 #### 4. **Update Twig** (Control what clients see)
 
 ```bash
-cr query def app.twig.container/twig-container
+calcit query def app.twig.container/twig-container
 # Then add/modify twig logic
 ```
 
@@ -176,8 +176,8 @@ defn twig-your-feature (db session)
 **Find location**:
 
 ```bash
-cr query def app.updater/updater
-cr tree show app.updater/updater -p "2"  # tag-match cases
+calcit query def app.updater/updater
+calcit tree show app.updater/updater -p "2"  # tag-match cases
 ```
 
 **Add case** (use same structure as existing ones):
@@ -196,26 +196,26 @@ tag-match op
 ### A. Add Field to Existing Schema
 
 ```bash
-cr tree append-child app.schema/user -p "1" -e ":new-field default-value"
+calcit tree append-child app.schema/user -p "1" -e ":new-field default-value"
 ```
 
 ### B. Modify Updater Logic
 
 ```bash
 # 1. Find and read current code
-cr query def app.updater.user/log-in
+calcit query def app.updater.user/log-in
 
 # 2. Locate exact position
-cr tree show app.updater.user/log-in -p "2"
+calcit tree show app.updater.user/log-in -p "2"
 
 # 3. Replace specific node
-cr tree replace app.updater.user/log-in -p "2,1,0" -e 'new-logic here'
+calcit tree replace app.updater.user/log-in -p "2,1,0" -e 'new-logic here'
 ```
 
 ### C. Add New Twig Projection
 
 ```bash
-cr edit def app.twig.user/twig-user-profile -e \
+calcit edit def app.twig.user/twig-user-profile -e \
   'defn twig-user-profile (user)
     {}
       :id $ :id user
@@ -226,7 +226,7 @@ cr edit def app.twig.user/twig-user-profile -e \
 ### D. Wire New Operation
 
 ```bash
-cr tree insert-after app.updater/updater -p "2,5" -e \
+calcit tree insert-after app.updater/updater -p "2,5" -e \
   '(:new/operation data) (new-updater db data sid op-id op-time)'
 ```
 
@@ -297,29 +297,29 @@ defn good-twig-container (db session)
 
 ```bash
 # View schema
-cr query def app.schema/database
+calcit query def app.schema/database
 
 # Trace updater flow
-cr query usages app.updater/updater
+calcit query usages app.updater/updater
 
 # Find where something is defined
-cr query find your-function-name
+calcit query find your-function-name
 
 # See all operations
-cr query search app.updater/updater -p "tag-match" -l
+calcit query search app.updater/updater -p "tag-match" -l
 ```
 
 ### Test Changes
 
 ```bash
 # Syntax check only (fast)
-cr --check-only
+calcit --check-only
 
 # Run once and exit
-cr
+calcit
 
 # Compile JS once
-cr js
+calcit js
 ```
 
 ### Server Logs (set `dev? true` in config)
@@ -422,20 +422,20 @@ dispatch! $ :: :router/change ({} (:name :profile))
 
 ```bash
 # Development cycle
-cr --check-only              # Fast syntax check
-cr                           # Run once
-cr js                        # Watch compile
-mode=dev cr --entry server   # Dev server
+calcit --check-only              # Fast syntax check
+calcit                           # Run once
+calcit js                        # Watch compile
+mode=dev calcit --entry server   # Dev server
 
 # Code exploration
-cr query def app.updater/updater
-cr query usages your-function
-cr query find symbol-name
+calcit query def app.updater/updater
+calcit query usages your-function
+calcit query find symbol-name
 
 # Code modification
-cr tree show path/to/func -p "2,1"
-cr tree replace path/to/func -p "2,1,0" -e 'new-code'
-cr edit def new/function -e 'defn ...'
+calcit tree show path/to/func -p "2,1"
+calcit tree replace path/to/func -p "2,1,0" -e 'new-code'
+calcit edit def new/function -e 'defn ...'
 ```
 
 ### Common Code Patterns
@@ -503,10 +503,10 @@ comp-messages (:messages session)
 ## Testing
 
 ```bash
-cr --check-only  # Syntax only (fast)
+calcit --check-only  # Syntax only (fast)
 
-cr --check-only  # Syntax only (fast)
-cr               # Run full cycle once
+calcit --check-only  # Syntax only (fast)
+calcit               # Run full cycle once
 ```
 
 ---
@@ -582,7 +582,7 @@ When adding a feature:
 3. ✅ **Wire** - Add case to `app.updater/updater` tag-match
 4. ✅ **Twig** - Filter data by session in `app.twig.*`
 5. ✅ **UI** - Create Respo component in `app.comp.*`
-6. ✅ **Test** - `cr --check-only` before commit
+6. ✅ **Test** - `calcit --check-only` before commit
 
 **Key Rules**:
 
@@ -590,7 +590,7 @@ When adding a feature:
 - Twigs must **filter by session** (never leak private data)
 - Always **dissoc :password** before sending to client
 - Use **`(:: :namespace/action args)`** for operations
-- Test with **`cr --check-only`** frequently
+- Test with **`calcit --check-only`** frequently
 
 **Template handles** (don't need to modify often):
 
