@@ -22,19 +22,19 @@ jobs:
           corepack prepare yarn@4.12.0 --activate
           yarn --version
 
-      - uses: calcit-lang/setup-cr@0.0.9
+      - uses: calcit-lang/setup-calcit@v1
 
       - name: Validate Calcit snapshot and type baseline
         run: |
           caps --ci
-          cr calcit.cirru edit format
+          calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
-          cr calcit.cirru --check-only
-          cr calcit.cirru --entry server --check-only
+          calcit calcit.cirru --check-only
+          calcit calcit.cirru --entry server --check-only
           mkdir -p .calcit/upgrade
-          cr calcit.cirru analyze check-types --summary-only --format json > .calcit/upgrade/check-types.json
-          cr calcit.cirru analyze weak-types --only schema-dynamic,code-dynamic,code-nil --intent unresolved,declared-optional --summary-only --format json > .calcit/upgrade/weak-types.json
-          cr calcit.cirru analyze deprecated --summary-only --format json > .calcit/upgrade/deprecated.json
+          calcit calcit.cirru analyze check-types --summary-only --format json > .calcit/upgrade/check-types.json
+          calcit calcit.cirru analyze weak-types --only schema-dynamic,code-dynamic,code-nil --intent unresolved,declared-optional --summary-only --format json > .calcit/upgrade/weak-types.json
+          calcit calcit.cirru analyze deprecated --summary-only --format json > .calcit/upgrade/deprecated.json
           node scripts/check-calcit-upgrade-baseline.mjs
 
       - run: yarn install --immutable && yarn compile-page && yarn release-page

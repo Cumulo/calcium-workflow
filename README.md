@@ -31,10 +31,10 @@ Run backend in calcit-rs:
 
 ```bash
 # dev mode
-mode=dev cr --entry server -w
+mode=dev calcit -w calcit.cirru --entry server
 
 # release mode
-cr --entry server
+calcit calcit.cirru --entry server
 ```
 
 ### Realtime sync lifecycle
