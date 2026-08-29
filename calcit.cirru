@@ -1411,7 +1411,7 @@
                           :dirty-rev @*sync-revision
                           :in-flight? false
                           :needs-snapshot? true
-                        dispatch! (%:: schema/Op :session/connect) sid
+                        dispatch! (schema/Op :session/connect) sid
                         println "|New client."
                     (:message sid msg)
                       match
