@@ -40,7 +40,7 @@
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn ack-sync! (revision)
-              ws-send! $ :: :sync/ack revision
+              ws-send! $ %:: schema/ClientMessage :sync/ack revision
           :examples $ []
           :schema $ :: 'Dynamic
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
@@ -79,7 +79,7 @@
                     reset! *store $ :: :offline
                     js/console.error "|Lost connection!"
                   :on-data on-server-data
-                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView)
+                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -96,7 +96,7 @@
                   (:states cursor s)
                     reset! *states $ update-states @*states cursor s
                   (:effect/connect) (connect!)
-                  _ $ ws-send! op
+                  _ $ ws-send! (%:: schema/ClientMessage :dispatch op)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
@@ -117,7 +117,7 @@
               js/window.addEventListener |visibilitychange $ fn (event)
                 when @*connected? $ send-activity!
               visibility-heartbeat $ fn ()
-                when @*connected? $ ws-send! (:: :sync/heartbeat @*sync-revision)
+                when @*connected? $ ws-send! (%:: schema/ClientMessage :sync/heartbeat @*sync-revision)
               println "|App started!"
           :examples $ []
           :schema $ :: 'Fn
@@ -129,29 +129,20 @@
             def mount-target $ js/document.querySelector |.app
           :examples $ []
           :schema $ :: 'Dynamic
-        'normalize-server-message $ %{} 'CodeEntry (:doc |)
-          :code $ quote
-            defn normalize-server-message (data)
-              if (enum? data)
-                assoc data 0 $ turn-tag
-                  option:unwrap $ nth data 0
-                data
-          :examples $ []
-          :schema $ :: 'Dynamic
         'on-server-data $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn on-server-data (data)
-              let
-                  message $ normalize-server-message data
-                match message
-                  (:snapshot revision store)
-                    do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
-                  (:patch base-revision revision changes)
-                    do
-                      when config/dev? $ js/console.log |Changes changes
-                      apply-server-patch! base-revision revision changes
-                  (:effect/pong) (do :ok)
-                  _ $ eprintln "|unknown server data kind:" message
+              match (schema/decode-server-message data)
+                (:ok message)
+                  match message
+                    (:snapshot revision store)
+                      do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
+                    (:patch base-revision revision changes)
+                      do
+                        when config/dev? $ js/console.log |Changes changes
+                        apply-server-patch! base-revision revision changes
+                    (:effect/pong) &unit
+                (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -190,14 +181,14 @@
               :args $ []
         'request-snapshot! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn request-snapshot! () $ ws-send! (:: :sync/resume @*sync-revision)
+            defn request-snapshot! () $ ws-send! (%:: schema/ClientMessage :sync/resume @*sync-revision)
           :examples $ []
           :schema $ :: 'Dynamic
         'send-activity! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn send-activity! () $ if (= |visible js/document.visibilityState)
-              ws-send! $ :: :sync/active @*sync-revision
-              ws-send! $ :: :sync/idle @*sync-revision
+              ws-send! $ %:: schema/ClientMessage :sync/active @*sync-revision
+              ws-send! $ %:: schema/ClientMessage :sync/idle @*sync-revision
           :examples $ []
           :schema $ :: 'Dynamic
         'simulate-login! $ %{} 'CodeEntry (:doc |)
@@ -642,6 +633,16 @@
             defstruct AttachedView (:type 'Tag) (:content 'String)
           :examples $ []
           :schema $ :: 'Enum
+        'ClientMessage $ %{} 'CodeEntry (:doc "|Typed messages accepted from a browser connection.")
+          :code $ quote
+            defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op)
+          :examples $ []
+          :schema $ :: 'Enum
+        'MessageDecodeError $ %{} 'CodeEntry (:doc "|Why an untrusted WebSocket value could not become a typed message envelope.")
+          :code $ quote
+            defenum MessageDecodeError $ :invalid 'String
+          :examples $ []
+          :schema $ :: 'Enum
         'MessageView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct MessageView (:id 'String) (:text 'String)
@@ -657,6 +658,13 @@
             defstruct RouterView (:name 'Tag)
               :data $ :: 'Option 'Map
               :router $ :: 'Option 'Map
+          :examples $ []
+          :schema $ :: 'Enum
+        'ServerMessage $ %{} 'CodeEntry (:doc "|Typed synchronization and effect messages sent to a browser.")
+          :code $ quote
+            defenum ServerMessage (:snapshot 'Number 'app.schema/Store)
+              :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
+              :effect/pong
           :examples $ []
           :schema $ :: 'Enum
         'SessionView $ %{} 'CodeEntry (:doc |)
@@ -704,6 +712,202 @@
               :users $ noted user ({})
           :examples $ []
           :schema $ :: 'Dynamic
+        'decode-client-message $ %{} 'CodeEntry (:doc "|Validate one untrusted client value and reconstruct a nominal ClientMessage; direct legacy Op enums remain accepted.")
+          :code $ quote
+            defn decode-client-message (data)
+              let
+                  message $ if (enum? data)
+                    assoc data 0 $ turn-tag
+                      option:unwrap $ nth data 0
+                    , data
+                match message
+                  (:sync/active revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/active revision
+                      invalid-message $ str "|Expected numeric active revision, got: " revision
+                  (:sync/heartbeat revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/heartbeat revision
+                      invalid-message $ str "|Expected numeric heartbeat revision, got: " revision
+                  (:sync/idle revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/idle revision
+                      invalid-message $ str "|Expected numeric idle revision, got: " revision
+                  (:sync/resume revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/resume revision
+                      invalid-message $ str "|Expected numeric resume revision, got: " revision
+                  (:sync/ack revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/ack revision
+                      invalid-message $ str "|Expected numeric acknowledgement revision, got: " revision
+                  (:dispatch op)
+                    match (decode-operation op)
+                      (:ok typed-op)
+                        %:: Result :ok $ %:: ClientMessage :dispatch typed-op
+                      (:err error) (%:: Result :err error)
+                  _ $ match (decode-operation message)
+                    (:ok typed-op)
+                      %:: Result :ok $ %:: ClientMessage :dispatch typed-op
+                    (:err error) (%:: Result :err error)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'Dynamic
+              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ClientMessage
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-sync-control)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ClientMessage :sync/ack 7
+                  decode-client-message $ :: :sync/ack 7
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |accepts-legacy-direct-op)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ClientMessage :dispatch (%:: Op :effect/ping)
+                  decode-client-message $ %:: Op :effect/ping
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-invalid-revision)
+              :code $ quote
+                match
+                  decode-client-message $ :: :sync/active |bad
+                  (:err error)
+                    match error $
+                      :invalid detail
+                      starts-with? detail "|Expected numeric active revision"
+                  _ false
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |decodes-named-wire-operation)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ClientMessage :dispatch (%:: Op :effect/ping)
+                  decode-client-message $ parse-cirru-edn "|%:: 'ClientMessage 'dispatch $ %:: 'Op 'effect/ping"
+              :tags $ #{} :server
+        'decode-operation $ %{} 'CodeEntry (:doc "|Reconstruct a nominal application Op from an untrusted or legacy enum value.")
+          :code $ quote
+            defn decode-operation (data)
+              let
+                  op $ if (enum? data)
+                    assoc data 0 $ turn-tag
+                      option:unwrap $ nth data 0
+                    , data
+                match op
+                  (:session/connect)
+                    %ok $ %:: Op :session/connect
+                  (:session/disconnect)
+                    %ok $ %:: Op :session/disconnect
+                  (:session/remove-message message)
+                    %ok $ %:: Op :session/remove-message message
+                  (:user/log-in username password)
+                    if
+                      and (string? username) (string? password)
+                      %ok $ %:: Op :user/log-in username password
+                      invalid-message $ str "|Invalid log-in operation: " op
+                  (:user/sign-up username password)
+                    if
+                      and (string? username) (string? password)
+                      %ok $ %:: Op :user/sign-up username password
+                      invalid-message $ str "|Invalid sign-up operation: " op
+                  (:user/log-out)
+                    %ok $ %:: Op :user/log-out
+                  (:router/change router)
+                    %ok $ %:: Op :router/change router
+                  (:effect/persist)
+                    %ok $ %:: Op :effect/persist
+                  (:effect/ping)
+                    %ok $ %:: Op :effect/ping
+                  (:effect/pong)
+                    %ok $ %:: Op :effect/pong
+                  (:effect/connect)
+                    %ok $ %:: Op :effect/connect
+                  (:reel/reset)
+                    %ok $ %:: Op :reel/reset
+                  (:reel/merge)
+                    %ok $ %:: Op :reel/merge
+                  (:states cursor state)
+                    %ok $ %:: Op :states cursor state
+                  _ $ invalid-message (str "|Unknown application operation: " op)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'Dynamic
+              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/Op
+        'decode-server-message $ %{} 'CodeEntry (:doc "|Validate one untrusted server value and reconstruct a nominal ServerMessage.")
+          :code $ quote
+            defn decode-server-message (data)
+              let
+                  message $ if (enum? data)
+                    assoc data 0 $ turn-tag
+                      option:unwrap $ nth data 0
+                    , data
+                match message
+                  (:snapshot revision store)
+                    if
+                      and (number? revision) (struct? store) (&struct:matches? store Store)
+                      %:: Result :ok $ %:: ServerMessage :snapshot revision (unsafe-coerce store 'app.schema/Store)
+                      invalid-message $ str "|Invalid snapshot envelope: " message
+                  (:patch base-revision revision changes)
+                    let
+                        valid-changes? $ if (list? changes)
+                          every? (unsafe-coerce changes 'List)
+                            fn (change)
+                              = (%some recollect.schema/change-op) (enum-definition change)
+                          , false
+                      if
+                        and (number? base-revision) (number? revision) valid-changes?
+                        %:: Result :ok $ %:: ServerMessage :patch base-revision revision
+                          unsafe-coerce changes $ :: 'List 'recollect.schema/change-op
+                        invalid-message $ str "|Invalid patch envelope: " message
+                  (:effect/pong)
+                    %:: Result :ok $ %:: ServerMessage :effect/pong
+                  _ $ invalid-message (str "|Unknown server message: " message)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'Dynamic
+              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ServerMessage
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-pong)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ServerMessage :effect/pong
+                  decode-server-message $ :: :effect/pong
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-patch-payload)
+              :code $ quote
+                match
+                  decode-server-message $ :: :patch 1 2 :bad
+                  (:err error)
+                    match error $
+                      :invalid detail
+                      starts-with? detail "|Invalid patch envelope"
+                  _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |decodes-named-wire-pong)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ServerMessage :effect/pong
+                  decode-server-message $ parse-cirru-edn "|%:: 'ServerMessage 'effect/pong"
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |validates-nominal-patch-list)
+              :code $ quote
+                assert=
+                  %:: Result :ok $ %:: ServerMessage :patch 3 4
+                    [] $ %:: recollect.schema/change-op :replace 1
+                  decode-server-message $ %:: ServerMessage :patch 3 4
+                    [] $ %:: recollect.schema/change-op :replace 1
+              :tags $ #{} :client
+        'invalid-message $ %{} 'CodeEntry (:doc "|Build a typed decode failure while preserving the expected success type.")
+          :code $ quote
+            defn invalid-message (detail)
+              %:: Result :err $ %:: MessageDecodeError :invalid detail
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'String
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/MessageDecodeError 'T
         'router $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def router $ {} (:name nil) (:title nil)
@@ -813,7 +1017,7 @@
                 match op
                   (:effect/persist) (persist-db!)
                   (:effect/ping)
-                    wss-send! sid $ format-cirru-edn (:: :effect/pong)
+                    wss-send! sid $ format-cirru-edn (%:: schema/ServerMessage :effect/pong)
                   _ $ do
                     reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
                     request-sync!
@@ -852,16 +1056,18 @@
               :args $ [] 'cumulo-reel.core/ReelState 'Number
         'handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn handle-client-message! (action sid)
-              match action
+            defn handle-client-message! (message sid)
+              match message
                 (:sync/active client-revision) (mark-client-active! sid client-revision false)
                 (:sync/heartbeat client-revision) (touch-client! sid client-revision)
                 (:sync/idle client-revision) (mark-client-idle! sid client-revision)
                 (:sync/resume client-revision) (mark-client-active! sid client-revision true)
                 (:sync/ack revision) (acknowledge-client! sid revision)
-                _ $ dispatch! action sid
+                (:dispatch op) (dispatch! op sid)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'app.schema/ClientMessage 'Number
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn handle-sync-send! (sid revision new-store outcome)
@@ -1141,9 +1347,10 @@
                         dispatch! (%:: schema/Op :session/connect) sid
                         println "|New client."
                     (:message sid msg)
-                      let
-                          action $ parse-cirru-edn msg
-                        handle-client-message! action sid
+                      match
+                        schema/decode-client-message $ parse-cirru-edn msg
+                        (:ok message) (handle-client-message! message sid)
+                        (:err error) (eprintln "|Invalid client message:" sid error)
                     (:disconnect sid)
                       do (println "|Client closed!")
                         dispatch! (%:: schema/Op :session/disconnect) sid
@@ -1207,11 +1414,11 @@
                       base-revision $ option:unwrap-or (get state :acked-rev) 0
                     if send-snapshot?
                       handle-sync-send! sid revision new-store $ wss-send! sid
-                        format-cirru-edn $ :: :snapshot revision new-store
+                        format-cirru-edn $ %:: schema/ServerMessage :snapshot revision new-store
                       if
                         not= changes $ []
                         handle-sync-send! sid revision new-store $ wss-send! sid
-                          format-cirru-edn $ :: :patch base-revision revision changes
+                          format-cirru-edn $ %:: schema/ServerMessage :patch base-revision revision changes
                         , &unit
           :examples $ []
           :schema $ :: 'Fn
