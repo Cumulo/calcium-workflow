@@ -70,6 +70,20 @@ oversized payload, while `(:closed)` clears pending send state.
 下一次发送从稳定的确认基线重新计算。`(:too-large)` 保持 snapshot 策略但避免
 重复忙循环，`(:closed)` 则清理 pending send 状态。
 
+Ordinary state changes schedule one sync within a 16 ms coalescing window. The
+first change starts the timer, so a continuous dispatch stream cannot postpone
+the flush indefinitely. WebSocket backpressure uses an independent 200 ms retry
+timer; it never blocks a new ordinary update from taking the fast path. Server
+coordination iterates the synchronous `*client-states` and `*dirty-clients`
+registries. Do not use asynchronous `wss-each!` callbacks as if they completed
+before the next statement; reserve WebSocket FFI for transport operations.
+
+普通状态变更会在 16ms 合并窗口内安排一次同步。首个变更立即启动 timer，因此
+持续 dispatch 不会无限推迟 flush。WebSocket 背压使用独立的 200ms 重试 timer，
+不会阻塞新的普通更新走快速路径。服务端协调同步遍历自身维护的
+`*client-states` 与 `*dirty-clients`；不要假设异步 `wss-each!` 回调会在下一条
+语句之前完成，WebSocket FFI 只负责实际传输。
+
 When migrating an older `(:patch changes)` application, first accept revisioned
 `(:snapshot revision store)` and `(:patch base-revision revision changes)`
 messages on the client, add `(:sync/ack revision)` and `(:sync/resume revision)`,
