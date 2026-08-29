@@ -107,6 +107,22 @@ Cirru EDN 只在 `app.schema` 解码一次；revision、snapshot、patch list �
 直接发送的 `Op`，旧客户端也可继续按未变化的 snapshot/patch variant tag 匹配
 named `ServerMessage`。
 
+Server synchronization observability is available through
+`app.server/read-sync-metrics`. The typed `SyncMetrics` snapshot records the
+latest diff latency, the latest patch payload's real UTF-8 byte length, patch
+and snapshot send attempts, explicit resync requests, and the latest revision.
+Pending-ACK and slow-client gauges are calculated only when the snapshot is
+read, so ordinary dispatch/send paths do not rescan every connection. Attempt
+counts include transport retries; combine them with calcit-wss `wss-metrics`
+when transport admission and queue details are needed.
+
+服务端同步观测可通过 `app.server/read-sync-metrics` 获取。Typed
+`SyncMetrics` snapshot 记录最近 diff 延迟、最近 patch payload 的真实 UTF-8
+字节数、patch/snapshot 发送尝试次数、显式 resync 请求数与最新 revision。
+等待 ACK 和 slow-client gauge 只在读取 snapshot 时计算，普通 dispatch/send
+热路径不会重新扫描所有连接。发送尝试包含传输重试；需要 transport admission
+与队列细节时，可与 calcit-wss 的 `wss-metrics` 组合使用。
+
 Twig rendering is split into a shared projection cached once per Reel revision
 and a session-specific projection. Keep both layers pure and deterministic so
 unchanged application state does not create artificial patches.
