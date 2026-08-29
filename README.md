@@ -47,7 +47,11 @@ visible again, the server sends a fresh snapshot before resuming patches.
 
 The server allows only one unacknowledged snapshot or patch per connection.
 Patches carry `base-revision` and `revision`; a client that cannot apply the
-base requests a new snapshot. Diffs above the configured operation threshold
+base requests a new snapshot. Even when the revision matches, the client applies
+the batch through Recollect's validated `Result` API; a missing path, container
+or payload type mismatch, invalid index, or unsupported operation rejects the
+whole batch and deterministically requests a full snapshot. No partial tree is
+published. Diffs above the configured operation threshold
 fall back to snapshots, bounding the retained patch and client-side patch work.
 The current threshold is checked after diffing; an interruptible node/time
 budget inside Recollect is still required to bound worst-case diff CPU.
@@ -71,6 +75,8 @@ When migrating an older `(:patch changes)` application, first accept revisioned
 messages on the client, add `(:sync/ack revision)` and `(:sync/resume revision)`,
 then switch the server cache to acknowledgement-driven advancement. Do not
 advance a cache for `backpressured`, `too-large`, or `closed` send outcomes.
+Use recollect 0.0.37 or newer and route incoming batches through `PatchBatch`
+`.apply-to`; do not restore the old exception-only `patch-twig` boundary.
 
 Twig rendering is split into a shared projection cached once per Reel revision
 and a session-specific projection. Keep both layers pure and deterministic so
