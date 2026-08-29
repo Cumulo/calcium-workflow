@@ -92,6 +92,21 @@ advance a cache for `backpressured`, `too-large`, or `closed` send outcomes.
 Use recollect 0.0.37 or newer and route incoming batches through `PatchBatch`
 `.apply-to`; do not restore the old exception-only `patch-twig` boundary.
 
+The template now represents the wire protocol as nominal `ClientMessage` and
+`ServerMessage` enums. Raw Cirru EDN is decoded once in `app.schema`; revision,
+snapshot, patch-list, and string operation payloads are validated before the
+typed envelope reaches client/server synchronization code. New clients wrap
+business operations in `ClientMessage :dispatch Op`. The server still decodes
+legacy direct `Op` enums during rolling deployment, while old clients can keep
+matching the unchanged snapshot/patch variant tags from named `ServerMessage`.
+
+模板现在用 nominal `ClientMessage` 与 `ServerMessage` enum 表示线协议。原始
+Cirru EDN 只在 `app.schema` 解码一次；revision、snapshot、patch list 与字符串
+操作参数经过校验后，typed envelope 才进入客户端/服务端同步逻辑。新客户端把
+业务操作包装为 `ClientMessage :dispatch Op`。滚动部署期间服务端仍兼容旧客户端
+直接发送的 `Op`，旧客户端也可继续按未变化的 snapshot/patch variant tag 匹配
+named `ServerMessage`。
+
 Twig rendering is split into a shared projection cached once per Reel revision
 and a session-specific projection. Keep both layers pure and deterministic so
 unchanged application state does not create artificial patches.
