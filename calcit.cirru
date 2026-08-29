@@ -724,7 +724,9 @@
                       sent-store $ option:unwrap (get state :sent-store)
                     swap! *client-caches assoc sid sent-store
                   swap! *client-states update sid $ fn (current)
-                    merge current $ {} (:acked-rev revision) (:sent-rev nil) (:sent-store nil) (:in-flight? false)
+                    dissoc
+                      merge current $ {} (:acked-rev revision) (:in-flight? false)
+                      , :sent-rev :sent-store
                   when
                     >
                       option:unwrap-or (get state :dirty-rev) 0
@@ -801,7 +803,7 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
-              :args $ [] 'Number 'Number 'Dynamic 'wss.core/WssSendOutcome
+              :args $ [] 'Number 'Number 'app.schema/Store 'wss.core/WssSendOutcome
         'heartbeat-timeout $ %{} 'CodeEntry (:doc |)
           :code $ quote (def heartbeat-timeout 12000)
           :examples $ []
@@ -813,7 +815,9 @@
               reset! *client-caches $ {}
               wss-each! $ fn (sid)
                 swap! *client-states update sid $ fn (state)
-                  merge state $ {} (:needs-snapshot? true) (:in-flight? false) (:sent-rev nil) (:sent-store nil)
+                  dissoc
+                    merge state $ {} (:needs-snapshot? true) (:in-flight? false)
+                    , :sent-rev :sent-store
                 when
                   = :active $ option:unwrap
                     get
@@ -852,11 +856,10 @@
                   state $ option:unwrap-or (get @*client-states sid) ({})
                   resumed? $ or force-snapshot?
                     not= :active $ option:unwrap-or (get state :status) :idle
-                  next-state $ merge
+                  next-state-base $ merge
                     {} (:status :active)
                       :last-heartbeat $ now-ms
                       :acked-rev client-revision
-                      :sent-rev nil
                       :dirty-rev @*sync-revision
                       :in-flight? false
                       :needs-snapshot? true
@@ -865,15 +868,13 @@
                         :last-heartbeat $ now-ms
                         :acked-rev $ if resumed? client-revision
                           option:unwrap-or (get state :acked-rev) client-revision
-                        :sent-rev $ if resumed? nil
-                          option:unwrap-or (get state :sent-rev) nil
                         :in-flight? $ if resumed? false
                           option:unwrap-or (get state :in-flight?) false
                         :needs-snapshot? $ or resumed?
                           option:unwrap-or (get state :needs-snapshot?) false
+                  next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
                 swap! *client-states assoc sid next-state
                 when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
-                  swap! *client-states assoc-in ([] sid :sent-store) nil
           :examples $ []
           :schema $ :: 'Dynamic
         'mark-client-idle! $ %{} 'CodeEntry (:doc |)
@@ -882,7 +883,9 @@
               when
                 option:some? $ get @*client-states sid
                 swap! *client-states update sid $ fn (state)
-                  merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:sent-rev nil) (:needs-snapshot? true) (:sent-store nil)
+                  dissoc
+                    merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:needs-snapshot? true)
+                    , :sent-rev :sent-store
                 swap! *client-caches dissoc sid
                 swap! *dirty-clients exclude sid
           :examples $ []
@@ -910,11 +913,14 @@
                 (:too-large)
                   merge current $ {} (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
                 (:closed)
-                  merge current $ {} (:status :idle) (:in-flight? false) (:sent-rev nil) (:sent-store nil) (:last-send-outcome :closed)
+                  dissoc
+                    merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
+                    , :sent-rev :sent-store
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Dynamic)
-              :args $ [] 'Dynamic 'Number 'Dynamic 'wss.core/WssSendOutcome
+            {} (:return 'C)
+              :args $ [] 'C 'Number 'U 'wss.core/WssSendOutcome
+              :generics $ [] 'C 'U
           :tests $ []
             %{} 'TestEntry (:name |accepted-records-pending-store)
               :code $ quote
@@ -954,7 +960,7 @@
             %{} 'TestEntry (:name |closed-clears-pending-send)
               :code $ quote
                 assert=
-                  {} (:status :idle) (:in-flight? false) (:sent-rev nil) (:sent-store nil) (:last-send-outcome :closed)
+                  {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                   next-sync-send-state
                     {} (:status :active) (:in-flight? true) (:sent-rev 7)
                       :sent-store $ {} (:value 1)
@@ -1029,11 +1035,9 @@
                         swap! *client-states assoc sid $ {} (:status :idle)
                           :last-heartbeat $ now-ms
                           :acked-rev 0
-                          :sent-rev nil
                           :dirty-rev @*sync-revision
                           :in-flight? false
                           :needs-snapshot? true
-                          :sent-store nil
                         dispatch! (%:: schema/Op :session/connect) sid
                         println "|New client."
                     (:message sid msg)
@@ -1088,13 +1092,13 @@
                       session $ option:unwrap
                         get-in db $ [] :sessions sid
                       shared $ get-shared-twig reel revision
-                      old-store $ option:unwrap-or (get @*client-caches sid) nil
+                      old-store-option $ get @*client-caches sid
                       new-store $ twig-container db session records shared
                       needs-snapshot? $ or
                         option:unwrap-or (get state :needs-snapshot?) true
-                        nil? old-store
+                        option:none? old-store-option
                       changes $ if needs-snapshot? ([])
-                        diff-twig old-store new-store $ {} (:key :id)
+                        diff-twig (option:unwrap old-store-option) new-store $ {} (:key :id)
                       send-snapshot? $ or needs-snapshot?
                         > (count changes) patch-operation-limit
                       base-revision $ option:unwrap-or (get state :acked-rev) 0
@@ -1108,8 +1112,8 @@
                         , &unit
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Dynamic)
-              :args $ [] 'Dynamic 'cumulo-reel.core/ReelState 'Number
+            {} (:return 'Unit)
+              :args $ [] 'Number 'cumulo-reel.core/ReelState 'Number
         'sync-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sync-clients! (reel)
