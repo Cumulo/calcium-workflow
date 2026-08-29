@@ -971,6 +971,11 @@
             defatom *shared-twig-cache $ {} (:revision -1) (:value nil)
           :examples $ []
           :schema $ :: 'Dynamic
+        '*sync-metrics $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defatom *sync-metrics $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
+          :examples $ []
+          :schema $ :: 'Dynamic
         '*sync-retry-scheduled? $ %{} 'CodeEntry (:doc "|Whether a slower backpressure retry callback is pending.")
           :code $ quote (defatom *sync-retry-scheduled? false)
           :examples $ []
@@ -983,6 +988,11 @@
           :code $ quote (defatom *sync-scheduled? false)
           :examples $ []
           :schema $ :: 'Ref 'Bool
+        'SyncMetrics $ %{} 'CodeEntry (:doc "|Application-level synchronization metrics; pending and slow client fields are gauges refreshed on read.")
+          :code $ quote
+            defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
+          :examples $ []
+          :schema $ :: 'Enum
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn acknowledge-client! (sid revision)
@@ -1061,7 +1071,8 @@
                 (:sync/active client-revision) (mark-client-active! sid client-revision false)
                 (:sync/heartbeat client-revision) (touch-client! sid client-revision)
                 (:sync/idle client-revision) (mark-client-idle! sid client-revision)
-                (:sync/resume client-revision) (mark-client-active! sid client-revision true)
+                (:sync/resume client-revision)
+                  do (record-resync!) (mark-client-active! sid client-revision true)
                 (:sync/ack revision) (acknowledge-client! sid revision)
                 (:dispatch op) (dispatch! op sid)
           :examples $ []
@@ -1187,6 +1198,32 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number
+        'next-sync-metrics $ %{} 'CodeEntry (:doc "|Purely advance synchronization counters for one attempted snapshot or patch send.")
+          :code $ quote
+            defn next-sync-metrics (metrics message-kind revision diff-latency payload)
+              merge metrics $ {} (:last-diff-latency-ms diff-latency)
+                :last-patch-bytes $ if (= message-kind :patch) (utf8-byte-count payload) (:last-patch-bytes metrics)
+                :patch-attempts $ if (= message-kind :patch)
+                  inc $ :patch-attempts metrics
+                  :patch-attempts metrics
+                :snapshot-attempts $ if (= message-kind :snapshot)
+                  inc $ :snapshot-attempts metrics
+                  :snapshot-attempts metrics
+                :last-revision revision
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'app.server/SyncMetrics)
+              :args $ [] 'app.server/SyncMetrics 'Tag 'Number 'Number 'String
+          :tests $ []
+            %{} 'TestEntry (:name |advances-patch-and-snapshot-counters)
+              :code $ quote
+                let
+                    initial $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
+                    after-patch $ next-sync-metrics initial :patch 7 3 "|A😀"
+                  assert=
+                    %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
+                    next-sync-metrics after-patch :snapshot 8 2 |ignored
+              :tags $ #{} :server
         'next-sync-send-state $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn next-sync-send-state (current revision new-store outcome)
@@ -1283,6 +1320,36 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'read-sync-metrics $ %{} 'CodeEntry (:doc "|Read counters plus pending and slow-client gauges computed from current connection state.")
+          :code $ quote
+            defn read-sync-metrics () $ let
+                states $ vals @*client-states
+                pending-clients $ count
+                  filter states $ fn (state)
+                    option:unwrap-or (get state :in-flight?) false
+                slow-clients $ count
+                  filter states $ fn (state)
+                    option:unwrap-or (get state :slow-client?) false
+              merge @*sync-metrics $ {} (:pending-clients pending-clients) (:slow-clients slow-clients)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'app.server/SyncMetrics)
+              :args $ []
+        'record-resync! $ %{} 'CodeEntry (:doc "|Count one explicit client request for a full synchronization snapshot.")
+          :code $ quote
+            defn record-resync! () $ swap! *sync-metrics update :resync-count inc
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
+        'record-sync-send! $ %{} 'CodeEntry (:doc "|Record metrics for one synchronization send attempt before transport admission.")
+          :code $ quote
+            defn record-sync-send! (message-kind revision diff-latency payload)
+              swap! *sync-metrics $ fn (metrics) (next-sync-metrics metrics message-kind revision diff-latency payload)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Tag 'Number 'Number 'String
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn reload! () (println "|Code updated..")
@@ -1407,18 +1474,24 @@
                       needs-snapshot? $ or
                         option:unwrap-or (get state :needs-snapshot?) true
                         option:none? old-store-option
+                      diff-start $ now-ms
                       changes $ if needs-snapshot? ([])
                         diff-twig (option:unwrap old-store-option) new-store $ {} (:key :id)
+                      diff-latency $ - (now-ms) diff-start
                       send-snapshot? $ or needs-snapshot?
                         > (count changes) patch-operation-limit
                       base-revision $ option:unwrap-or (get state :acked-rev) 0
                     if send-snapshot?
-                      handle-sync-send! sid revision new-store $ wss-send! sid
-                        format-cirru-edn $ %:: schema/ServerMessage :snapshot revision new-store
+                      let
+                          payload $ format-cirru-edn (%:: schema/ServerMessage :snapshot revision new-store)
+                        record-sync-send! :snapshot revision diff-latency payload
+                        handle-sync-send! sid revision new-store $ wss-send! sid payload
                       if
                         not= changes $ []
-                        handle-sync-send! sid revision new-store $ wss-send! sid
-                          format-cirru-edn $ %:: schema/ServerMessage :patch base-revision revision changes
+                        let
+                            payload $ format-cirru-edn (%:: schema/ServerMessage :patch base-revision revision changes)
+                          record-sync-send! :patch revision diff-latency payload
+                          handle-sync-send! sid revision new-store $ wss-send! sid payload
                         , &unit
           :examples $ []
           :schema $ :: 'Fn
@@ -1461,6 +1534,30 @@
                   mark-client-active! sid client-revision true
           :examples $ []
           :schema $ :: 'Dynamic
+        'utf8-byte-count $ %{} 'CodeEntry (:doc "|Count UTF-8 wire bytes without allocating an encoded buffer.")
+          :code $ quote
+            defn utf8-byte-count (text)
+              foldl
+                range $ count text
+                , 0 $ fn (total idx)
+                  let
+                      code $ .get-char-code
+                        option:unwrap $ .nth text idx
+                    + total $ cond
+                        <= code 127
+                        , 1
+                      (<= code 2047) 2
+                      (<= code 65535) 3
+                      true 4
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ [] 'String
+          :tests $ []
+            %{} 'TestEntry (:name |counts-multibyte-wire-size)
+              :code $ quote
+                assert= 10 $ utf8-byte-count "|Aé中😀"
+              :tags $ #{} :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)
