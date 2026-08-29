@@ -23,10 +23,12 @@ jobs:
           yarn --version
 
       - uses: calcit-lang/setup-calcit@v1
+        with:
+          tools: calcit,caps
 
       - name: Validate Calcit snapshot and type baseline
         run: |
-          caps --ci
+          caps --strict --ci
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
           calcit calcit.cirru --check-only
