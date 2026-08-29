@@ -767,17 +767,25 @@
             defatom *shared-twig-cache $ {} (:revision -1) (:value nil)
           :examples $ []
           :schema $ :: 'Dynamic
+        '*sync-retry-scheduled? $ %{} 'CodeEntry (:doc "|Whether a slower backpressure retry callback is pending.")
+          :code $ quote (defatom *sync-retry-scheduled? false)
+          :examples $ []
+          :schema $ :: 'Ref 'Bool
         '*sync-revision $ %{} 'CodeEntry (:doc |)
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
           :schema $ :: 'Ref 'Number
+        '*sync-scheduled? $ %{} 'CodeEntry (:doc "|Whether a fast coalesced server sync callback is pending.")
+          :code $ quote (defatom *sync-scheduled? false)
+          :examples $ []
+          :schema $ :: 'Ref 'Bool
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn acknowledge-client! (sid revision)
               let
                   state $ option:unwrap (get @*client-states sid)
                 when
-                  = revision $ option:unwrap (get state :sent-rev)
+                  = revision $ option:unwrap-or (get state :sent-rev) -1
                   let
                       sent-store $ option:unwrap (get state :sent-store)
                     swap! *client-caches assoc sid sent-store
@@ -790,8 +798,11 @@
                       option:unwrap-or (get state :dirty-rev) 0
                       , revision
                     swap! *dirty-clients include sid
+                    request-sync!
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Number 'Number
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn dispatch! (op sid)
@@ -803,7 +814,9 @@
                   (:effect/persist) (persist-db!)
                   (:effect/ping)
                     wss-send! sid $ format-cirru-edn (:: :effect/pong)
-                  _ $ reset! *reel (reel-reducer @*reel updater op sid op-id op-time config/dev?)
+                  _ $ do
+                    reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
+                    request-sync!
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
@@ -855,7 +868,8 @@
               swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
               match outcome
                 (:accepted) &unit
-                (:backpressured) (swap! *dirty-clients include sid)
+                (:backpressured)
+                  do (swap! *dirty-clients include sid) (request-sync-retry!)
                 (:too-large) (println "|WebSocket sync payload is too large for client:" sid)
                 (:closed) &unit
           :examples $ []
@@ -871,19 +885,22 @@
             defn invalidate-sync-caches! ()
               reset! *shared-twig-cache $ {} (:revision -1) (:value nil)
               reset! *client-caches $ {}
-              wss-each! $ fn (sid)
-                swap! *client-states update sid $ fn (state)
-                  dissoc
-                    merge state $ {} (:needs-snapshot? true) (:in-flight? false)
-                    , :sent-rev :sent-store
-                when
-                  = :active $ option:unwrap
-                    get
-                      option:unwrap $ get @*client-states sid
-                      , :status
-                  swap! *dirty-clients include sid
+              each (keys @*client-states)
+                fn (sid)
+                  swap! *client-states update sid $ fn (state)
+                    dissoc
+                      merge state $ {} (:needs-snapshot? true) (:in-flight? false)
+                      , :sent-rev :sent-store
+                  when
+                    = :active $ option:unwrap
+                      get
+                        option:unwrap $ get @*client-states sid
+                        , :status
+                    swap! *dirty-clients include sid
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn main! () $ do
@@ -899,7 +916,6 @@
                 do (run-server! port)
                   println $ str "|Server started on port:" port
               do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
-              set-interval 200 $ fn () (render-loop!)
               set-interval 5000 $ fn () (sweep-idle-clients!)
               set-interval 600000 $ fn () (persist-db!)
               on-control-c on-exit!
@@ -932,9 +948,11 @@
                           option:unwrap-or (get state :needs-snapshot?) false
                   next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
                 swap! *client-states assoc sid next-state
-                when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid)
+                when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid) (request-sync!)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Number 'Number 'Bool
         'mark-client-idle! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn mark-client-idle! (sid client-revision)
@@ -951,15 +969,18 @@
         'mark-clients-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn mark-clients-dirty! (revision)
-              wss-each! $ fn (sid)
-                let
-                    state $ option:unwrap (get @*client-states sid)
-                  swap! *client-states assoc-in ([] sid :dirty-rev) revision
-                  when
-                    = :active $ option:unwrap (get state :status)
-                    swap! *dirty-clients include sid
+              each (keys @*client-states)
+                fn (sid)
+                  let
+                      state $ option:unwrap (get @*client-states sid)
+                    swap! *client-states assoc-in ([] sid :dirty-rev) revision
+                    when
+                      = :active $ option:unwrap (get state :status)
+                      swap! *dirty-clients include sid
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Number
         'next-sync-send-state $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn next-sync-send-state (current revision new-store outcome)
@@ -1081,6 +1102,27 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'request-sync! $ %{} 'CodeEntry (:doc "|Request one bounded, coalesced server sync callback.")
+          :code $ quote
+            defn request-sync! () $ if @*sync-scheduled? &unit
+              do (reset! *sync-scheduled? true)
+                set-timeout sync-coalesce-delay $ fn () (reset! *sync-scheduled? false) (render-loop!)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
+        'request-sync-retry! $ %{} 'CodeEntry (:doc "|Request one slower retry without blocking new fast sync requests.")
+          :code $ quote
+            defn request-sync-retry! () $ if @*sync-retry-scheduled? &unit
+              do (reset! *sync-retry-scheduled? true)
+                set-timeout sync-retry-delay $ fn () (reset! *sync-retry-scheduled? false)
+                  when
+                    not $ empty? @*dirty-clients
+                    request-sync!
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
         'run-server! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn run-server! (port)
@@ -1124,17 +1166,20 @@
           :code $ quote
             defn sweep-idle-clients! () $ let
                 current-time $ now-ms
-              wss-each! $ fn (sid)
-                let
-                    state $ option:unwrap (get @*client-states sid)
-                    last-heartbeat $ option:unwrap-or (get state :last-heartbeat) 0
-                  when
-                    and
-                      = :active $ option:unwrap (get state :status)
-                      > (- current-time last-heartbeat) heartbeat-timeout
-                    mark-client-idle! sid $ option:unwrap-or (get state :acked-rev) 0
+              each (keys @*client-states)
+                fn (sid)
+                  let
+                      state $ option:unwrap (get @*client-states sid)
+                      last-heartbeat $ option:unwrap-or (get state :last-heartbeat) 0
+                    when
+                      and
+                        = :active $ option:unwrap (get state :status)
+                        > (- current-time last-heartbeat) heartbeat-timeout
+                      mark-client-idle! sid $ option:unwrap-or (get state :acked-rev) 0
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
         'sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sync-client! (sid reel revision) (swap! *dirty-clients exclude sid)
@@ -1180,13 +1225,24 @@
                 begin-twig-frame!
                 let
                     revision @*sync-revision
-                  wss-each! $ fn (sid)
-                    when (includes? @*dirty-clients sid) (sync-client! sid reel revision)
+                    clients @*dirty-clients
+                  each clients $ fn (sid)
+                    when
+                      option:some? $ get @*client-states sid
+                      sync-client! sid reel revision
                 finish-twig-frame!
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'cumulo-reel.core/ReelState
+        'sync-coalesce-delay $ %{} 'CodeEntry (:doc "|Maximum coalescing delay in milliseconds for ordinary state updates.")
+          :code $ quote (def sync-coalesce-delay 16)
+          :examples $ []
+          :schema $ :: 'Number
+        'sync-retry-delay $ %{} 'CodeEntry (:doc "|Retry delay in milliseconds after WebSocket backpressure.")
+          :code $ quote (def sync-retry-delay 200)
+          :examples $ []
+          :schema $ :: 'Number
         'touch-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn touch-client! (sid client-revision)
@@ -1207,11 +1263,11 @@
             app.config :as config
             app.twig.container :refer $ twig-container twig-shared
             recollect.diff :refer $ diff-twig
-            wss.core :refer $ wss-serve! wss-send! wss-each!
+            wss.core :refer $ wss-serve! wss-send!
             recollect.twig :refer $ clear-twig-caches!
             app.$meta :refer $ calcit-dirname
             calcit.std.fs :refer $ path-exists? check-write-file!
-            calcit.std.time :refer $ set-interval
+            calcit.std.time :refer $ set-timeout set-interval
             calcit.std.date :refer $ Date get-time!
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
