@@ -52,6 +52,26 @@ fall back to snapshots, bounding the retained patch and client-side patch work.
 The current threshold is checked after diffing; an interruptible node/time
 budget inside Recollect is still required to bound worst-case diff CPU.
 
+The per-client cache is the last acknowledged store, not merely the last value
+offered to the socket. An accepted send keeps its candidate store separately
+until the matching acknowledgement arrives. `(:backpressured)` leaves the
+acknowledged baseline untouched, marks the client slow, and requeues only the
+latest desired revision; the next attempt recomputes one patch from that stable
+baseline. `(:too-large)` requests snapshot policy without spinning on the same
+oversized payload, while `(:closed)` clears pending send state.
+
+每个客户端的 cache 表示“已确认 store”，而不是最近一次尝试发送的值。只有
+`(:accepted)` 且收到匹配 ack 后，pending store 才会成为新的 diff 基线。
+`(:backpressured)` 不推进基线，标记 slow client 并合并到最新 dirty revision；
+下一次发送从稳定的确认基线重新计算。`(:too-large)` 保持 snapshot 策略但避免
+重复忙循环，`(:closed)` 则清理 pending send 状态。
+
+When migrating an older `(:patch changes)` application, first accept revisioned
+`(:snapshot revision store)` and `(:patch base-revision revision changes)`
+messages on the client, add `(:sync/ack revision)` and `(:sync/resume revision)`,
+then switch the server cache to acknowledgement-driven advancement. Do not
+advance a cache for `backpressured`, `too-large`, or `closed` send outcomes.
+
 Twig rendering is split into a shared projection cached once per Reel revision
 and a session-specific projection. Keep both layers pure and deterministic so
 unchanged application state does not create artificial patches.

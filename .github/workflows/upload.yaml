@@ -31,6 +31,7 @@ jobs:
           git diff --exit-code -- calcit.cirru
           calcit calcit.cirru --check-only
           calcit calcit.cirru --entry server --check-only
+          calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
           mkdir -p .calcit/upgrade
           calcit calcit.cirru analyze check-types --summary-only --format json > .calcit/upgrade/check-types.json
           calcit calcit.cirru analyze weak-types --only schema-dynamic,code-dynamic,code-nil --intent unresolved,declared-optional --summary-only --format json > .calcit/upgrade/weak-types.json
