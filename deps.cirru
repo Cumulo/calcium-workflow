@@ -1,7 +1,7 @@
 
 {} (:calcit-version |0.13.63)
   :version |0.0.5
-  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.24)
+  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.25)
     |Cumulo/cumulo-util.calcit |0.0.13
     |Respo/alerts.calcit |0.10.21
     |Respo/respo-feather.calcit |0.4.5
