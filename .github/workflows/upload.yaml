@@ -32,7 +32,9 @@ jobs:
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
           calcit calcit.cirru --check-only
+          calcit calcit.cirru analyze dynamic-methods --max 1
           calcit calcit.cirru --entry server --check-only
+          calcit calcit.cirru test --tag client --require-match --summary-only --format json
           calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
           mkdir -p .calcit/upgrade
           calcit calcit.cirru analyze check-types --summary-only --format json > .calcit/upgrade/check-types.json

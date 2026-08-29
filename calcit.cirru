@@ -32,6 +32,11 @@
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
           :schema $ :: 'Dynamic
+        'ClientPatchError $ %{} 'CodeEntry (:doc "|Client-side reason for rejecting a revisioned patch before requesting a full snapshot.")
+          :code $ quote
+            defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
+          :examples $ []
+          :schema $ :: 'EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn ack-sync! (revision)
@@ -41,19 +46,20 @@
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn apply-server-patch! (base-revision revision changes)
-              if (= base-revision @*sync-revision)
-                let
-                    result $ try
-                      :: :ok $ patch-twig @*store changes
-                      fn (error) (:: :error error)
-                  match result
-                    (:ok next-store)
-                      do (reset! *store next-store) (reset! *sync-revision revision) (ack-sync! revision)
-                    (:error error)
-                      do (js/console.error |Failed-to-apply-server-patch error) (request-snapshot!)
-                do (js/console.warn |Sync-revision-mismatch base-revision @*sync-revision) (request-snapshot!)
+              match (validate-server-patch @*store @*sync-revision base-revision changes)
+                (:ok next-store)
+                  do (reset! *store next-store) (reset! *sync-revision revision) (ack-sync! revision)
+                (:err error)
+                  do
+                    match error
+                      (:revision-mismatch expected actual) (js/console.warn |Sync-revision-mismatch expected actual)
+                      (:invalid-patch patch-error)
+                        js/console.error |Failed-to-apply-server-patch $ patch-error-message patch-error
+                    request-snapshot!
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'Number 'Number (:: 'List 'recollect.schema/change-op)
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
@@ -211,6 +217,57 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'validate-server-patch $ %{} 'CodeEntry (:doc "|Validate base revision and apply one patch batch without mutating client state.")
+          :code $ quote
+            defn validate-server-patch (store local-revision base-revision changes)
+              if (= base-revision local-revision)
+                match
+                  .apply-to
+                    assert-traits (patch-batch changes) PatchBatchOps
+                    , store
+                  (:ok next-store) (%ok next-store)
+                  (:err error)
+                    %err $ %:: ClientPatchError :invalid-patch error
+                %err $ %:: ClientPatchError :revision-mismatch base-revision local-revision
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
+              :generics $ [] 'T
+              :return $ :: 'Result 'T 'ClientPatchError
+          :tests $ []
+            %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
+              :code $ quote
+                let
+                    store $ {} (:value 1)
+                    changes $ [] (%:: patch-schema/change-op :assoc :value 2)
+                  assert=
+                    %ok $ {} (:value 2)
+                    validate-server-patch store 7 7 changes
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-revision-mismatch)
+              :code $ quote
+                let
+                    store $ {} (:value 1)
+                    changes $ []
+                  assert=
+                    %err $ %:: ClientPatchError :revision-mismatch 8 7
+                    validate-server-patch store 7 8 changes
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-patch-atomically)
+              :code $ quote
+                let
+                    store $ {} (:stable 1)
+                    changes $ [] (%:: patch-schema/change-op :assoc :temporary 2)
+                      %:: patch-schema/change-op :update :missing $ %:: patch-schema/change-op :replace 3
+                    expected $ %err
+                      %:: ClientPatchError :invalid-patch $ %:: PatchError :missing-node
+                        [] $ %:: PatchPathSegment :field :missing
+                  assert= expected $ validate-server-patch store 9 9 changes
+                  assert=
+                    {} $ :stable 1
+                    , store
+              :tags $ #{} :client
         'visibility-heartbeat $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn visibility-heartbeat (cb ? duration)
@@ -237,11 +294,12 @@
             app.schema :refer $ Op
             app.config :as config
             ws-edn.client :refer $ ws-connect! ws-send!
-            recollect.patch :refer $ patch-twig
+            recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment PatchBatchOps
             cumulo-util.core :refer $ on-page-touch
             |url-parse :default url-parse
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
+            recollect.schema :as patch-schema
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
