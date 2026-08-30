@@ -1063,10 +1063,7 @@
                   let
                       sent-store $ option:unwrap (get state :sent-store)
                     swap! *client-caches assoc sid sent-store
-                  swap! *client-states update sid $ fn (current)
-                    dissoc
-                      merge current $ {} (:acked-rev revision) (:in-flight? false)
-                      , :sent-rev :sent-store
+                  swap! *client-states update sid $ fn (current) (next-sync-ack-state current revision)
                   when
                     >
                       option:unwrap-or (get state :dirty-rev) 0
@@ -1261,11 +1258,40 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number
+        'next-sync-ack-state $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn next-sync-ack-state (current revision)
+              dissoc
+                merge current $ {} (:acked-rev revision) (:in-flight? false)
+                , :sent-rev :sent-store
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'C)
+              :args $ [] 'C 'Number
+              :generics $ [] 'C
+          :tests $ []
+            %{} 'TestEntry (:name |repeated-backpressure-converges-to-latest-revision)
+              :code $ quote
+                let
+                    initial $ {} (:status :active) (:acked-rev 3) (:dirty-rev 4) (:in-flight? false) (:needs-snapshot? false)
+                    after-first-backpressure $ next-sync-send-state initial 4
+                      {} $ :value 4
+                      %:: wss.core/WssSendOutcome :backpressured
+                    after-latest-backpressure $ next-sync-send-state (assoc after-first-backpressure :dirty-rev 7) 7
+                      {} $ :value 7
+                      %:: wss.core/WssSendOutcome :backpressured
+                    accepted-latest $ next-sync-send-state (assoc after-latest-backpressure :dirty-rev 9) 9
+                      {} $ :value 9
+                      %:: wss.core/WssSendOutcome :accepted
+                  assert=
+                    {} (:status :active) (:acked-rev 9) (:dirty-rev 9) (:in-flight? false) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
+                    next-sync-ack-state accepted-latest 9
+              :tags $ #{} :server
         'next-sync-metrics $ %{} 'CodeEntry (:doc "|Purely advance synchronization counters for one attempted snapshot or patch send.")
           :code $ quote
             defn next-sync-metrics (metrics message-kind revision diff-latency payload)
               merge metrics $ {} (:last-diff-latency-ms diff-latency)
-                :last-patch-bytes $ if (= message-kind :patch) (utf8-byte-count payload) (:last-patch-bytes metrics)
+                :last-patch-bytes $ if (= message-kind :patch) payload.utf8-byte-count (:last-patch-bytes metrics)
                 :patch-attempts $ if (= message-kind :patch)
                   inc $ :patch-attempts metrics
                   :patch-attempts metrics
@@ -1294,7 +1320,12 @@
                 (:accepted)
                   merge current $ {} (:sent-rev revision) (:sent-store new-store) (:in-flight? true) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
                 (:backpressured)
-                  merge current $ {} (:slow-client? true) (:last-send-outcome :backpressured)
+                  merge current $ {}
+                    :dirty-rev $ let
+                        current-dirty $ option:unwrap-or (get current :dirty-rev) 0
+                      if (> revision current-dirty) revision current-dirty
+                    :slow-client? true
+                    :last-send-outcome :backpressured
                 (:too-large)
                   merge current $ {} (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
                 (:closed)
@@ -1322,16 +1353,6 @@
                       {} $ :value 1
                       %:: wss.core/WssSendOutcome :accepted
               :tags $ #{} :server
-            %{} 'TestEntry (:name |backpressure-preserves-ack-baseline)
-              :code $ quote
-                assert=
-                  {} (:status :active) (:acked-rev 5) (:slow-client? true) (:last-send-outcome :backpressured)
-                  next-sync-send-state
-                    {} (:status :active) (:acked-rev 5)
-                    , 7
-                      {} $ :value 1
-                      %:: wss.core/WssSendOutcome :backpressured
-              :tags $ #{} :server
             %{} 'TestEntry (:name |oversized-payload-requires-snapshot)
               :code $ quote
                 assert=
@@ -1352,6 +1373,16 @@
                     , 7
                       {} $ :value 1
                       %:: wss.core/WssSendOutcome :closed
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |backpressure-preserves-latest-dirty-revision)
+              :code $ quote
+                assert=
+                  {} (:status :active) (:acked-rev 5) (:dirty-rev 7) (:slow-client? true) (:last-send-outcome :backpressured)
+                  next-sync-send-state
+                    {} (:status :active) (:acked-rev 5) (:dirty-rev 6)
+                    , 7
+                      {} $ :value 1
+                      %:: wss.core/WssSendOutcome :backpressured
               :tags $ #{} :server
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote
@@ -1597,30 +1628,6 @@
                   mark-client-active! sid client-revision true
           :examples $ []
           :schema $ :: 'Dynamic
-        'utf8-byte-count $ %{} 'CodeEntry (:doc "|Count UTF-8 wire bytes without allocating an encoded buffer.")
-          :code $ quote
-            defn utf8-byte-count (text)
-              foldl
-                range $ count text
-                , 0 $ fn (total idx)
-                  let
-                      code $ .get-char-code
-                        option:unwrap $ .nth text idx
-                    + total $ cond
-                        <= code 127
-                        , 1
-                      (<= code 2047) 2
-                      (<= code 65535) 3
-                      true 4
-          :examples $ []
-          :schema $ :: 'Fn
-            {} (:return 'Number)
-              :args $ [] 'String
-          :tests $ []
-            %{} 'TestEntry (:name |counts-multibyte-wire-size)
-              :code $ quote
-                assert= 10 $ utf8-byte-count "|Aé中😀"
-              :tags $ #{} :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.server $ :require (app.schema :as schema)

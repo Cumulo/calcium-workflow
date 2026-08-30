@@ -11,24 +11,6 @@
       :schema $ :: 'Enum
       :code $ quote
         defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
-    'app.server/utf8-byte-count $ {}
-      :mode :ensure
-      :kind :fn
-      :doc "|Count UTF-8 wire bytes without allocating an encoded buffer."
-      :params $ [] 'text
-      :schema $ :: 'Fn $ {}
-        :args $ [] 'String
-        :return 'Number
-      :code $ quote
-        defn utf8-byte-count (text)
-          foldl (range $ count text) 0 $ fn (total idx)
-            let
-                code $ .get-char-code $ option:unwrap (.nth text idx)
-              + total $ cond
-                (<= code 127) 1
-                (<= code 2047) 2
-                (<= code 65535) 3
-                true 4
     'app.server/next-sync-metrics $ {}
       :mode :ensure
       :kind :fn
@@ -41,7 +23,7 @@
         defn next-sync-metrics (metrics message-kind revision diff-latency payload)
           merge metrics $ {}
             :last-diff-latency-ms diff-latency
-            :last-patch-bytes $ if (= message-kind :patch) (utf8-byte-count payload) (:last-patch-bytes metrics)
+            :last-patch-bytes $ if (= message-kind :patch) payload.utf8-byte-count (:last-patch-bytes metrics)
             :patch-attempts $ if (= message-kind :patch) (inc $ :patch-attempts metrics) (:patch-attempts metrics)
             :snapshot-attempts $ if (= message-kind :snapshot) (inc $ :snapshot-attempts metrics) (:snapshot-attempts metrics)
             :last-revision revision
@@ -85,5 +67,4 @@
                 option:unwrap-or (get state :slow-client?) false
             merge @*sync-metrics $ {} (:pending-clients pending-clients) (:slow-clients slow-clients)
   :edges $ #{}
-    :: :call 'app.server/next-sync-metrics 'app.server/utf8-byte-count
     :: :call 'app.server/record-sync-send! 'app.server/next-sync-metrics
