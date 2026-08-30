@@ -70,6 +70,20 @@ oversized payload, while `(:closed)` clears pending send state.
 下一次发送从稳定的确认基线重新计算。`(:too-large)` 保持 snapshot 策略但避免
 重复忙循环，`(:closed)` 则清理 pending send 状态。
 
+A native slow-reader regression deliberately pauses the TCP reader while asking
+for repeated 192 KiB snapshots. With calcit-wss 0.2.25, 16 requests produce only
+9 delivered baseline snapshots before the bounded transport coalesces pressure;
+the next acknowledged snapshot contains the final coalesced application state,
+and the following patch uses that acknowledged revision as its base. Retryable
+socket `WouldBlock`/timeout results keep the connection alive instead of being
+reported as a disconnect.
+
+原生慢读端回归会暂停 TCP reader，同时重复请求 192 KiB snapshot。使用
+calcit-wss 0.2.25 时，16 次请求只实际收到 9 个 baseline snapshot，证明有界
+transport 已触发背压；随后确认的 snapshot 包含最终合并后的业务状态，下一条 patch
+也从该已确认 revision 继续。socket 的 `WouldBlock`/timeout 作为可重试结果处理，
+不会再把普通慢读端误判为断线。
+
 Ordinary state changes schedule one sync within a 16 ms coalescing window. The
 first change starts the timer, so a continuous dispatch stream cannot postpone
 the flush indefinitely. WebSocket backpressure uses an independent 200 ms retry
@@ -148,6 +162,11 @@ when transport admission and queue details are needed.
 等待 ACK 和 slow-client gauge 只在读取 snapshot 时计算，普通 dispatch/send
 热路径不会重新扫描所有连接。发送尝试包含传输重试；需要 transport admission
 与队列细节时，可与 calcit-wss 的 `wss-metrics` 组合使用。
+
+Payload byte accounting uses Calcit 0.13.67's string receiver method
+`.utf8-byte-count`; the template no longer carries an interpreted helper on this
+hot path. 字节统计直接使用 Calcit 0.13.67 的 String 方法 `.utf8-byte-count`，
+不再在模板中维护解释执行的辅助函数。
 
 Twig rendering is split into a shared projection cached once per Reel revision
 and a session-specific projection. Keep both layers pure and deterministic so
