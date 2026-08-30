@@ -70,7 +70,7 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number 'Number (:: 'List 'recollect.schema/change-op)
-        'choose-recovery-action $ %{} 'CodeEntry (:doc "|Choose whether a visible online page should reconnect an existing client or create one.")
+        'choose-recovery-action $ %{} 'CodeEntry (:doc "|Choose whether a visible online manual recovery signal should reconnect an existing client or create one.")
           :code $ quote
             defn choose-recovery-action (connected? has-client? visible? online?)
               if (and visible? online?)
@@ -111,6 +111,7 @@
                       reset! *store $ :: :offline
                       js/console.error "|Lost connection!"
                     :on-data on-server-data
+                    :heartbeat-timeout-ms 75000
                     :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
           :examples $ []
           :schema $ :: 'Fn
@@ -148,8 +149,6 @@
                   recover-connection!
               js/window.addEventListener |visibilitychange $ fn (event)
                 when @*connected? $ send-activity!
-                recover-connection!
-              js/window.addEventListener |online $ fn (event) (recover-connection!)
               visibility-heartbeat $ fn ()
                 when @*connected? $ ws-send! (%:: schema/ClientMessage :sync/heartbeat @*sync-revision)
               println "|App started!"
@@ -181,7 +180,7 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Dynamic
-        'recover-connection! $ %{} 'CodeEntry (:doc "|Apply the typed recovery policy to the current browser WebSocket client.")
+        'recover-connection! $ %{} 'CodeEntry (:doc "|Apply typed manual page-touch acceleration to the current browser WebSocket client.")
           :code $ quote
             defn recover-connection! () $ let
                 document-node $ unsafe-coerce js/document 'JsObject
@@ -1130,7 +1129,10 @@
             defn handle-client-message! (message sid)
               match message
                 (:sync/active client-revision) (mark-client-active! sid client-revision false)
-                (:sync/heartbeat client-revision) (touch-client! sid client-revision)
+                (:sync/heartbeat client-revision)
+                  do (touch-client! sid client-revision)
+                    wss-send! sid $ format-cirru-edn (%:: schema/ServerMessage :effect/pong)
+                    , &unit
                 (:sync/idle client-revision) (mark-client-idle! sid client-revision)
                 (:sync/resume client-revision)
                   do (record-resync!) (mark-client-active! sid client-revision true)
