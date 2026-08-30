@@ -32,9 +32,19 @@
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
           :schema $ :: 'Dynamic
+        '*ws-client $ %{} 'CodeEntry (:doc "|Current nominal ws-edn client, retained across browser recovery events.")
+          :code $ quote
+            defatom *ws-client $ %none
+          :examples $ []
+          :schema $ :: 'Ref (:: 'Option 'ws-edn.client/WsClient)
         'ClientPatchError $ %{} 'CodeEntry (:doc "|Client-side reason for rejecting a revisioned patch before requesting a full snapshot.")
           :code $ quote
             defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'ConnectionRecoveryAction $ %{} 'CodeEntry (:doc "|Deterministic action selected from browser and WebSocket lifecycle facts.")
+          :code $ quote
+            defenum ConnectionRecoveryAction (:none) (:reconnect) (:connect)
           :examples $ []
           :schema $ :: 'EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
@@ -60,6 +70,27 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number 'Number (:: 'List 'recollect.schema/change-op)
+        'choose-recovery-action $ %{} 'CodeEntry (:doc "|Choose whether a visible online page should reconnect an existing client or create one.")
+          :code $ quote
+            defn choose-recovery-action (connected? has-client? visible? online?)
+              if (and visible? online?)
+                if connected? (ConnectionRecoveryAction :none)
+                  if has-client? (ConnectionRecoveryAction :reconnect) (ConnectionRecoveryAction :connect)
+                ConnectionRecoveryAction :none
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'ConnectionRecoveryAction)
+              :args $ [] 'Bool 'Bool 'Bool 'Bool
+          :tests $ []
+            %{} 'TestEntry (:name |selects-deterministic-browser-recovery)
+              :code $ quote
+                do
+                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action true true true true)
+                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action false true false true)
+                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action false true true false)
+                  assert= (ConnectionRecoveryAction :reconnect) (choose-recovery-action false true true true)
+                  assert= (ConnectionRecoveryAction :connect) (choose-recovery-action false false true true)
+              :tags $ #{} :client
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
@@ -71,15 +102,16 @@
                 port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
                   str $ option:unwrap (get config/site :port)
               reset! *store $ :: :loading
-              ws-connect! (str |ws:// host |: port)
-                {}
-                  :on-open $ fn (event)
-                    do (reset! *connected? true) (send-activity!) (simulate-login!)
-                  :on-close $ fn (event) (reset! *connected? false)
-                    reset! *store $ :: :offline
-                    js/console.error "|Lost connection!"
-                  :on-data on-server-data
-                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
+              reset! *ws-client $ %some
+                ws-connect! (str |ws:// host |: port)
+                  {}
+                    :on-open $ fn (event)
+                      do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
+                    :on-close $ fn (event) (reset! *connected? false)
+                      reset! *store $ :: :offline
+                      js/console.error "|Lost connection!"
+                    :on-data on-server-data
+                    :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -113,9 +145,11 @@
               on-page-touch $ fn ()
                 if
                   = @*store $ :: :offline
-                  connect!
+                  recover-connection!
               js/window.addEventListener |visibilitychange $ fn (event)
                 when @*connected? $ send-activity!
+                recover-connection!
+              js/window.addEventListener |online $ fn (event) (recover-connection!)
               visibility-heartbeat $ fn ()
                 when @*connected? $ ws-send! (%:: schema/ClientMessage :sync/heartbeat @*sync-revision)
               println "|App started!"
@@ -147,12 +181,39 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Dynamic
+        'recover-connection! $ %{} 'CodeEntry (:doc "|Apply the typed recovery policy to the current browser WebSocket client.")
+          :code $ quote
+            defn recover-connection! () $ let
+                document-node $ unsafe-coerce js/document 'JsObject
+                navigator-node $ unsafe-coerce js/navigator 'JsObject
+                visible? $ = |visible
+                  unsafe-coerce (.-visibilityState document-node) 'String
+                online? $ unsafe-coerce (.-onLine navigator-node) 'Bool
+                client-option @*ws-client
+                has-client? $ match client-option
+                  (:some client) true
+                  (:none) false
+                action $ choose-recovery-action @*connected? has-client? visible? online?
+              match action
+                (:none) &unit
+                (:connect) (connect!)
+                (:reconnect)
+                  match client-option
+                    (:some client)
+                      do (assert-traits client WsClientOps) (client .reconnect)
+                    (:none) &unit
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
+              :features $ #{} :js-ffi
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn reload! () $ if (some? client-errors) (hud! |error client-errors)
               do (hud! |inactive nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!)
                 add-watch *store :changes $ fn (store prev) (render-app!)
                 add-watch *states :changes $ fn (states prev) (render-app!)
+                ws-set-on-data! on-server-data
                 println "|Code updated."
           :examples $ []
           :schema $ :: 'Fn
@@ -284,7 +345,7 @@
             app.schema :as schema
             app.schema :refer $ Op
             app.config :as config
-            ws-edn.client :refer $ ws-connect! ws-send!
+            ws-edn.client :refer $ ws-connect! ws-send! ws-set-on-data! WsClientOps
             recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment PatchBatchOps
             cumulo-util.core :refer $ on-page-touch
             |url-parse :default url-parse

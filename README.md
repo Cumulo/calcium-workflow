@@ -107,6 +107,24 @@ Cirru EDN 只在 `app.schema` 解码一次；revision、snapshot、patch list �
 直接发送的 `Op`，旧客户端也可继续按未变化的 snapshot/patch variant tag 匹配
 named `ServerMessage`。
 
+Browser recovery keeps the nominal `ws-edn.client/WsClient` instead of creating
+untracked sockets from individual DOM callbacks. A pure typed policy selects
+`none`, `reconnect`, or `connect` from connection, client, visibility, and
+online state. `visibilitychange`, `online`, and offline-page touches all use the
+same policy. Every successful open—including a reopened socket—sends
+`ClientMessage :sync/resume` with the last applied revision before ordinary
+activity/login messages. ws-edn generation gating discards callbacks from
+replaced sockets, and hot reload replaces the active data handler without
+rebuilding the connection.
+
+浏览器恢复会保留 nominal `ws-edn.client/WsClient`，不在各个 DOM callback 中
+创建无法追踪的新 socket。纯 typed 策略根据 connected、client、visibility 与
+online 状态选择 `none`、`reconnect` 或 `connect`；`visibilitychange`、`online`
+以及离线页面触摸统一经过这套策略。每次成功 open（包括重新连接）都会先携带
+最后已应用 revision 发送 `ClientMessage :sync/resume`，再发送普通 activity/login
+消息。ws-edn 的 generation gating 会丢弃已替换 socket 的迟到 callback；热更新
+只替换当前 data handler，不重建连接。
+
 Server synchronization observability is available through
 `app.server/read-sync-metrics`. The typed `SyncMetrics` snapshot records the
 latest diff latency, the latest patch payload's real UTF-8 byte length, patch
