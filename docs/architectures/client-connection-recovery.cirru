@@ -1,7 +1,7 @@
 {}
   :schema-version 1
   :feature 'client-connection-recovery
-  :doc "|Typed browser recovery policy over the generation-gated ws-edn client; every reopened socket requests revision resynchronization."
+  :doc "|ws-edn owns visibility/online lifecycle, bounded retry, and heartbeat deadline; Calcium adds manual page-touch acceleration and revision resynchronization on every open."
   :roots $ #{} 'app.client/recover-connection!
   :definitions $ {}
     'app.client/ConnectionRecoveryAction $ {}
@@ -19,7 +19,7 @@
     'app.client/choose-recovery-action $ {}
       :mode :ensure
       :kind :fn
-      :doc "|Choose whether a visible online page should reconnect an existing client or create one."
+      :doc "|Choose whether a visible online manual recovery signal should reconnect an existing client or create one."
       :params $ [] 'connected? 'has-client? 'visible? 'online?
       :schema $ :: :fn $ {}
         :args $ [] 'Bool 'Bool 'Bool 'Bool
@@ -27,7 +27,7 @@
     'app.client/recover-connection! $ {}
       :mode :ensure
       :kind :fn
-      :doc "|Apply the typed recovery policy to the current browser WebSocket client."
+      :doc "|Apply typed manual page-touch acceleration to the current browser WebSocket client."
       :params $ []
       :schema $ :: :fn $ {}
         :args $ []
