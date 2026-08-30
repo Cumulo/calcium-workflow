@@ -10,4 +10,4 @@
 
 - Remove the obsolete page-touch reconnect policy from README after PR review.
 - Clarify that ws-edn exclusively owns transport recovery while Calcium's lifecycle watcher only emits application activity and revision heartbeats.
-- Remove the quickly stale Calcit version qualifier while retaining the `.utf8-byte-count` capability documentation.
+- Remove the likely-to-become-stale Calcit version qualifier while retaining the `.utf8-byte-count` capability documentation.
