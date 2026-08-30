@@ -147,13 +147,11 @@ Cirru EDN 只在 `app.schema` 解码一次；revision、snapshot、patch list �
 直接发送的 `Op`，旧客户端也可继续按未变化的 snapshot/patch variant tag 匹配
 named `ServerMessage`。
 
-Browser recovery keeps the nominal `ws-edn.client/WsClient` instead of creating
-untracked sockets from individual DOM callbacks. A pure typed policy selects
-`none`, `reconnect`, or `connect` from connection, client, visibility, and
-online state for manual page-touch acceleration. ws-edn owns the
+Browser recovery keeps the nominal `ws-edn.client/WsClient`; ws-edn owns the
 `visibilitychange`/`online` recovery listeners, generation gate, bounded retry,
-and heartbeat deadline, so the application does not install a second reconnect
-path. Every successful open—including a reopened socket—sends
+and heartbeat deadline. Calcium's cleanup-backed lifecycle watcher only emits
+application activity and revision heartbeats, so it never installs a second
+reconnect path. Every successful open—including a reopened socket—sends
 `ClientMessage :sync/resume` with the last applied revision before ordinary
 activity/login messages. ws-edn generation gating discards callbacks from
 replaced sockets, and hot reload replaces the active data handler without
@@ -162,11 +160,10 @@ deadline. Its existing 30-second protocol heartbeat now receives a typed
 `ServerMessage :effect/pong`, renewing healthy connections while a silent dead
 socket is actively closed and recovered through backoff.
 
-浏览器恢复会保留 nominal `ws-edn.client/WsClient`，不在各个 DOM callback 中
-创建无法追踪的新 socket。纯 typed 策略根据 connected、client、visibility 与
-online 状态为 page-touch 提供手动加速；`visibilitychange`/`online` recovery、
-generation gate、有界重试与 heartbeat deadline 统一由 ws-edn 管理，应用不再安装
-第二套重连路径。每次成功 open（包括重新连接）都会先携带
+浏览器恢复会保留 nominal `ws-edn.client/WsClient`；`visibilitychange`/`online`
+recovery、generation gate、有界重试与 heartbeat deadline 统一由 ws-edn 管理。
+Calcium 带 cleanup 的 lifecycle watcher 只发送应用 activity 和 revision heartbeat，
+不会安装第二套重连路径。每次成功 open（包括重新连接）都会先携带
 最后已应用 revision 发送 `ClientMessage :sync/resume`，再发送普通 activity/login
 消息。ws-edn 的 generation gating 会丢弃已替换 socket 的迟到 callback；热更新
 只替换当前 data handler，不重建连接。模板启用 75 秒入站 heartbeat deadline；
@@ -189,9 +186,9 @@ when transport admission and queue details are needed.
 热路径不会重新扫描所有连接。发送尝试包含传输重试；需要 transport admission
 与队列细节时，可与 calcit-wss 的 `wss-metrics` 组合使用。
 
-Payload byte accounting uses Calcit 0.13.67's string receiver method
+Payload byte accounting uses Calcit's string receiver method
 `.utf8-byte-count`; the template no longer carries an interpreted helper on this
-hot path. 字节统计直接使用 Calcit 0.13.67 的 String 方法 `.utf8-byte-count`，
+hot path. 字节统计直接使用 Calcit 的 String 方法 `.utf8-byte-count`，
 不再在模板中维护解释执行的辅助函数。
 
 Twig rendering is split into a shared projection cached once per Reel revision
