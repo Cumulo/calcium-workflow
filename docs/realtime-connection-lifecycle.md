@@ -15,14 +15,14 @@ typed heartbeat/pong 消息与 updater 状态。
 
 Do not add application-level `online` or `visibilitychange` reconnect listeners.
 They race with ws-edn's listener and can replace a socket that is already
-connecting. Calcium keeps only `on-page-touch` as an explicit manual
-acceleration when the store is offline; `.reconnect` cancels a pending backoff
-timer before opening a new generation.
+connecting. Calcium installs one cleanup-backed `watch-browser-lifecycle!`
+watcher only for visible/hidden application activity and the 30-second revision
+heartbeat; it never calls `connect!` or `.reconnect`.
 
 不要再增加应用层 `online` 或 `visibilitychange` 重连 listener；它们会与 ws-edn
-listener 竞争，并替换已经处于 connecting 的 socket。Calcium 只保留 store offline
-时的 `on-page-touch` 手动加速；`.reconnect` 会先取消 pending backoff timer，再打开
-新 generation。
+listener 竞争，并替换已经处于 connecting 的 socket。Calcium 只安装一个带 cleanup
+的 `watch-browser-lifecycle!` watcher，负责 visible/hidden 应用 activity 与 30 秒
+revision heartbeat；它不会调用 `connect!` 或 `.reconnect`。
 
 ## Heartbeat and resync / 心跳与重同步
 
@@ -48,10 +48,11 @@ snapshot；因此 heartbeat recovery 不会绕过 revision 收敛。
 
 ## Cleanup / 清理
 
-Hot reload only replaces the data handler. Explicit client `.close` owns cleanup
-of lifecycle listeners, reconnect timers, heartbeat timers, and leases. Avoid
-detached timers or untracked sockets in application code.
+Main and hot reload run the previous application watcher cleanup before
+installing its replacement. Explicit client `.close` owns ws-edn's transport
+listeners, reconnect timers, deadline timers, and leases. Avoid detached timers
+or untracked sockets in application code.
 
-热更新只替换 data handler。显式 client `.close` 负责清理 lifecycle listener、
-reconnect timer、heartbeat timer 与 lease；应用代码不应创建 detached timer 或
-无法追踪的 socket。
+main 与热更新会在安装新的应用 watcher 前执行旧 cleanup。显式 client `.close`
+负责清理 ws-edn 的 transport listener、reconnect timer、deadline timer 与 lease；
+应用代码不应创建 detached timer 或无法追踪的 socket。
