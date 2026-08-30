@@ -45,6 +45,20 @@ connection that misses heartbeats, becomes idle: the server records only the
 latest dirty revision and releases its previous Twig cache. When the page is
 visible again, the server sends a fresh snapshot before resuming patches.
 
+Transport recovery has one owner: ws-edn manages visibility/online reconnect,
+bounded backoff, generation replacement, and its 75-second receive deadline.
+Calcium reuses cumulo-util's cleanup-backed browser lifecycle only for
+application signals: visible/hidden activity and one 30-second revision
+heartbeat. Main and hot reload replace the previous cleanup capability, so no
+listener or timer accumulates. The older page-touch reconnect path and local
+visibility interval have been removed.
+
+传输恢复只有一个 owner：ws-edn 管理 visibility/online 重连、有界退避、generation
+替换及 75 秒接收 deadline。Calcium 复用 cumulo-util 带 cleanup 的浏览器生命周期，
+但只处理应用信号：visible/hidden 活跃状态和 30 秒 revision heartbeat。main 与热更新
+都会先执行旧 cleanup，因此 listener/timer 不会累积；旧 page-touch 重连路径及本地
+visibility interval 已删除。
+
 The server allows only one unacknowledged snapshot or patch per connection.
 Patches carry `base-revision` and `revision`; a client that cannot apply the
 base requests a new snapshot. Even when the revision matches, the client applies
@@ -92,11 +106,23 @@ coordination iterates the synchronous `*client-states` and `*dirty-clients`
 registries. Do not use asynchronous `wss-each!` callbacks as if they completed
 before the next statement; reserve WebSocket FFI for transport operations.
 
+The pure `cumulo-util.realtime/Coalescer` was evaluated here but is intentionally
+not inserted into this server path: the existing fixed-window single timer is
+already bounded and cannot starve, while the generic planner would still need
+the same application-owned timer and add clock/state transitions without
+removing duplicated behavior. RetryBackoff, HeartbeatLease, and browser
+lifecycle do remove duplicated state and are reused through ws-edn/cumulo-util.
+
 普通状态变更会在 16ms 合并窗口内安排一次同步。首个变更立即启动 timer，因此
 持续 dispatch 不会无限推迟 flush。WebSocket 背压使用独立的 200ms 重试 timer，
 不会阻塞新的普通更新走快速路径。服务端协调同步遍历自身维护的
 `*client-states` 与 `*dirty-clients`；不要假设异步 `wss-each!` 回调会在下一条
 语句之前完成，WebSocket FFI 只负责实际传输。
+
+这里也评估了 `cumulo-util.realtime/Coalescer`，但没有强行接入：现有固定窗口单
+timer 已经有界且不会饥饿，通用 planner 仍需应用持有同一个 timer，并额外增加
+clock/state 转换，不能减少重复行为。RetryBackoff、HeartbeatLease 与 browser
+lifecycle 确实删除了重复状态，因此已通过 ws-edn/cumulo-util 复用。
 
 When migrating an older `(:patch changes)` application, first accept revisioned
 `(:snapshot revision store)` and `(:patch base-revision revision changes)`

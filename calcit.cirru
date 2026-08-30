@@ -12,6 +12,11 @@
   :files $ {}
     'app.client $ %{} 'FileEntry
       :defs $ {}
+        '*activity-cleanup $ %{} 'CodeEntry (:doc "|Cleanup capability for Calcium application-level browser activity signals.")
+          :code $ quote
+            defatom *activity-cleanup $ %none
+          :examples $ []
+          :schema $ :: 'Ref (:: 'Option 'Fn)
         '*connected? $ %{} 'CodeEntry (:doc |)
           :code $ quote (defatom *connected? false)
           :examples $ []
@@ -42,11 +47,6 @@
             defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
           :examples $ []
           :schema $ :: 'EnumDef
-        'ConnectionRecoveryAction $ %{} 'CodeEntry (:doc "|Deterministic action selected from browser and WebSocket lifecycle facts.")
-          :code $ quote
-            defenum ConnectionRecoveryAction (:none) (:reconnect) (:connect)
-          :examples $ []
-          :schema $ :: 'EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn ack-sync! (revision)
@@ -70,27 +70,18 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number 'Number (:: 'List 'recollect.schema/change-op)
-        'choose-recovery-action $ %{} 'CodeEntry (:doc "|Choose whether a visible online manual recovery signal should reconnect an existing client or create one.")
+        'cleanup-activity-lifecycle! $ %{} 'CodeEntry (:doc "|Run and clear the current application activity cleanup capability.")
           :code $ quote
-            defn choose-recovery-action (connected? has-client? visible? online?)
-              if (and visible? online?)
-                if connected? (ConnectionRecoveryAction :none)
-                  if has-client? (ConnectionRecoveryAction :reconnect) (ConnectionRecoveryAction :connect)
-                ConnectionRecoveryAction :none
+            defn cleanup-activity-lifecycle! () $ do
+              match @*activity-cleanup
+                (:some cleanup) (cleanup)
+                (:none) &unit
+              reset! *activity-cleanup $ %none
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'ConnectionRecoveryAction)
-              :args $ [] 'Bool 'Bool 'Bool 'Bool
-          :tests $ []
-            %{} 'TestEntry (:name |selects-deterministic-browser-recovery)
-              :code $ quote
-                do
-                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action true true true true)
-                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action false true false true)
-                  assert= (ConnectionRecoveryAction :none) (choose-recovery-action false true true false)
-                  assert= (ConnectionRecoveryAction :reconnect) (choose-recovery-action false true true true)
-                  assert= (ConnectionRecoveryAction :connect) (choose-recovery-action false false true true)
-              :tags $ #{} :client
+            {} (:return 'Unit)
+              :args $ []
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn connect! () $ let
@@ -134,6 +125,28 @@
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
               :args $ [] 'app.schema/Op 'Dynamic
+        'install-activity-lifecycle! $ %{} 'CodeEntry (:doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership.")
+          :code $ quote
+            defn install-activity-lifecycle! () $ do (cleanup-activity-lifecycle!)
+              let
+                  cleanup $ watch-browser-lifecycle!
+                    fn (signal)
+                      cond
+                          = signal :visible
+                          when @*connected? $ send-activity!
+                        (= signal :hidden)
+                          when @*connected? $ send-activity!
+                        (= signal :heartbeat)
+                          when @*connected? $ ws-send! (schema/ClientMessage :sync/heartbeat @*sync-revision)
+                        true &unit
+                    %some 30000
+                reset! *activity-cleanup $ %some cleanup
+                , &unit
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
+              :features $ #{} :js-ffi
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn main! () $ do
@@ -143,14 +156,7 @@
               connect!
               add-watch *store :changes $ fn (store prev) (render-app!)
               add-watch *states :changes $ fn (states prev) (render-app!)
-              on-page-touch $ fn ()
-                if
-                  = @*store $ :: :offline
-                  recover-connection!
-              js/window.addEventListener |visibilitychange $ fn (event)
-                when @*connected? $ send-activity!
-              visibility-heartbeat $ fn ()
-                when @*connected? $ ws-send! (%:: schema/ClientMessage :sync/heartbeat @*sync-revision)
+              install-activity-lifecycle!
               println "|App started!"
           :examples $ []
           :schema $ :: 'Fn
@@ -180,38 +186,13 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Dynamic
-        'recover-connection! $ %{} 'CodeEntry (:doc "|Apply typed manual page-touch acceleration to the current browser WebSocket client.")
-          :code $ quote
-            defn recover-connection! () $ let
-                document-node $ unsafe-coerce js/document 'JsObject
-                navigator-node $ unsafe-coerce js/navigator 'JsObject
-                visible? $ = |visible
-                  unsafe-coerce (.-visibilityState document-node) 'String
-                online? $ unsafe-coerce (.-onLine navigator-node) 'Bool
-                client-option @*ws-client
-                has-client? $ match client-option
-                  (:some client) true
-                  (:none) false
-                action $ choose-recovery-action @*connected? has-client? visible? online?
-              match action
-                (:none) &unit
-                (:connect) (connect!)
-                (:reconnect)
-                  match client-option
-                    (:some client)
-                      do (assert-traits client WsClientOps) (client .reconnect)
-                    (:none) &unit
-          :examples $ []
-          :schema $ :: 'Fn
-            {} (:return 'Unit)
-              :args $ []
-              :features $ #{} :js-ffi
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn reload! () $ if (some? client-errors) (hud! |error client-errors)
               do (hud! |inactive nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!)
                 add-watch *store :changes $ fn (store prev) (render-app!)
                 add-watch *states :changes $ fn (states prev) (render-app!)
+                install-activity-lifecycle!
                 ws-set-on-data! on-server-data
                 println "|Code updated."
           :examples $ []
@@ -319,22 +300,6 @@
                     {} $ :stable 1
                     , store
               :tags $ #{} :client
-        'visibility-heartbeat $ %{} 'CodeEntry (:doc |)
-          :code $ quote
-            defn visibility-heartbeat (cb ? duration)
-              unsafe-coerce
-                flipped js/setInterval (option:unwrap-or duration 3000)
-                  fn () $ let
-                      document-node $ unsafe-coerce js/document 'JsObject
-                    when
-                      = |visible $ .-visibilityState document-node
-                      cb
-                , 'Number
-          :examples $ []
-          :schema $ :: 'Fn
-            {} (:return 'Number)
-              :args $ [] 'Fn (:: 'Option 'Number)
-              :features $ #{} :js-ffi
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.client $ :require
@@ -344,13 +309,13 @@
             app.schema :as schema
             app.schema :refer $ Op
             app.config :as config
-            ws-edn.client :refer $ ws-connect! ws-send! ws-set-on-data! WsClientOps
+            ws-edn.client :refer $ ws-connect! ws-send! ws-set-on-data!
             recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment PatchBatchOps
-            cumulo-util.core :refer $ on-page-touch
             |url-parse :default url-parse
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
             recollect.schema :as patch-schema
+            cumulo-util.activity :refer $ watch-browser-lifecycle!
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
