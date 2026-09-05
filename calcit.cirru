@@ -112,7 +112,9 @@
           :code $ quote
             defn dispatch! (op ? op-data)
               when
-                and config/dev? $ not= op :states
+                and config/dev? $ match op
+                  (:states _ _) false
+                  _ true
                 println |Dispatch op op-data
               if (tag? op)
                 recur $ :: op op-data
@@ -227,7 +229,7 @@
           :schema $ :: 'Dynamic
         'send-activity! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn send-activity! () $ if (= |visible js/document.visibilityState)
+            defn send-activity! () $ if (page-visible?)
               ws-send! $ %:: schema/ClientMessage :sync/active @*sync-revision
               ws-send! $ %:: schema/ClientMessage :sync/idle @*sync-revision
           :examples $ []
@@ -315,7 +317,7 @@
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
             recollect.schema :as patch-schema
-            cumulo-util.activity :refer $ watch-browser-lifecycle!
+            cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
@@ -468,7 +470,8 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ get e :value
-                              d! cursor $ assoc state :username (value .unwrap-or |)
+                              d! $ %:: schema/Op :states cursor
+                                assoc state :username $ value .unwrap-or |
                       =< nil 8
                       div ({})
                         input $ {} (:placeholder |Password) (:class-name css/input)
@@ -476,7 +479,8 @@
                           :on-input $ fn (e d!)
                             let
                                 value $ get e :value
-                              d! cursor $ assoc state :password (value .unwrap-or |)
+                              d! $ %:: schema/Op :states cursor
+                                assoc state :password $ value .unwrap-or |
                     =< nil 8
                     div
                       {} $ :style
@@ -877,7 +881,7 @@
                         valid-changes? $ if (list? changes)
                           every? (unsafe-coerce changes 'List)
                             fn (change)
-                              = (%some recollect.schema/change-op) (enum-definition change)
+                              = (enum-definition change) (%some recollect.schema/change-op)
                           , false
                       if
                         and (number? base-revision) (number? revision) valid-changes?
@@ -987,8 +991,7 @@
           :schema $ :: 'Dynamic
         '*reel $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defatom *reel $ merge reel-schema
-              {} (:base @*initial-db) (:db @*initial-db)
+            defatom *reel $ struct-with reel-schema (:base @*initial-db) (:db @*initial-db)
           :examples $ []
           :schema $ :: 'Ref 'cumulo-reel.core/ReelState
         '*shared-twig-cache $ %{} 'CodeEntry (:doc |)
@@ -1035,6 +1038,7 @@
                       , revision
                     swap! *dirty-clients include sid
                     request-sync!
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1044,7 +1048,7 @@
             defn dispatch! (op sid)
               let
                   op-id $ generate-id!
-                  op-time $ -> (get-time!) (.timestamp)
+                  op-time $ now-ms
                 if config/dev? $ println |Dispatch! (str op) sid
                 match op
                   (:effect/persist) (persist-db!)
@@ -1060,7 +1064,7 @@
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn get-backup-path! () $ let
-                now $ .extract (get-time!)
+                now $ extract-time (get-time!)
               join-path calcit-dirname |backups
                 str $ option:unwrap (get now :month)
                 str
@@ -1191,6 +1195,7 @@
                   next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
                 swap! *client-states assoc sid next-state
                 when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid) (request-sync!)
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1255,7 +1260,7 @@
         'next-sync-metrics $ %{} 'CodeEntry (:doc "|Purely advance synchronization counters for one attempted snapshot or patch send.")
           :code $ quote
             defn next-sync-metrics (metrics message-kind revision diff-latency payload)
-              merge metrics $ {} (:last-diff-latency-ms diff-latency)
+              struct-with metrics (:last-diff-latency-ms diff-latency)
                 :last-patch-bytes $ if (= message-kind :patch) payload.utf8-byte-count (:last-patch-bytes metrics)
                 :patch-attempts $ if (= message-kind :patch)
                   inc $ :patch-attempts metrics
@@ -1351,7 +1356,7 @@
               :tags $ #{} :server
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn now-ms () $ -> (get-time!) (.timestamp)
+            defn now-ms () $ get-timestamp (get-time!)
           :examples $ []
           :schema $ :: 'Dynamic
         'on-exit! $ %{} 'CodeEntry (:doc |)
@@ -1451,6 +1456,7 @@
                   when
                     not $ empty? @*dirty-clients
                     request-sync!
+                  , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1484,6 +1490,7 @@
                         swap! *client-states dissoc sid
                         swap! *dirty-clients exclude sid
                     _ $ println "|unknown data:" data
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1552,6 +1559,7 @@
                           record-sync-send! :patch revision diff-latency payload
                           handle-sync-send! sid revision new-store $ wss-send! sid payload
                         , &unit
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1570,6 +1578,7 @@
                       option:some? $ get @*client-states sid
                       sync-client! sid reel revision
                 finish-twig-frame!
+              , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -1607,7 +1616,7 @@
             app.$meta :refer $ calcit-dirname
             calcit.std.fs :refer $ path-exists? check-write-file!
             calcit.std.time :refer $ set-timeout set-interval
-            calcit.std.date :refer $ Date get-time!
+            calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
     'app.twig.container $ %{} 'FileEntry
@@ -1867,7 +1876,7 @@
             defn sign-up (db username password sid op-id op-time)
               let
                   users $ option:unwrap-or (get db :users) ({})
-                  maybe-user $ find (vals users)
+                  maybe-user $ find (-> users vals .to-list)
                     fn (user)
                       = username $ option:unwrap (get user :name)
                 if-let (user maybe-user)
