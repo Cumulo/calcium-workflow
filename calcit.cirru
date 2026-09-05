@@ -30,9 +30,9 @@
           :schema $ :: 'Dynamic
         '*store $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defatom *store $ :: :loading
+            defatom *store $ ClientState :loading
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'app.client/ClientState
         '*sync-revision $ %{} 'CodeEntry (:doc |)
           :code $ quote (defatom *sync-revision 0)
           :examples $ []
@@ -47,6 +47,11 @@
             defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
           :examples $ []
           :schema $ :: 'EnumDef
+        'ClientState $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defenum ClientState (:loading) (:offline) (:ready 'app.schema/Store)
+          :examples $ []
+          :schema $ :: 'EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn ack-sync! (revision)
@@ -56,16 +61,23 @@
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn apply-server-patch! (base-revision revision changes)
-              match (validate-server-patch @*store @*sync-revision base-revision changes)
-                (:ok next-store)
-                  do (reset! *store next-store) (reset! *sync-revision revision) (ack-sync! revision)
-                (:err error)
-                  do
-                    match error
-                      (:revision-mismatch expected actual) (js/console.warn |Sync-revision-mismatch expected actual)
-                      (:invalid-patch patch-error)
-                        js/console.error |Failed-to-apply-server-patch $ patch-error-message patch-error
-                    request-snapshot!
+              match @*store
+                (:ready store)
+                  match (validate-server-patch store @*sync-revision base-revision changes)
+                    (:ok next-store)
+                      do
+                        reset! *store $ ClientState :ready next-store
+                        reset! *sync-revision revision
+                        ack-sync! revision
+                    (:err error)
+                      do
+                        match error
+                          (:revision-mismatch expected actual) (js/console.warn |Sync-revision-mismatch expected actual)
+                          (:invalid-patch patch-error)
+                            js/console.error |Failed-to-apply-server-patch $ patch-error-message patch-error
+                        request-snapshot!
+                (:loading) (request-snapshot!)
+                (:offline) (request-snapshot!)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
@@ -92,14 +104,14 @@
                 host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
                 port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
                   str $ option:unwrap (get config/site :port)
-              reset! *store $ :: :loading
+              reset! *store $ ClientState :loading
               reset! *ws-client $ %some
                 ws-connect! (str |ws:// host |: port)
                   {}
                     :on-open $ fn (event)
                       do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
                     :on-close $ fn (event) (reset! *connected? false)
-                      reset! *store $ :: :offline
+                      reset! *store $ ClientState :offline
                       js/console.error "|Lost connection!"
                     :on-data on-server-data
                     :heartbeat-timeout-ms 75000
@@ -177,7 +189,10 @@
                 (:ok message)
                   match message
                     (:snapshot revision store)
-                      do (reset! *store store) (reset! *sync-revision revision) (ack-sync! revision)
+                      do
+                        reset! *store $ ClientState :ready store
+                        reset! *sync-revision revision
+                        ack-sync! revision
                     (:patch base-revision revision changes)
                       do
                         when config/dev? $ js/console.log |Changes changes
@@ -205,18 +220,12 @@
           :code $ quote
             defn render-app! () $ let
                 states $ option:unwrap-or (get @*states :states) ({})
-                store @*store
-                app $ if (enum? store) (comp-offline store)
-                  if
-                    and (struct? store) (&struct:matches? store schema/Store)
-                    comp-container states $ unsafe-coerce store 'app.schema/Store
-                    do
-                      js/console.error |Invalid-store-payload
-                        {}
-                          :struct? $ struct? store
-                          :store-schema-match? $ if (struct? store) (&struct:matches? store schema/Store) false
-                        , store
-                      div ({}) (<> "|Invalid store payload")
+                app $ match @*store
+                  (:loading)
+                    comp-offline $ :: :loading
+                  (:offline)
+                    comp-offline $ :: :offline
+                  (:ready store) (comp-container states store)
               render! mount-target app dispatch!
           :examples $ []
           :schema $ :: 'Fn
@@ -268,7 +277,7 @@
             {}
               :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
               :generics $ [] 'T
-              :return $ :: 'Result 'T 'ClientPatchError
+              :return $ :: 'Result 'app.client/ClientPatchError 'T
           :tests $ []
             %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
               :code $ quote
@@ -301,6 +310,24 @@
                   assert=
                     {} $ :stable 1
                     , store
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |ready-store-retains-nominal-state)
+              :code $ quote
+                let
+                    db $ {}
+                      :sessions $ {}
+                      :users $ {}
+                    records $ []
+                    shared $ app.twig.container/twig-shared db records
+                    store $ app.twig.container/twig-container db ({}) records shared
+                    state $ match
+                      validate-server-patch store 7 7 $ []
+                      (:ok next-store) (ClientState :ready next-store)
+                      (:err error) (raise |Unexpected-patch-error)
+                  assert= (ClientState :ready store) state
+                  match state
+                    (:ready next-store) (assert= store next-store)
+                    _ $ raise |Expected-ready-state
               :tags $ #{} :client
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
@@ -699,9 +726,9 @@
         'SessionView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SessionView
-              :user-id $ :: 'Optional 'String
-              :id $ :: 'Optional 'Number
-              :nickname $ :: 'Optional 'String
+              :user-id $ :: 'Option 'String
+              :id $ :: 'Option 'Number
+              :nickname $ :: 'Option 'String
               :router $ quote app.schema/RouterView
               :messages $ :: 'Map 'String (quote app.schema/MessageView)
           :examples $ []
@@ -1658,9 +1685,19 @@
                           :id $ option:unwrap-or (get message :id) id
                           :text $ option:unwrap-or (get message :text) |
                     pairs-map
-                  session-view $ %{} SessionView (:user-id user-id)
-                    :id $ option:unwrap-or (get session :id) nil
-                    :nickname $ option:unwrap-or (get session :nickname) nil
+                  session-view $ %{} SessionView
+                    :user-id $ let
+                        value user-id
+                      if (nil? value) (%none)
+                        if (string? value) (%some value) (raise "|Invalid session String field")
+                    :id $ let
+                        value $ option:unwrap-or (get session :id) nil
+                      if (nil? value) (%none)
+                        if (number? value) (%some value) (raise "|Invalid session Number field")
+                    :nickname $ let
+                        value $ option:unwrap-or (get session :nickname) nil
+                      if (nil? value) (%none)
+                        if (string? value) (%some value) (raise "|Invalid session String field")
                     :router session-router
                     :messages messages-view
                   user-option $ if logged-in?
@@ -1706,6 +1743,45 @@
                   assert= 0 $ :count typed-store
                   assert= |hello $ :text typed-message
               :tags $ #{} :twig :type
+            %{} 'TestEntry (:name |session-none-fields)
+              :code $ quote
+                let
+                    db $ {}
+                      :sessions $ {}
+                      :users $ {}
+                    shared $ twig-shared db ([])
+                    missing $ :session
+                      twig-container db ({}) ([]) shared
+                    explicit $ :session
+                      twig-container db
+                        {} (:id nil) (:user-id nil) (:nickname nil)
+                        []
+                        , shared
+                  assert= (%none) (:id missing)
+                  assert= (%none) (:user-id missing)
+                  assert= (%none) (:nickname missing)
+                  assert= missing explicit
+                  assert= missing $ parse-cirru-edn (format-cirru-edn missing)
+              :tags $ #{} :client :server :twig :type
+            %{} 'TestEntry (:name |session-some-fields)
+              :code $ quote
+                let
+                    db $ {}
+                      :sessions $ {}
+                      :users $ {}
+                        |u1 $ {} (:id |u1) (:name |demo) (:nickname nil) (:avatar nil)
+                    shared $ twig-shared db ([])
+                    projected $ twig-container db
+                      {} (:id 0) (:user-id |u1) (:nickname |)
+                      []
+                      , shared
+                    session $ :session projected
+                  assert= (%some 0) (:id session)
+                  assert= (%some |u1) (:user-id session)
+                  assert= (%some |) (:nickname session)
+                  assert= true $ :logged-in? projected
+                  assert= session $ parse-cirru-edn (format-cirru-edn session)
+              :tags $ #{} :client :server :twig :type
         'twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn twig-members (sessions users)
@@ -1756,8 +1832,14 @@
               %{} UserView
                 :name $ option:unwrap (get user :name)
                 :id $ option:unwrap (get user :id)
-                :nickname $ option:unwrap-or (get user :nickname) nil
-                :avatar $ option:unwrap-or (get user :avatar) nil
+                :nickname $ let
+                    value $ option:unwrap-or (get user :nickname) nil
+                  if (nil? value) (%none)
+                    if (string? value) (%some value) (raise "|Invalid user String field")
+                :avatar $ let
+                    value $ option:unwrap-or (get user :avatar) nil
+                  if (nil? value) (%none)
+                    if (string? value) (%some value) (raise "|Invalid user String field")
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.schema/UserView)
