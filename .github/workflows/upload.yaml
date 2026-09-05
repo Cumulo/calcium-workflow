@@ -45,8 +45,10 @@ jobs:
           calcit calcit.cirru analyze dynamic-methods --max 1
           calcit calcit.cirru --entry server --check-only
           calcit calcit.cirru --entry server analyze dynamic-methods --max 1
-          calcit calcit.cirru analyze deprecated --summary-only --format json
-          calcit calcit.cirru --entry server analyze deprecated --summary-only --format json
+          calcit calcit.cirru analyze deprecated --summary-only --format json \
+            | jq -e '.data.summary.calls == 0' > /dev/null
+          calcit calcit.cirru --entry server analyze deprecated --summary-only --format json \
+            | jq -e '.data.summary.calls == 0' > /dev/null
           calcit calcit.cirru test --tag client --require-match --summary-only --format json
           calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
           calcit calcit.cirru analyze quality --baseline config/calcit-quality.cirru
