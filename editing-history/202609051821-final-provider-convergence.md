@@ -1,0 +1,15 @@
+# Final provider convergence for Calcit 0.13.77 / Calcit 0.13.77 最终 provider 收口
+
+## 中文
+
+- 在 #784 的干净独立 worktree 中，将 Calcium Workflow 的直接依赖更新到 milestone provider 链已经审阅并发布的不可变版本。
+- 对齐 cumulo-reel 0.0.35、Alerts 0.10.29、respo-feather 0.4.10、respo-message 0.0.19、respo-ui 0.7.16、Respo 0.16.91、calcit-wss 0.2.27、calcit.std 0.2.31、Recollect 0.0.42 与 ws-edn 0.0.25；cumulo-util 保持已发布的 0.0.17。Respo 0.16.92 虽已发布，但传递 provider 全部精确请求 0.16.91；strict Caps 正确拒绝根依赖单独抬升，因此选用完整一致的 0.16.91 图。
+- 本检查点必须以 strict Caps/toolchain、不可变 Yarn、Calcit client/server checks、测试、质量与动态方法门禁、Node 24/Vite build，以及 revision/ack/resync/diff/patch 代表性回归为准；若任何门禁失败，先处理根因再提交 PR。
+- 验证结果：16 个模块的 strict Caps/toolchain 通过；client/server check-only 通过；client 7/7、server 10/10 测试通过，其中覆盖有效 patch、无效 patch 原子拒绝、revision mismatch、sync control、重复 backpressure 到最新 revision 收敛、ACK pending-store 推进与 oversized snapshot fallback；quality baseline、client 1/1 与 server 0/1 dynamic-method 预算、两端 deprecated=0、Snapshot 幂等、Node 24 client JS 和 Vite production build 均通过。
+
+## English
+
+- In #784's clean independent worktree, update Calcium Workflow's direct dependencies to the immutable releases reviewed and published by the milestone provider chain.
+- Align cumulo-reel 0.0.35, Alerts 0.10.29, respo-feather 0.4.10, respo-message 0.0.19, respo-ui 0.7.16, Respo 0.16.91, calcit-wss 0.2.27, calcit.std 0.2.31, Recollect 0.0.42, and ws-edn 0.0.25; keep the published cumulo-util 0.0.17. Although Respo 0.16.92 is published, every transitive provider requests exact 0.16.91; strict Caps correctly rejects raising only the root, so this checkpoint uses the fully aligned 0.16.91 graph.
+- This checkpoint is accepted only after strict Caps/toolchain, immutable Yarn, Calcit client/server checks, tests, quality and dynamic-method gates, Node 24/Vite build, and representative revision/ack/resync/diff/patch regressions pass. Any failure must be diagnosed and fixed before opening the PR.
+- Validation result: strict Caps/toolchain passed for all 16 modules; client/server check-only passed; all 7 client and 10 server tests passed, covering valid patches, atomic invalid-patch rejection, revision mismatch, sync control, repeated-backpressure convergence to the latest revision, ACK pending-store advancement, and oversized snapshot fallback. The quality baseline, client 1/1 and server 0/1 dynamic-method budgets, deprecated=0 on both entries, Snapshot idempotence, Node 24 client JavaScript, and the Vite production build also passed.
