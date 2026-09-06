@@ -1913,6 +1913,25 @@
           :schema $ :: 'Fn
             {} (:return 'Map)
               :args $ [] 'Map 'Dynamic 'Number 'String 'Dynamic
+          :tests $ []
+            %{} 'TestEntry (:name |existing-message-map-callback)
+              :code $ quote
+                let
+                    sid 1
+                    db $ {}
+                      :sessions $ {}
+                        sid $ {}
+                          :messages $ {}
+                            |m1 $ {} (:id |m1) (:text |remove)
+                            |m2 $ {} (:id |m2) (:text |keep)
+                    result $ remove-message db
+                      {} $ :id |m1
+                      , sid |op 0
+                  assert= (%none)
+                    get-in result $ [] :sessions sid :messages |m1
+                  assert= |keep $ option:unwrap
+                    get-in result $ [] :sessions sid :messages |m2 :text
+              :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater.session $ :require (app.schema :as schema)
@@ -1936,15 +1955,37 @@
                             option:unwrap $ get user :password
                           assoc session-data :user-id $ option:unwrap (get user :id)
                           update session-data :messages $ fn (messages)
-                            assoc (option:unwrap messages) op-id $ {} (:id op-id)
+                            assoc messages op-id $ {} (:id op-id)
                               :text $ str "|Wrong password for " username
                         update session-data :messages $ fn (messages)
-                          assoc (option:unwrap messages) op-id $ {} (:id op-id)
+                          assoc messages op-id $ {} (:id op-id)
                             :text $ str "|No user named: " username
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Map)
               :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
+          :tests $ []
+            %{} 'TestEntry (:name |existing-session-callbacks)
+              :code $ quote
+                let
+                    sid 1
+                    db $ {}
+                      :sessions $ {}
+                        sid $ {} (:id sid) (:user-id nil)
+                          :messages $ {}
+                      :users $ {}
+                        |user-1 $ {} (:id |user-1) (:name |demo)
+                          :password $ md5 |secret
+                    missing $ log-in db |missing |secret sid |op-missing 0
+                    wrong $ log-in db |demo |wrong sid |op-wrong 0
+                    success $ log-in db |demo |secret sid |op-success 0
+                  assert= "|No user named: missing" $ option:unwrap
+                    get-in missing $ [] :sessions sid :messages |op-missing :text
+                  assert= "|Wrong password for demo" $ option:unwrap
+                    get-in wrong $ [] :sessions sid :messages |op-wrong :text
+                  assert= |user-1 $ option:unwrap
+                    get-in success $ [] :sessions sid :user-id
+              :tags $ #{} :protocol :server
         'log-out $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn log-out (db sid op-id op-time)
@@ -1976,6 +2017,22 @@
           :schema $ :: 'Fn
             {} (:return 'Map)
               :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
+          :tests $ []
+            %{} 'TestEntry (:name |duplicate-user-message-callback)
+              :code $ quote
+                let
+                    sid 1
+                    db $ {}
+                      :sessions $ {}
+                        sid $ {} (:id sid) (:user-id nil)
+                          :messages $ {}
+                      :users $ {}
+                        |user-1 $ {} (:id |user-1) (:name |demo)
+                          :password $ md5 |secret
+                    result $ sign-up db |demo |secret sid |op-taken 0
+                  assert= "|Name is taken: demo" $ option:unwrap
+                    get-in result $ [] :sessions sid :messages |op-taken :text
+              :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater.user $ :require

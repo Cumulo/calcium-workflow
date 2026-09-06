@@ -27,8 +27,8 @@ SessionView 序列化字段会从裸值/nil 改为 nominal Option；客户端和
 部署，不能声称兼容混合版本。数据库输入、消息 envelope、revision/ACK 与 diff/patch
 算法未改，序列化往返已有测试。
 
-Native client tests (10), server-tagged tests (12), and server-entry full tests
-(21) pass. The generated-JS
+Native client tests (10), server-tagged tests (15), and server-entry full tests
+(24) pass. The generated-JS
 `tests/session-option.mjs` suite covers missing/explicit nil, zero/empty present
 values, rejected invalid field types, and Session/User EDN roundtrips. CI runs
 this suite after compilation. The existing quality baseline passes unchanged,
@@ -47,7 +47,14 @@ The patch validator's Result schema was also reversed; it now uses the canonical
 现改为具名 ClientState；同时修正补丁验证器 Result 类型参数顺序。客户端状态
 容器不参与服务端序列化，消息 envelope 和补丁算法不变。
 
-Local browser smoke (isolated server port 15021, frontend 5182) reached Guest,
+The final 0.13.78-rc.1 browser smoke used isolated server port 15022 and frontend
+5183. It reached Guest over a real WebSocket connection, mounted 56 static style
+tags containing 9,733 characters of CSS, and produced no current-origin console
+errors; the server observed clean connect/disconnect lifecycle events. This also
+exposed and fixed stale `option:unwrap` calls in the login updater's `update`
+callbacks, with focused protocol tests preventing recurrence.
+
+An earlier browser smoke (isolated server port 15021, frontend 5182) reached Guest,
 created a disposable local test user, rendered the authenticated home/profile,
 and restored login after reloading the original URL. The profile Refresh button
 has a separate existing limitation: it replaces the URL with origin plus time,
@@ -100,6 +107,9 @@ client at `app.comp.container/comp-offline`, server at an `if-let` callback in
 nil diagnostics pass. The schema migration and retained-boundary inventory are
 evidence for the bounded change, not a whole-project strict-zero claim.
 
-Browser/protocol validation, review and Actions remain required before this
-issue is complete. Aggregate #653 must also retain the separate strict-preflight
-limitation rather than close on the absence of raw Optional text alone.
+Browser and protocol validation now pass on the release candidate. Review and
+Actions remain required before this issue is complete. Aggregate #653 must also
+retain the separate strict-preflight limitation rather than close on the absence
+of raw Optional text alone. The final dependency-inclusive nil inventory is 201
+occurrences in 99 definitions across 58 namespaces; the project-local inventory
+remains 37 occurrences in 16 definitions across 10 namespaces.
