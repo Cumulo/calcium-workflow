@@ -43,7 +43,7 @@
       :schema $ :: 'Fn
         {}
           :args $ [] 'Dynamic
-          :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ClientMessage
+          :return $ :: 'Result 'app.schema/ClientMessage 'app.schema/MessageDecodeError
     'app.schema/decode-operation $ {}
       :mode :ensure
       :kind :fn
@@ -52,7 +52,7 @@
       :schema $ :: 'Fn
         {}
           :args $ [] 'Dynamic
-          :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/Op
+          :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
     'app.schema/decode-server-message $ {}
       :mode :ensure
       :kind :fn
@@ -61,7 +61,7 @@
       :schema $ :: 'Fn
         {}
           :args $ [] 'Dynamic
-          :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ServerMessage
+          :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
     'app.schema/invalid-message $ {}
       :mode :ensure
       :kind :fn
@@ -71,7 +71,7 @@
         {}
           :generics $ [] 'T
           :args $ [] 'String
-          :return $ :: 'Result 'app.schema/MessageDecodeError 'T
+          :return $ :: 'Result 'T 'app.schema/MessageDecodeError
   :edges $ #{}
     :: :call 'app.schema/decode-client-message 'app.schema/invalid-message
     :: :call 'app.schema/decode-client-message 'app.schema/decode-operation

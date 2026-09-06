@@ -25,7 +25,7 @@
       :kind :fn
       :schema $ :: 'Fn $ {}
         :args $ [] 'Dynamic
-        :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ServerMessage
+        :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
     'app.server/now-ms $ {}
       :mode :external
       :kind :fn
