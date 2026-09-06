@@ -13,7 +13,7 @@ Base: 1be7e3b4098ba37a1182e36c38bf710a7b105b99; calcit-lang/calcit#876.
   unchanged quality baseline; canonical formatting and Vite build pass.
 - Browser smoke exposed mixed Enum/Store atom inference erasing the ready render
   branch. Replaced it with Ref<ClientState> (loading/offline/ready Store), and
-  corrected validate-server-patch's reversed Result type arguments (error first).
+  corrected validate-server-patch's reversed Result type arguments (value first).
   The typed ready-state regression validates wrapping successful patched Store.
 - Browser passed Guest, local signup, home/profile, URL reload with login
   restoration, logout and login. Profile Refresh drops the custom test port;

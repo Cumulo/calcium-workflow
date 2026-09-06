@@ -40,8 +40,8 @@ structs. Generated JS erased the enum predicate's alternative and tried to
 render Store as an offline enum. Client state now has a nominal
 `Ref<ClientState>` contract with loading/offline/ready(Store) variants. Snapshot
 and patch handlers wrap validated Store values; rendering unwraps only ready.
-The patch validator's Result schema was also reversed; it now uses the actual
-`Result<Error, Value>` order, with a typed ready-state regression.
+The patch validator's Result schema was also reversed; it now uses the canonical
+`Result<Value, Error>` order, with a typed ready-state regression.
 
 浏览器验收发现原先客户端 atom 混放 Enum/Store，导致生成 JS 丢失正常渲染分支。
 现改为具名 ClientState；同时修正补丁验证器 Result 类型参数顺序。客户端状态

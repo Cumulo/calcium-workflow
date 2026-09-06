@@ -277,7 +277,7 @@
             {}
               :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
               :generics $ [] 'T
-              :return $ :: 'Result 'app.client/ClientPatchError 'T
+              :return $ :: 'Result 'T 'app.client/ClientPatchError
           :tests $ []
             %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
               :code $ quote
@@ -810,7 +810,7 @@
           :schema $ :: 'Fn
             {}
               :args $ [] 'Dynamic
-              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ClientMessage
+              :return $ :: 'Result 'app.schema/ClientMessage 'app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |decodes-sync-control)
               :code $ quote
@@ -888,7 +888,7 @@
           :schema $ :: 'Fn
             {}
               :args $ [] 'Dynamic
-              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/Op
+              :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
         'decode-server-message $ %{} 'CodeEntry (:doc "|Validate one untrusted server value and reconstruct a nominal ServerMessage.")
           :code $ quote
             defn decode-server-message (data)
@@ -922,7 +922,7 @@
           :schema $ :: 'Fn
             {}
               :args $ [] 'Dynamic
-              :return $ :: 'Result 'app.schema/MessageDecodeError 'app.schema/ServerMessage
+              :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |decodes-pong)
               :code $ quote
@@ -963,7 +963,7 @@
             {}
               :args $ [] 'String
               :generics $ [] 'T
-              :return $ :: 'Result 'app.schema/MessageDecodeError 'T
+              :return $ :: 'Result 'T 'app.schema/MessageDecodeError
         'router $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def router $ {} (:name nil) (:title nil)
