@@ -55,6 +55,9 @@ jobs:
 
       - run: yarn compile-page && yarn release-page
 
+      - name: Verify Session and User Option projections in generated JS
+        run: yarn node tests/session-option.mjs
+
       - run: mkdir -p dist-server && cp calcit.cirru dist-server && cp package.json dist-server/
         name: Copy server scripts
 
