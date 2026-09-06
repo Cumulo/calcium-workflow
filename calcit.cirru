@@ -427,11 +427,11 @@
                 {} $ :style
                   {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
                 -> messages
-                  map-kv $ fn (id message)
+                  filter-map-kv $ fn (id message)
                     hint-fn $ {}
                       :args $ [] 'String 'app.schema/MessageView
-                      :return 'List
-                    [] id $ div
+                      :return $ :: 'MapEntryDecision 'String 'respo.schema/Component
+                    MapEntryDecision :keep id $ div
                       {}
                         :style $ {} (:padding 8) (:margin-bottom 8)
                           :background-color $ hsl 0 80 95
