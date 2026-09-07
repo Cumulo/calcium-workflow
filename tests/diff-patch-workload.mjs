@@ -6,7 +6,7 @@ import process from "node:process";
 import { performance } from "node:perf_hooks";
 
 import * as calcit from "../js-out/calcit.core.mjs";
-import { diff_twig } from "../js-out/recollect.diff.mjs";
+import { DiffBudget, diff_twig_budgeted } from "../js-out/recollect.diff.mjs";
 import { patch_twig, try_patch_twig } from "../js-out/recollect.patch.mjs";
 import { change_op } from "../js-out/recollect.schema.mjs";
 import {
@@ -29,6 +29,14 @@ const warmups = Number(args.get("--warmups") ?? (mode === "full" ? 5 : 1));
 const sizes = mode === "full" ? [1_000, 10_000] : [100];
 const tags = calcit.init_tags(["id", "key"]);
 const diffOptions = calcit._$n__$M_(tags.key, tags.id);
+const budgetTags = calcit.init_tags(["max-visited", "max-emitted"]);
+const diffBudget = calcit._$n__PCT__$M_(
+  DiffBudget,
+  budgetTags["max-visited"],
+  calcit._PCT_some(50_000),
+  budgetTags["max-emitted"],
+  calcit._PCT_some(80_000),
+);
 const patchTags = calcit.init_tags(["pick", "missing"]);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const elapsed = (started) => (performance.now() - started) * 1_000;
@@ -55,7 +63,7 @@ function assertConverged(actual, expected, context) {
   assert.ok(equal(actual, expected), `${context}: patched and fresh stores diverged`);
 }
 
-function runSequence(size, measured) {
+function runSequence(size, measured, captureEvidence = false) {
   const samples = Object.fromEntries(
     ["updater", "projection", "dataDiff", "encode", "decode", "apply"].map((name) => [
       name,
@@ -72,9 +80,12 @@ function runSequence(size, measured) {
     const caseName = enumTag(operation);
     const nextState = timeStage(samples, "updater", () => apply_domain_op(state, operation));
     const freshStore = timeStage(samples, "projection", () => project_state(nextState));
-    const changes = timeStage(samples, "dataDiff", () =>
-      diff_twig(clientStore, freshStore, diffOptions),
+    const outcome = timeStage(samples, "dataDiff", () =>
+      diff_twig_budgeted(clientStore, freshStore, diffOptions, diffBudget),
     );
+    assert.equal(enumTag(outcome), "complete", `${caseName}: fixed workload exceeded diff budget`);
+    const changes = outcome.extra[0];
+    const diffWork = outcome.extra[1];
     const encoded = timeStage(samples, "encode", () => calcit.format_cirru_edn(changes));
     const decoded = timeStage(samples, "decode", () => calcit.parse_cirru_edn(encoded));
     const patchedStore = timeStage(samples, "apply", () => patch_twig(clientStore, decoded));
@@ -88,6 +99,11 @@ function runSequence(size, measured) {
       projectedRows: listValues(field(freshStore, "rows")).length,
       patchOperations: listValues(changes).length,
       encodedBytes: Buffer.byteLength(encoded),
+      snapshotBytes: captureEvidence
+        ? Buffer.byteLength(calcit.format_cirru_edn(freshStore))
+        : null,
+      visitedNodes: field(diffWork, "visited-nodes"),
+      emittedOperations: field(diffWork, "emitted-ops"),
     });
     state = nextState;
     clientStore = patchedStore;
@@ -110,7 +126,11 @@ function makeEnvelopes(size) {
     envelopes.push({
       baseRevision: revision,
       revision: revision + 1,
-      changes: diff_twig(store, nextStore, diffOptions),
+      changes: (() => {
+        const outcome = diff_twig_budgeted(store, nextStore, diffOptions, diffBudget);
+        assert.equal(enumTag(outcome), "complete", "protocol workload exceeded diff budget");
+        return outcome.extra[0];
+      })(),
       expected: nextStore,
     });
     state = nextState;
@@ -225,8 +245,12 @@ const workByStage = (cases, measuredRepetitions) => {
       count: cases.reduce((sum, item) => sum + item.projectedRows, 0),
     },
     dataDiff: {
-      unit: "change-operations",
-      count: cases.reduce((sum, item) => sum + item.patchOperations, 0),
+      unit: "visited-nodes",
+      count: cases.reduce((sum, item) => sum + item.visitedNodes, 0),
+      emittedOperationConstructions: cases.reduce(
+        (sum, item) => sum + item.emittedOperations,
+        0,
+      ),
     },
     encode: {
       unit: "encoded-bytes",
@@ -259,7 +283,7 @@ for (const size of sizes) {
   );
   let last;
   for (let index = 0; index < repetitions; index += 1) {
-    last = runSequence(size, true);
+    last = runSequence(size, true, index === repetitions - 1);
     for (const name of Object.keys(accumulated)) accumulated[name].push(...last.samples[name]);
   }
   const stageWork = workByStage(last.cases, repetitions);
@@ -272,7 +296,14 @@ for (const size of sizes) {
     stages: Object.fromEntries(
       Object.entries(accumulated).map(([name, samples]) => [
         name,
-        { ...stats(samples), work: stageWork[name], allocation: allocationUnavailable },
+        {
+          ...stats(samples),
+          work: stageWork[name],
+          throughputPerSecond:
+            stageWork[name].measuredTotal /
+            (samples.reduce((sum, value) => sum + value, 0) / 1_000_000),
+          allocation: allocationUnavailable,
+        },
       ]),
     ),
     allocations: allocationUnavailable,
@@ -282,7 +313,7 @@ for (const size of sizes) {
 
 const dependencyFiles = ["calcit.cirru", "deps.cirru", "package.json"];
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   mode,
   environment: {
     platform: process.platform,
@@ -298,6 +329,8 @@ const report = {
   command: `yarn workload:${mode === "full" ? "benchmark" : "smoke"}`,
   warmups,
   repetitions,
+  diffBudget: { maxVisited: 50_000, maxEmitted: 80_000 },
+  memory: process.memoryUsage(),
   results,
   rawHashScope: "full report excluding rawHash; includes environment and timing",
 };

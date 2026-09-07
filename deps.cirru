@@ -1,7 +1,7 @@
 
 {} (:calcit-version |0.14.0)
   :version |0.0.5
-  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.37)
+  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.38)
     |Cumulo/cumulo-util.calcit |0.0.18
     |Respo/alerts.calcit |0.10.30
     |Respo/respo-feather.calcit |0.4.11
@@ -10,5 +10,5 @@
     |Respo/respo.calcit |0.16.95
     |calcit-lang/calcit-wss |0.2.27
     |calcit-lang/calcit.std |0.2.31
-    |calcit-lang/recollect |0.0.44
+    |calcit-lang/recollect |0.0.45
     |mvc-works/ws-edn.calcit |0.0.26
