@@ -61,7 +61,7 @@
     'app.server/SyncMetrics $ {}
       :mode :external
       :kind :data
-      :schema $ :: 'Enum
+      :schema $ :: 'StructDef
     'app.server/read-sync-metrics $ {}
       :mode :external
       :kind :fn

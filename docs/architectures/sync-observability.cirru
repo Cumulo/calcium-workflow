@@ -8,7 +8,7 @@
       :mode :ensure
       :kind :data
       :doc "|Application-level synchronization latency, wire-byte, deterministic diff-work, budget-fallback, revision, resync, pending-client, and slow-client metrics; pending and slow fields are gauges refreshed on read."
-      :schema $ :: 'Enum
+      :schema $ :: 'StructDef
       :code $ quote
         defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
     'app.server/next-sync-metrics $ {}
@@ -26,7 +26,10 @@
             :last-snapshot-bytes $ if (= message-kind :snapshot) payload.utf8-byte-count (:last-snapshot-bytes metrics)
             :last-visited-nodes $ :visited-nodes stats
             :last-emitted-ops $ :emitted-ops stats
-            :budget-fallback-count $ if budget-fallback? (inc $ :budget-fallback-count metrics) (:budget-fallback-count metrics)
+            :budget-fallback-count $ if
+              and budget-fallback? $ not= revision (:last-revision metrics)
+              inc $ :budget-fallback-count metrics
+              :budget-fallback-count metrics
             :patch-attempts $ if (= message-kind :patch) (inc $ :patch-attempts metrics) (:patch-attempts metrics)
             :snapshot-attempts $ if (= message-kind :snapshot) (inc $ :snapshot-attempts metrics) (:snapshot-attempts metrics)
             :last-revision revision

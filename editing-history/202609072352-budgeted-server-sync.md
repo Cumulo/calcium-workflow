@@ -16,8 +16,10 @@ Issue: calcit-lang/calcit#798.
   consumes 40,002 visited nodes and 70,001 construction units, while all six
   cases complete without fallback.
 - Extend `SyncMetrics` with snapshot bytes, latest visited/emitted work, and a
-  budget-fallback count. Patch/snapshot byte policy, queue admission, and
-  backpressure remain independent from the traversal budget.
+  budget-fallback count. Repeated transport attempts for the same revision are
+  deduplicated, so backpressure does not count one planning fallback multiple
+  times. Patch/snapshot byte policy, queue admission, and backpressure remain
+  independent from the traversal budget.
 - On Darwin 25.6.0 arm64, Apple M1 Pro, Node 20.10.0, and Calcit 0.14.0, the
   generated-JavaScript full run completed 5 warmups and 30 repetitions. The
   server-side data-diff stage measured p50/p95 of 1.56/5.91 ms at 1,000 entities
@@ -48,7 +50,9 @@ Issue: calcit-lang/calcit#798.
   上限。固定的 10,000 entity workload 中最大 case 消耗 40,002 visited node 与
   70,001 construction unit；全部六种 case 均未回退。
 - `SyncMetrics` 新增 snapshot 字节数、最近 visited/emitted 工作量和预算回退计数。
-  patch/snapshot 字节策略、queue admission 与 backpressure 仍独立于遍历预算。
+  同一 revision 的重复 transport attempt 会去重，因此 backpressure 不会把一次规划
+  回退重复计数。patch/snapshot 字节策略、queue admission 与 backpressure 仍独立于
+  遍历预算。
 - 在 Darwin 25.6.0 arm64、Apple M1 Pro、Node 20.10.0、Calcit 0.14.0 环境，generated
   JavaScript 完成 5 次 warmup 与 30 次正式采样。服务端 data-diff 阶段在 1,000
   entity 的 p50/p95 为 1.56/5.91 ms、吞吐 793,592 visited nodes/s；10,000 entity

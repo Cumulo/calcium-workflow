@@ -1537,7 +1537,7 @@
           :code $ quote
             defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn acknowledge-client! (sid revision)
@@ -1812,7 +1812,8 @@
                 :last-snapshot-bytes $ if (= message-kind :snapshot) payload.utf8-byte-count (:last-snapshot-bytes metrics)
                 :last-visited-nodes $ :visited-nodes stats
                 :last-emitted-ops $ :emitted-ops stats
-                :budget-fallback-count $ if budget-fallback?
+                :budget-fallback-count $ if
+                  and budget-fallback? $ not= revision (:last-revision metrics)
                   inc $ :budget-fallback-count metrics
                   :budget-fallback-count metrics
                 :patch-attempts $ if (= message-kind :patch)
@@ -1834,9 +1835,14 @@
                     patch-stats $ %{} DiffStats (:visited-nodes 7) (:emitted-ops 3)
                     snapshot-stats $ %{} DiffStats (:visited-nodes 9) (:emitted-ops 4)
                     after-patch $ next-sync-metrics initial :patch 7 3 "|A😀" patch-stats false
-                  assert=
-                    %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:last-snapshot-bytes 7) (:last-visited-nodes 9) (:last-emitted-ops 4) (:budget-fallback-count 1) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
-                    next-sync-metrics after-patch :snapshot 8 2 |ignored snapshot-stats true
+                    after-fallback $ next-sync-metrics after-patch :snapshot 8 2 |ignored snapshot-stats true
+                    after-retry $ next-sync-metrics after-fallback :snapshot 8 2 |ignored snapshot-stats true
+                  do
+                    assert=
+                      %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:last-snapshot-bytes 7) (:last-visited-nodes 9) (:last-emitted-ops 4) (:budget-fallback-count 1) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
+                      , after-fallback
+                    assert= 1 $ :budget-fallback-count after-retry
+                    assert= 2 $ :budget-fallback-count (next-sync-metrics after-retry :snapshot 9 2 |ignored snapshot-stats true)
               :tags $ #{} :server
         'next-sync-send-state $ %{} 'CodeEntry (:doc |)
           :code $ quote
