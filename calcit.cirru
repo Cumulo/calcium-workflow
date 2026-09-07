@@ -315,12 +315,9 @@
             %{} 'TestEntry (:name |ready-store-retains-nominal-state)
               :code $ quote
                 let
-                    db $ {}
-                      :sessions $ {}
-                      :users $ {}
-                    records $ []
-                    shared $ app.twig.container/twig-shared db records
-                    store $ app.twig.container/twig-container db ({}) records shared
+                    db app.schema/database
+                    shared $ app.twig.container/twig-shared db 0
+                    store $ app.twig.container/twig-container db app.schema/session shared
                     state $ match
                       validate-server-patch store 7 7 $ []
                       (:ok next-store) (ClientState :ready next-store)
@@ -449,7 +446,7 @@
                           :cursor :pointer
                         :on-click $ fn (e d!)
                           d! $ %:: schema/Op :session/remove-message
-                            {} $ :id id
+                            %{} schema/RemoveMessage $ :id id
                       <> (:text message) nil
                   .to-list
           :examples $ []
@@ -576,7 +573,7 @@
                   {}
                     :on-click $ fn (e d!)
                       d! $ %:: app.schema/Op :router/change
-                        {} $ :name :home
+                        %{} app.schema/Router $ :name :home
                     :style $ {} (:cursor :pointer)
                   <>
                     option:unwrap-or (get config/site :title) |Calcium
@@ -586,7 +583,7 @@
                     :style $ {} (:cursor |pointer)
                     :on-click $ fn (e d!)
                       d! $ %:: app.schema/Op :router/change
-                        {} $ :name :profile
+                        %{} app.schema/Router $ :name :profile
                   <> $ if logged-in? |Me |Guest
                   =< 8 nil
                   <> count-members
@@ -697,41 +694,83 @@
           :code $ quote
             defstruct AttachedView (:type 'Tag) (:content 'String)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'ClientMessage $ %{} 'CodeEntry (:doc "|Typed messages accepted from a browser connection.")
           :code $ quote
             defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'EnumDef
+        'DatabaseDecodeError $ %{} 'CodeEntry (:doc "|A path-aware failure produced while decoding untrusted or legacy persisted database data.")
+          :code $ quote
+            defenum DatabaseDecodeError $ :invalid 'String 'String
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Db $ %{} 'CodeEntry (:doc "|The nominal application database used by reducers and projections.")
+          :code $ quote
+            defstruct Db
+              :sessions $ :: 'Map 'Number 'app.schema/Session
+              :users $ :: 'Map 'String 'app.schema/User
+          :examples $ []
+          :schema $ :: 'StructDef
+        'DomainOp $ %{} 'CodeEntry (:doc "|Pure business operations accepted by the database reducer; local and server effects stay outside this enum.")
+          :code $ quote
+            defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Message $ %{} 'CodeEntry (:doc "|A persisted session message.")
+          :code $ quote
+            defstruct Message (:id 'String) (:text 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
         'MessageDecodeError $ %{} 'CodeEntry (:doc "|Why an untrusted WebSocket value could not become a typed message envelope.")
           :code $ quote
             defenum MessageDecodeError $ :invalid 'String
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'EnumDef
         'MessageView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct MessageView (:id 'String) (:text 'String)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'Op $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'Dynamic) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'Dynamic) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:states 'Dynamic 'Dynamic)
+            defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:states 'Dynamic 'Dynamic)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'EnumDef
+        'RemoveMessage $ %{} 'CodeEntry (:doc "|Concrete payload for removing one session message.")
+          :code $ quote
+            defstruct RemoveMessage $ :id 'String
+          :examples $ []
+          :schema $ :: 'StructDef
+        'Router $ %{} 'CodeEntry (:doc "|The domain route stored for one session. Route-specific view data is projected separately.")
+          :code $ quote
+            defstruct Router $ :name 'Tag
+          :examples $ []
+          :schema $ :: 'StructDef
         'RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct RouterView (:name 'Tag)
               :data $ :: 'Option 'Map
               :router $ :: 'Option 'Map
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'ServerMessage $ %{} 'CodeEntry (:doc "|Typed synchronization and effect messages sent to a browser.")
           :code $ quote
             defenum ServerMessage (:snapshot 'Number 'app.schema/Store)
               :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
               :effect/pong
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'EnumDef
+        'Session $ %{} 'CodeEntry (:doc "|A connected session in the nominal database.")
+          :code $ quote
+            defstruct Session
+              :user-id $ :: 'Option 'String
+              :id 'Number
+              :nickname $ :: 'Option 'String
+              :router $ quote app.schema/Router
+              :messages $ :: 'Map 'String 'app.schema/Message
+          :examples $ []
+          :schema $ :: 'StructDef
         'SessionView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SessionView
@@ -741,16 +780,16 @@
               :router $ quote app.schema/RouterView
               :messages $ :: 'Map 'String (quote app.schema/MessageView)
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'SharedTwig $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct SharedTwig (:reel-length 'Number)
               :attached $ quote app.schema/AttachedView
               :pages $ :: 'Option 'Map
-              :members 'Map
+              :members $ :: 'Map 'Number (:: 'Option 'String)
               :session-count 'Number
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'Store $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct Store (:logged-in? 'Bool)
@@ -762,21 +801,29 @@
               :count 'Number
               :color 'String
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
+        'User $ %{} 'CodeEntry (:doc "|A persisted application user.")
+          :code $ quote
+            defstruct User (:name 'String) (:id 'String)
+              :nickname $ :: 'Option 'String
+              :avatar $ :: 'Option 'String
+              :password 'String
+          :examples $ []
+          :schema $ :: 'StructDef
         'UserView $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defstruct UserView (:name 'String) (:id 'String)
               :nickname $ :: 'Option 'String
               :avatar $ :: 'Option 'String
           :examples $ []
-          :schema $ :: 'Enum
+          :schema $ :: 'StructDef
         'database $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            def database $ {}
-              :sessions $ noted session ({})
-              :users $ noted user ({})
+            def database $ %{} Db
+              :sessions $ {}
+              :users $ {}
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'app.schema/Db
         'decode-client-message $ %{} 'CodeEntry (:doc "|Validate one untrusted client value and reconstruct a nominal ClientMessage; direct legacy Op enums remain accepted.")
           :code $ quote
             defn decode-client-message (data)
@@ -849,6 +896,141 @@
                   %:: Result :ok $ %:: ClientMessage :dispatch (%:: Op :effect/ping)
                   decode-client-message $ parse-cirru-edn "|%:: 'ClientMessage 'dispatch $ %:: 'Op 'effect/ping"
               :tags $ #{} :server
+        'decode-database $ %{} 'CodeEntry (:doc "|Deeply validate a wire or legacy bare-map database and reconstruct nominal Db, Session, User, Router, and Message values.")
+          :code $ quote
+            defn decode-database (data)
+              let
+                  source $ if
+                    = (type-of data) :struct
+                    &struct:to-map data
+                    , data
+                if
+                  = (type-of source) :map
+                  let
+                      sessions-data $ option:unwrap-or (get source :sessions) ({})
+                      users-data $ option:unwrap-or (get source :users) ({})
+                    match (decode-sessions sessions-data |db.sessions)
+                      (:err error) (%err error)
+                      (:ok sessions)
+                        match (decode-users users-data |db.users)
+                          (:err error) (%err error)
+                          (:ok users)
+                            %ok $ %{} Db (:sessions sessions) (:users users)
+                  %err $ %:: DatabaseDecodeError :invalid |db "|Expected database map or struct"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-legacy-bare-map)
+              :code $ quote
+                let
+                    legacy $ {}
+                      :sessions $ {}
+                        1 $ {} (:id 1) (:user-id |u1) (:nickname nil)
+                          :router $ {} (:name :profile)
+                          :messages $ {}
+                            |m1 $ {} (:id |m1) (:text |hello)
+                      :users $ {}
+                        |u1 $ {} (:id |u1) (:name |demo) (:nickname nil) (:avatar nil) (:password |hash)
+                  match (decode-database legacy)
+                    (:ok db)
+                      do
+                        assert= true $ &struct:matches? db Db
+                        assert= true $ &struct:matches?
+                          option:unwrap $ get (:sessions db) 1
+                          , Session
+                        assert= true $ &struct:matches?
+                          option:unwrap $ get (:users db) |u1
+                          , User
+                    (:err error) (raise |Unexpected-decode-failure)
+              :tags $ #{} :schema :server
+            %{} 'TestEntry (:name |rejects-corrupt-nested-message)
+              :code $ quote
+                let
+                    corrupt $ {}
+                      :sessions $ {}
+                        1 $ {} (:id 1)
+                          :router $ {} (:name :home)
+                          :messages $ {}
+                            |m1 $ {} (:id |m1) (:text 42)
+                      :users $ {}
+                  assert=
+                    %err $ %:: DatabaseDecodeError :invalid |db.sessions.1.messages.m1.text "|Expected String"
+                    decode-database corrupt
+              :tags $ #{} :schema :server
+            %{} 'TestEntry (:name |rejects-corrupt-nested-user)
+              :code $ quote
+                let
+                    corrupt $ {}
+                      :sessions $ {}
+                      :users $ {}
+                        |u1 $ {} (:id |u1) (:name |demo) (:password 42)
+                  assert=
+                    %err $ %:: DatabaseDecodeError :invalid |db.users.u1.password "|Expected String"
+                    decode-database corrupt
+              :tags $ #{} :schema :server
+        'decode-message $ %{} 'CodeEntry (:doc "|Decode and validate one stored message.")
+          :code $ quote
+            defn decode-message (data path)
+              let
+                  source $ if
+                    = (type-of data) :struct
+                    &struct:to-map data
+                    , data
+                if
+                  = (type-of source) :map
+                  match (get source :id)
+                    (:none)
+                      %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                    (:some id)
+                      if-not (string? id)
+                        %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                        match (get source :text)
+                          (:none)
+                            %err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
+                          (:some text)
+                            if (string? text)
+                              %ok $ %{} Message (:id id) (:text text)
+                              %err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
+                  %err $ %:: DatabaseDecodeError :invalid path "|Expected Message map or struct"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/Message 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
+        'decode-messages $ %{} 'CodeEntry (:doc "|Decode a keyed message collection and validate every nested value.")
+          :code $ quote
+            defn decode-messages (data path)
+              if-not
+                = (type-of data) :map
+                %err $ %:: DatabaseDecodeError :invalid path "|Expected message Map"
+                foldl (&map:to-list data)
+                  %ok $ {}
+                  fn (acc pair)
+                    match acc
+                      (:err error) (%err error)
+                      (:ok messages)
+                        let[] (id value) pair $ if-not (string? id)
+                          %err $ %:: DatabaseDecodeError :invalid path "|Expected String message key"
+                          let
+                              decoded $ decode-message value (str path |. id)
+                            match decoded
+                              (:err error) (%err error)
+                              (:ok message)
+                                %ok $ assoc messages id message
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
         'decode-operation $ %{} 'CodeEntry (:doc "|Reconstruct a nominal application Op from an untrusted or legacy enum value.")
           :code $ quote
             defn decode-operation (data)
@@ -863,7 +1045,23 @@
                   (:session/disconnect)
                     %ok $ %:: Op :session/disconnect
                   (:session/remove-message message)
-                    %ok $ %:: Op :session/remove-message message
+                    if
+                      or
+                        = (type-of message) :map
+                        = (type-of message) :struct
+                      let
+                          source $ if
+                            = (type-of message) :struct
+                            &struct:to-map message
+                            , message
+                        match (get source :id)
+                          (:none) (invalid-message "|Invalid remove-message id")
+                          (:some id)
+                            if (string? id)
+                              %ok $ %:: Op :session/remove-message
+                                %{} RemoveMessage $ :id id
+                              invalid-message $ str "|Invalid remove-message id: " id
+                      invalid-message $ str "|Invalid remove-message payload: " message
                   (:user/log-in username password)
                     if
                       and (string? username) (string? password)
@@ -876,8 +1074,14 @@
                       invalid-message $ str "|Invalid sign-up operation: " op
                   (:user/log-out)
                     %ok $ %:: Op :user/log-out
-                  (:router/change router)
-                    %ok $ %:: Op :router/change router
+                  (:router/change router-data)
+                    let
+                        decoded-router $ decode-router router-data |operation.router
+                      match decoded-router
+                        (:ok typed-router)
+                          %ok $ %:: Op :router/change typed-router
+                        (:err error)
+                          invalid-message $ str "|Invalid router operation: " error
                   (:effect/persist)
                     %ok $ %:: Op :effect/persist
                   (:effect/ping)
@@ -898,6 +1102,55 @@
             {}
               :args $ [] 'Dynamic
               :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
+              :code $ quote
+                do
+                  assert=
+                    %ok $ %:: Op :router/change
+                      %{} Router $ :name :profile
+                    decode-operation $ :: :router/change
+                      {} $ :name :profile
+                  assert=
+                    %ok $ %:: Op :session/remove-message
+                      %{} RemoveMessage $ :id |m1
+                    decode-operation $ :: :session/remove-message
+                      {} $ :id |m1
+                  match
+                    decode-operation $ :: :router/change |profile
+                    (:ok _) (raise |Expected-invalid-router-payload)
+                    (:err _) &unit
+                  match
+                    decode-operation $ :: :session/remove-message
+                      {} $ :id 1
+                    (:ok _) (raise |Expected-invalid-remove-message-payload)
+                    (:err _) &unit
+              :tags $ #{} :protocol :schema
+        'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
+          :code $ quote
+            defn decode-router (data path)
+              let
+                  source $ if
+                    = (type-of data) :struct
+                    &struct:to-map data
+                    , data
+                if
+                  = (type-of source) :map
+                  match (get source :name)
+                    (:none)
+                      %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
+                    (:some name)
+                      if (tag? name)
+                        %ok $ %{} Router (:name name)
+                        %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
+                  %err $ %:: DatabaseDecodeError :invalid path "|Expected Router map or struct"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/Router 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
         'decode-server-message $ %{} 'CodeEntry (:doc "|Validate one untrusted server value and reconstruct a nominal ServerMessage.")
           :code $ quote
             defn decode-server-message (data)
@@ -963,6 +1216,189 @@
                   decode-server-message $ %:: ServerMessage :patch 3 4
                     [] $ %:: recollect.schema/change-op :replace 1
               :tags $ #{} :client
+        'decode-session $ %{} 'CodeEntry (:doc "|Decode and deeply validate one stored session.")
+          :code $ quote
+            defn decode-session (data path)
+              let
+                  source $ if
+                    = (type-of data) :struct
+                    &struct:to-map data
+                    , data
+                if
+                  = (type-of source) :map
+                  match (get source :id)
+                    (:none)
+                      %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
+                    (:some id)
+                      if-not (number? id)
+                        %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
+                        let
+                            user-id-result $ match (get source :user-id)
+                              (:none)
+                                %ok $ %none
+                              (:some value)
+                                if (nil? value)
+                                  %ok $ %none
+                                  if (string? value)
+                                    %ok $ %some value
+                                    %err $ %:: DatabaseDecodeError :invalid (str path |.user-id) "|Expected nil or String"
+                            nickname-result $ match (get source :nickname)
+                              (:none)
+                                %ok $ %none
+                              (:some value)
+                                if (nil? value)
+                                  %ok $ %none
+                                  if (string? value)
+                                    %ok $ %some value
+                                    %err $ %:: DatabaseDecodeError :invalid (str path |.nickname) "|Expected nil or String"
+                            router-data $ option:unwrap-or (get source :router)
+                              {} $ :name :home
+                            messages-data $ option:unwrap-or (get source :messages) ({})
+                            router-result $ decode-router router-data (str path |.router)
+                            messages-result $ decode-messages messages-data (str path |.messages)
+                          match user-id-result
+                            (:err error) (%err error)
+                            (:ok user-id)
+                              match nickname-result
+                                (:err error) (%err error)
+                                (:ok nickname)
+                                  match router-result
+                                    (:err error) (%err error)
+                                    (:ok typed-router)
+                                      match messages-result
+                                        (:err error) (%err error)
+                                        (:ok typed-messages)
+                                          %ok $ %{} Session (:user-id user-id) (:id id) (:nickname nickname) (:router typed-router) (:messages typed-messages)
+                  %err $ %:: DatabaseDecodeError :invalid path "|Expected Session map or struct"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/Session 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
+        'decode-sessions $ %{} 'CodeEntry (:doc "|Decode a keyed session collection and validate every nested value.")
+          :code $ quote
+            defn decode-sessions (data path)
+              if-not
+                = (type-of data) :map
+                %err $ %:: DatabaseDecodeError :invalid path "|Expected session Map"
+                foldl (&map:to-list data)
+                  %ok $ {}
+                  fn (acc pair)
+                    match acc
+                      (:err error) (%err error)
+                      (:ok sessions)
+                        let[] (id value) pair $ if-not (number? id)
+                          %err $ %:: DatabaseDecodeError :invalid path "|Expected Number session key"
+                          let
+                              decoded $ decode-session value (str path |. id)
+                            match decoded
+                              (:err error) (%err error)
+                              (:ok session)
+                                if
+                                  = id $ :id session
+                                  %ok $ assoc sessions id session
+                                  %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
+        'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
+          :code $ quote
+            defn decode-user (data path)
+              let
+                  source $ if
+                    = (type-of data) :struct
+                    &struct:to-map data
+                    , data
+                if
+                  = (type-of source) :map
+                  match (get source :name)
+                    (:none)
+                      %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
+                    (:some name)
+                      if-not (string? name)
+                        %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
+                        match (get source :id)
+                          (:none)
+                            %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                          (:some id)
+                            if-not (string? id)
+                              %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                              let
+                                  nickname-result $ match (get source :nickname)
+                                    (:none)
+                                      %ok $ %none
+                                    (:some value)
+                                      if (nil? value)
+                                        %ok $ %none
+                                        if (string? value)
+                                          %ok $ %some value
+                                          %err $ %:: DatabaseDecodeError :invalid (str path |.nickname) "|Expected nil or String"
+                                  avatar-result $ match (get source :avatar)
+                                    (:none)
+                                      %ok $ %none
+                                    (:some value)
+                                      if (nil? value)
+                                        %ok $ %none
+                                        if (string? value)
+                                          %ok $ %some value
+                                          %err $ %:: DatabaseDecodeError :invalid (str path |.avatar) "|Expected nil or String"
+                                match nickname-result
+                                  (:err error) (%err error)
+                                  (:ok nickname)
+                                    match avatar-result
+                                      (:err error) (%err error)
+                                      (:ok avatar)
+                                        match (get source :password)
+                                          (:none)
+                                            %err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
+                                          (:some password)
+                                            if (string? password)
+                                              %ok $ %{} User (:name name) (:id id) (:nickname nickname) (:avatar avatar) (:password password)
+                                              %err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
+                  %err $ %:: DatabaseDecodeError :invalid path "|Expected User map or struct"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result 'app.schema/User 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
+        'decode-users $ %{} 'CodeEntry (:doc "|Decode a keyed user collection and validate every nested value.")
+          :code $ quote
+            defn decode-users (data path)
+              if-not
+                = (type-of data) :map
+                %err $ %:: DatabaseDecodeError :invalid path "|Expected user Map"
+                foldl (&map:to-list data)
+                  %ok $ {}
+                  fn (acc pair)
+                    match acc
+                      (:err error) (%err error)
+                      (:ok users)
+                        let[] (id value) pair $ if-not (string? id)
+                          %err $ %:: DatabaseDecodeError :invalid path "|Expected String user key"
+                          let
+                              decoded $ decode-user value (str path |. id)
+                            match decoded
+                              (:err error) (%err error)
+                              (:ok user)
+                                if
+                                  = id $ :id user
+                                  %ok $ assoc users id user
+                                  %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
         'invalid-message $ %{} 'CodeEntry (:doc "|Build a typed decode failure while preserving the expected success type.")
           :code $ quote
             defn invalid-message (detail)
@@ -975,24 +1411,27 @@
               :return $ :: 'Result 'T 'app.schema/MessageDecodeError
         'router $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            def router $ {} (:name nil) (:title nil)
-              :data $ {}
-              :router nil
+            def router $ %{} Router (:name :home)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'app.schema/Router
         'session $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            def session $ {} (:user-id nil) (:id nil) (:nickname nil)
-              :router $ noted router
-                {} (:name :home) (:data nil) (:router nil)
+            def session $ %{} Session
+              :user-id $ %none
+              :id 0
+              :nickname $ %none
+              :router router
               :messages $ {}
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'app.schema/Session
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            def user $ {} (:name nil) (:id nil) (:nickname nil) (:avatar nil) (:password nil)
+            def user $ %{} User (:name ||) (:id ||)
+              :nickname $ %none
+              :avatar $ %none
+              :password ||
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'app.schema/User
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote (ns app.schema)
     'app.server $ %{} 'FileEntry
@@ -1017,10 +1456,14 @@
             defatom *initial-db $ if
               path-exists? $ w-log storage-file
               do (println "|Found local EDN data")
-                merge schema/database $ parse-cirru-edn (read-file storage-file)
+                match
+                  read-persisted-database $ read-file storage-file
+                  (:ok db) db
+                  (:err error)
+                    do (eprintln "|Invalid persisted database, starting empty:" error) schema/database
               do (println "|Found no data") schema/database
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'app.schema/Db
         '*reader-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote (defatom *reader-reel @*reel)
           :examples $ []
@@ -1090,13 +1533,49 @@
                   (:effect/persist) (persist-db!)
                   (:effect/ping)
                     wss-send! sid $ format-cirru-edn (%:: schema/ServerMessage :effect/pong)
-                  _ $ do
-                    reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
-                    request-sync!
+                  (:reel/reset)
+                    do
+                      reset! *reel $ -> @*reel
+                        assoc :db $ :base @*reel
+                        assoc :records $ []
+                      request-sync!
+                  (:reel/merge)
+                    do
+                      reset! *reel $ -> @*reel
+                        assoc :base $ :db @*reel
+                        assoc :records $ []
+                        assoc :merged? true
+                      request-sync!
+                  (:session/connect)
+                    dispatch-domain! (%:: schema/DomainOp :session/connect) sid op-id op-time
+                  (:session/disconnect)
+                    dispatch-domain! (%:: schema/DomainOp :session/disconnect) sid op-id op-time
+                  (:session/remove-message data)
+                    dispatch-domain! (%:: schema/DomainOp :session/remove-message data) sid op-id op-time
+                  (:user/log-in username password)
+                    dispatch-domain! (%:: schema/DomainOp :user/log-in username password) sid op-id op-time
+                  (:user/sign-up username password)
+                    dispatch-domain! (%:: schema/DomainOp :user/sign-up username password) sid op-id op-time
+                  (:user/log-out)
+                    dispatch-domain! (%:: schema/DomainOp :user/log-out) sid op-id op-time
+                  (:router/change data)
+                    dispatch-domain! (%:: schema/DomainOp :router/change data) sid op-id op-time
+                  _ $ do (eprintln "|Ignoring client-local operation on server:" op) &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Dynamic)
               :args $ [] 'app.schema/Op 'Number
+        'dispatch-domain! $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn dispatch-domain! (op sid op-id op-time)
+              do
+                reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
+                request-sync!
+                , &unit
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'app.schema/DomainOp 'Number 'String 'Number
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn get-backup-path! () $ let
@@ -1119,12 +1598,12 @@
                   = revision $ option:unwrap (get cached :revision)
                   option:unwrap $ get cached :value
                   let
-                      value $ twig-shared (:db reel) (:records reel)
+                      value $ twig-shared (reel-db reel) (reel-record-count reel)
                     reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                     , value
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Dynamic)
+            {} (:return 'app.schema/SharedTwig)
               :args $ [] 'cumulo-reel.core/ReelState 'Number
         'handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote
@@ -1410,9 +1889,7 @@
           :code $ quote
             defn persist-db! () $ let
                 file-content $ format-cirru-edn
-                  assoc
-                    :db $ unsafe-coerce @*reel 'cumulo-reel.core/ReelState
-                    , :sessions $ {}
+                  assoc (reel-db @*reel) :sessions $ {}
                 storage-path storage-file
                 backup-path $ get-backup-path!
               do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
@@ -1420,6 +1897,25 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'read-persisted-database $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn read-persisted-database (content)
+              try
+                schema/decode-database $ parse-cirru-edn content
+                fn (error)
+                  %err $ %:: schema/DatabaseDecodeError :invalid |db (str "|Malformed persisted Cirru EDN: " error)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'String
+              :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
+          :tests $ []
+            %{} 'TestEntry (:name |rejects-malformed-cirru-edn)
+              :code $ quote
+                match (read-persisted-database "|{} (:sessions")
+                  (:ok _) (raise |Expected-malformed-storage-error)
+                  (:err _) &unit
+              :tags $ #{} :schema :server
         'read-sync-metrics $ %{} 'CodeEntry (:doc "|Read counters plus pending and slow-client gauges computed from current connection state.")
           :code $ quote
             defn read-sync-metrics () $ let
@@ -1450,6 +1946,37 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Tag 'Number 'Number 'String
+        'reel-db $ %{} 'CodeEntry (:doc "|Named adapter for the legacy generic ReelState database slot.")
+          :code $ quote
+            defn reel-db (reel)
+              let
+                  decoded $ schema/decode-database (:db reel)
+                match decoded
+                  (:ok db) db
+                  (:err error)
+                    raise $ str "|Invalid nominal database in ReelState: " error
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'app.schema/Db)
+              :args $ [] 'cumulo-reel.core/ReelState
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-generic-reel-slot)
+              :code $ quote
+                let
+                    reel $ struct-with reel-schema (:db schema/database) (:base schema/database)
+                      :records $ []
+                      :merged? false
+                  assert= schema/database $ reel-db reel
+                  assert= 0 $ reel-record-count reel
+              :tags $ #{} :server :type
+        'reel-record-count $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn reel-record-count (reel)
+              count $ :records reel
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ [] 'cumulo-reel.core/ReelState
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn reload! () (println "|Code updated..")
@@ -1566,35 +2093,37 @@
                     = :active $ option:unwrap (get state :status)
                     not $ option:unwrap-or (get state :in-flight?) false
                   let
-                      db $ :db reel
-                      records $ :records reel
-                      session $ option:unwrap
-                        get-in db $ [] :sessions sid
-                      shared $ get-shared-twig reel revision
-                      old-store-option $ get @*client-caches sid
-                      new-store $ twig-container db session records shared
-                      needs-snapshot? $ or
-                        option:unwrap-or (get state :needs-snapshot?) true
-                        option:none? old-store-option
-                      diff-start $ now-ms
-                      changes $ if needs-snapshot? ([])
-                        diff-twig (option:unwrap old-store-option) new-store $ {} (:key :id)
-                      diff-latency $ - (now-ms) diff-start
-                      send-snapshot? $ or needs-snapshot?
-                        > (count changes) patch-operation-limit
-                      base-revision $ option:unwrap-or (get state :acked-rev) 0
-                    if send-snapshot?
+                      db $ reel-db reel
+                    if-let
+                      raw-session $ get (:sessions db) sid
                       let
-                          payload $ format-cirru-edn (%:: schema/ServerMessage :snapshot revision new-store)
-                        record-sync-send! :snapshot revision diff-latency payload
-                        handle-sync-send! sid revision new-store $ wss-send! sid payload
-                      if
-                        not= changes $ []
-                        let
-                            payload $ format-cirru-edn (%:: schema/ServerMessage :patch base-revision revision changes)
-                          record-sync-send! :patch revision diff-latency payload
-                          handle-sync-send! sid revision new-store $ wss-send! sid payload
-                        , &unit
+                          session-data $ assert-type raw-session app.schema/Session
+                          shared $ get-shared-twig reel revision
+                          old-store-option $ get @*client-caches sid
+                          new-store $ twig-container db session-data shared
+                          needs-snapshot? $ or
+                            option:unwrap-or (get state :needs-snapshot?) true
+                            option:none? old-store-option
+                          diff-start $ now-ms
+                          changes $ if needs-snapshot? ([])
+                            diff-twig (option:unwrap old-store-option) new-store $ {} (:key :id)
+                          diff-latency $ - (now-ms) diff-start
+                          send-snapshot? $ or needs-snapshot?
+                            > (count changes) patch-operation-limit
+                          base-revision $ option:unwrap-or (get state :acked-rev) 0
+                        if send-snapshot?
+                          let
+                              payload $ format-cirru-edn (%:: schema/ServerMessage :snapshot revision new-store)
+                            record-sync-send! :snapshot revision diff-latency payload
+                            handle-sync-send! sid revision new-store $ wss-send! sid payload
+                          if
+                            not= changes $ []
+                            let
+                                payload $ format-cirru-edn (%:: schema/ServerMessage :patch base-revision revision changes)
+                              record-sync-send! :patch revision diff-latency payload
+                              handle-sync-send! sid revision new-store $ wss-send! sid payload
+                            , &unit
+                      do (eprintln "|Missing typed session during sync:" sid) &unit
               , &unit
           :examples $ []
           :schema $ :: 'Fn
@@ -1659,62 +2188,43 @@
       :defs $ {}
         'twig-container $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn twig-container (db session records shared)
+            defn twig-container (db session-data shared)
               let
-                  user-id $ option:unwrap-or (get session :user-id) nil
-                  logged-in? $ some? user-id
-                  router $ if-let
-                    router-data $ get session :router
-                    , router-data
-                      {} (:name :home) (:data nil) (:router nil)
-                  router-name $ option:unwrap (get router :name)
-                  router-parent $ if-let
-                    value $ get router :router
-                    if (nil? value) (%:: Option :none)
-                      %:: Option :some $ unsafe-coerce value 'Map
-                    %:: Option :none
-                  session-router-data $ if-let
-                    value $ get router :data
-                    if (nil? value) (%:: Option :none)
-                      %:: Option :some $ unsafe-coerce value 'Map
-                    %:: Option :none
-                  session-router $ %{} RouterView (:name router-name) (:data session-router-data) (:router router-parent)
-                  router-data $ if logged-in?
-                    case-default router-name (%:: Option :none)
+                  user-id-option $ :user-id session-data
+                  logged-in? $ option:some? user-id-option
+                  router-data $ :router session-data
+                  router-name $ :name router-data
+                  router-view-data $ if logged-in?
+                    case-default router-name (%none)
                       :home $ :pages shared
-                      :profile $ %:: Option :some (:members shared)
-                    %:: Option :none
-                  router-view $ %{} RouterView (:name router-name) (:data router-data) (:router router-parent)
-                  messages-view $ ->
-                    option:unwrap-or (get session :messages) ({})
-                    .to-list
+                      :profile $ %some (:members shared)
+                    %none
+                  router-view $ %{} RouterView (:name router-name) (:data router-view-data)
+                    :router $ %none
+                  messages-view $ -> (:messages session-data) (.to-list)
                     map $ fn (pair)
-                      let[] (id message) pair $ [] id
-                        %{} MessageView
-                          :id $ option:unwrap-or (get message :id) id
-                          :text $ option:unwrap-or (get message :text) |
+                      let[] (id raw-message) pair $ let
+                          message $ assert-type raw-message app.schema/Message
+                        [] id $ %{} MessageView
+                          :id $ :id message
+                          :text $ :text message
                     pairs-map
-                  session-view $ %{} SessionView
-                    :user-id $ let
-                        value user-id
-                      if (nil? value) (%none)
-                        if (string? value) (%some value) (raise "|Invalid session String field")
-                    :id $ let
-                        value $ option:unwrap-or (get session :id) nil
-                      if (nil? value) (%none)
-                        if (number? value) (%some value) (raise "|Invalid session Number field")
-                    :nickname $ let
-                        value $ option:unwrap-or (get session :nickname) nil
-                      if (nil? value) (%none)
-                        if (string? value) (%some value) (raise "|Invalid session String field")
-                    :router session-router
+                  session-view $ %{} SessionView (:user-id user-id-option)
+                    :id $ %some (:id session-data)
+                    :nickname $ :nickname session-data
+                    :router $ %{} RouterView (:name router-name)
+                      :data $ %none
+                      :router $ %none
                     :messages messages-view
-                  user-option $ if logged-in?
-                    %:: Option :some $ memo-twig-by1 user-id twig-user
-                      dissoc
-                        option:unwrap $ get-in db ([] :users user-id)
-                        , :tasks
-                    %:: Option :none
+                  user-option $ match user-id-option
+                    (:none) (%none)
+                    (:some user-id)
+                      if-let
+                        raw-user $ get (:users db) user-id
+                        let
+                            user-data $ assert-type raw-user app.schema/User
+                          %some $ twig-user user-data
+                        %none
                 %{} Store (:logged-in? logged-in?) (:session session-view)
                   :reel-length $ :reel-length shared
                   :attached $ :attached shared
@@ -1725,108 +2235,105 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.schema/Store)
-              :args $ [] 'Map 'Map 'Dynamic 'app.schema/SharedTwig
+              :args $ [] 'app.schema/Db 'app.schema/Session 'app.schema/SharedTwig
           :tests $ []
             %{} 'TestEntry (:name |typed-store-roundtrip)
               :code $ quote
                 let
-                    db $ {}
-                      :sessions $ {}
+                    message $ %{} app.schema/Message (:id |m1) (:text |hello)
+                    session-data $ %{} app.schema/Session
+                      :user-id $ %none
+                      :id 1
+                      :nickname $ %none
+                      :router $ %{} app.schema/Router (:name :home)
+                      :messages $ {} (|m1 message)
+                    db $ %{} app.schema/Db
+                      :sessions $ {} (1 session-data)
                       :users $ {}
-                    session $ {} (:user-id nil) (:id 1) (:nickname nil)
-                      :router $ {} (:name :home) (:data nil) (:router nil)
-                      :messages $ {}
-                        |m1 $ {} (:id |m1) (:text |hello)
-                    shared $ twig-shared db ([])
-                    store $ twig-container db session ([]) shared
+                    shared $ twig-shared db 0
+                    store $ twig-container db session-data shared
                     decoded $ parse-cirru-edn (format-cirru-edn store)
-                    typed-store $ unsafe-coerce store 'app.schema/Store
-                    message $ option:unwrap
-                      get
-                        :messages $ :session typed-store
-                        , |m1
-                    typed-message $ unsafe-coerce message 'app.schema/MessageView
+                    session-view $ :session store
+                    raw-message $ option:unwrap
+                      get (:messages session-view) |m1
+                    typed-message $ assert-type raw-message app.schema/MessageView
                   assert= true $ &struct:matches? store Store
                   assert= true $ &struct:matches? decoded Store
-                  assert= true $ &struct:matches? message MessageView
-                  assert= 0 $ :count typed-store
+                  assert= true $ &struct:matches? typed-message MessageView
+                  assert= 0 $ :count store
                   assert= |hello $ :text typed-message
               :tags $ #{} :twig :type
             %{} 'TestEntry (:name |session-none-fields)
               :code $ quote
                 let
-                    db $ {}
-                      :sessions $ {}
-                      :users $ {}
-                    shared $ twig-shared db ([])
-                    missing $ :session
-                      twig-container db ({}) ([]) shared
-                    explicit $ :session
-                      twig-container db
-                        {} (:id nil) (:user-id nil) (:nickname nil)
-                        []
-                        , shared
-                  assert= (%none) (:id missing)
-                  assert= (%none) (:user-id missing)
-                  assert= (%none) (:nickname missing)
-                  assert= missing explicit
-                  assert= missing $ parse-cirru-edn (format-cirru-edn missing)
+                    db app.schema/database
+                    session-data app.schema/session
+                    shared $ twig-shared db 0
+                    projected $ twig-container db session-data shared
+                    view $ :session projected
+                  assert= (%some 0) (:id view)
+                  assert= (%none) (:user-id view)
+                  assert= (%none) (:nickname view)
+                  assert= view $ parse-cirru-edn (format-cirru-edn view)
               :tags $ #{} :client :server :twig :type
             %{} 'TestEntry (:name |session-some-fields)
               :code $ quote
                 let
-                    db $ {}
-                      :sessions $ {}
-                      :users $ {}
-                        |u1 $ {} (:id |u1) (:name |demo) (:nickname nil) (:avatar nil)
-                    shared $ twig-shared db ([])
-                    projected $ twig-container db
-                      {} (:id 0) (:user-id |u1) (:nickname |)
-                      []
-                      , shared
-                    session $ :session projected
-                  assert= (%some 0) (:id session)
-                  assert= (%some |u1) (:user-id session)
-                  assert= (%some |) (:nickname session)
+                    user-data $ %{} app.schema/User (:id |u1) (:name |demo)
+                      :nickname $ %none
+                      :avatar $ %none
+                      :password |hash
+                    session-data $ %{} app.schema/Session (:id 0)
+                      :user-id $ %some |u1
+                      :nickname $ %some ||
+                      :router $ %{} app.schema/Router (:name :home)
+                      :messages $ {}
+                    db $ %{} app.schema/Db
+                      :sessions $ {} (0 session-data)
+                      :users $ {} (|u1 user-data)
+                    shared $ twig-shared db 0
+                    projected $ twig-container db session-data shared
+                    view $ :session projected
+                  assert= (%some 0) (:id view)
+                  assert= (%some |u1) (:user-id view)
+                  assert= (%some ||) (:nickname view)
                   assert= true $ :logged-in? projected
-                  assert= session $ parse-cirru-edn (format-cirru-edn session)
+                  assert= view $ parse-cirru-edn (format-cirru-edn view)
               :tags $ #{} :client :server :twig :type
         'twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn twig-members (sessions users)
               -> sessions (.to-list)
                 map $ fn (pair)
-                  let[] (k session) pair $ [] k
-                    option:unwrap-or
-                      get-in users $ []
-                        option:unwrap $ get session :user-id
-                        , :name
-                      , nil
+                  let[] (sid raw-session) pair $ let
+                      session-data $ assert-type raw-session app.schema/Session
+                    [] sid $ match (:user-id session-data)
+                      (:none) (%none)
+                      (:some user-id)
+                        if-let
+                          raw-user $ get users user-id
+                          let
+                              user-data $ assert-type raw-user app.schema/User
+                            %some $ :name user-data
+                          %none
                 pairs-map
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Map
+            {}
+              :args $ [] (:: 'Map 'Number 'app.schema/Session) (:: 'Map 'String 'app.schema/User)
+              :return $ :: 'Map 'Number (:: 'Option 'String)
         'twig-shared $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn twig-shared (db records)
-              let
-                  sessions $ option:unwrap (get db :sessions)
-                  users $ option:unwrap (get db :users)
-                  pages $ if-let
-                    value $ get db :pages
-                    %:: Option :some $ unsafe-coerce value 'Map
-                    %:: Option :none
-                %{} SharedTwig
-                  :reel-length $ count records
-                  :attached $ %{} AttachedView (:type :msg) (:content "|SOME data")
-                  :pages pages
-                  :members $ twig-members sessions users
-                  :session-count $ count sessions
+            defn twig-shared (db record-count)
+              %{} SharedTwig (:reel-length record-count)
+                :attached $ %{} AttachedView (:type :msg) (:content "|SOME data")
+                :pages $ %none
+                :members $ twig-members (:sessions db) (:users db)
+                :session-count $ count (:sessions db)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.schema/SharedTwig)
-              :args $ [] 'Map 'Dynamic
+              :args $ [] 'app.schema/Db 'Number
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.twig.container $ :require
@@ -1837,22 +2344,16 @@
       :defs $ {}
         'twig-user $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn twig-user (user)
+            defn twig-user (user-data)
               %{} UserView
-                :name $ option:unwrap (get user :name)
-                :id $ option:unwrap (get user :id)
-                :nickname $ let
-                    value $ option:unwrap-or (get user :nickname) nil
-                  if (nil? value) (%none)
-                    if (string? value) (%some value) (raise "|Invalid user String field")
-                :avatar $ let
-                    value $ option:unwrap-or (get user :avatar) nil
-                  if (nil? value) (%none)
-                    if (string? value) (%some value) (raise "|Invalid user String field")
+                :name $ :name user-data
+                :id $ :id user-data
+                :nickname $ :nickname user-data
+                :avatar $ :avatar user-data
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.schema/UserView)
-              :args $ [] 'Map
+              :args $ [] 'app.schema/User
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.twig.user $ :require
@@ -1870,11 +2371,10 @@
                 (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
                 (:user/log-out) (user/log-out db sid op-id op-time)
                 (:router/change data) (router/change db data sid op-id op-time)
-                _ $ do (eprintln "|Unknown op:" op) db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Dynamic)
-              :args $ [] 'Map 'app.schema/Op 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.updater $ :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
@@ -1885,11 +2385,17 @@
         'change $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn change (db op-data sid op-id op-time)
-              assoc-in db ([] :sessions sid :router) op-data
+              if-let
+                raw-session $ get (:sessions db) sid
+                let
+                    session-data $ assert-type raw-session app.schema/Session
+                  assoc db :sessions $ assoc (:sessions db) sid
+                    struct-with session-data $ :router op-data
+                , db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Dynamic 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'app.schema/Router 'Number 'String 'Number
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote (ns app.updater.router)
     'app.updater.session $ %{} 'FileEntry
@@ -1897,49 +2403,65 @@
         'connect $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn connect (db sid op-id op-time)
-              assoc-in db ([] :sessions sid)
-                merge schema/session $ {} (:id sid)
+              assoc db :sessions $ assoc (:sessions db) sid
+                %{} schema/Session
+                  :user-id $ %none
+                  :id sid
+                  :nickname $ %none
+                  :router schema/router
+                  :messages $ {}
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'Number 'String 'Number
         'disconnect $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn disconnect (db sid op-id op-time)
-              update db :sessions $ fn (sessions) (dissoc sessions sid)
+              assoc db :sessions $ dissoc (:sessions db) sid
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'Number 'String 'Number
         'remove-message $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn remove-message (db op-data sid op-id op-time)
-              update-in db ([] :sessions sid :messages)
-                fn (messages)
-                  dissoc (option:unwrap messages)
-                    option:unwrap $ get op-data :id
+              if-let
+                raw-session $ get (:sessions db) sid
+                let
+                    session-data $ assert-type raw-session app.schema/Session
+                  assoc db :sessions $ assoc (:sessions db) sid
+                    struct-with session-data $ :messages
+                      dissoc (:messages session-data) (:id op-data)
+                , db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Dynamic 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'app.schema/RemoveMessage 'Number 'String 'Number
           :tests $ []
             %{} 'TestEntry (:name |existing-message-map-callback)
               :code $ quote
                 let
                     sid 1
-                    db $ {}
-                      :sessions $ {}
-                        sid $ {}
-                          :messages $ {}
-                            |m1 $ {} (:id |m1) (:text |remove)
-                            |m2 $ {} (:id |m2) (:text |keep)
+                    session-data $ %{} app.schema/Session (:id sid)
+                      :user-id $ %none
+                      :nickname $ %none
+                      :router $ %{} app.schema/Router (:name :home)
+                      :messages $ {}
+                        |m1 $ %{} app.schema/Message (:id |m1) (:text |remove)
+                        |m2 $ %{} app.schema/Message (:id |m2) (:text |keep)
+                    db $ %{} app.schema/Db
+                      :sessions $ {} (sid session-data)
+                      :users $ {}
                     result $ remove-message db
-                      {} $ :id |m1
+                      %{} app.schema/RemoveMessage $ :id |m1
                       , sid |op 0
+                    raw-session $ option:unwrap
+                      get (:sessions result) sid
+                    next-session $ assert-type raw-session app.schema/Session
                   assert= (%none)
-                    get-in result $ [] :sessions sid :messages |m1
-                  assert= |keep $ option:unwrap
-                    get-in result $ [] :sessions sid :messages |m2 :text
+                    get (:messages next-session) |m1
+                  assert= |keep $ :text
+                    option:unwrap $ get (:messages next-session) |m2
               :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
@@ -1950,97 +2472,139 @@
           :code $ quote
             defn log-in (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (get db :users) ({})
-                  maybe-user $ -> users vals .to-list
-                    find $ fn (user)
-                      = username $ option:unwrap (get user :name)
-                update-in db ([] :sessions sid)
-                  fn (session)
-                    let
-                        session-data $ option:unwrap session
-                      if-let (user maybe-user)
-                        if
-                          = (md5 password)
-                            option:unwrap $ get user :password
-                          assoc session-data :user-id $ option:unwrap (get user :id)
-                          update session-data :messages $ fn (messages)
-                            assoc messages op-id $ {} (:id op-id)
-                              :text $ str "|Wrong password for " username
-                        update session-data :messages $ fn (messages)
-                          assoc messages op-id $ {} (:id op-id)
+                  maybe-user $ find
+                    -> (:users db) vals .to-list
+                    fn (raw-user)
+                      let
+                          user-data $ assert-type raw-user app.schema/User
+                        = username $ :name user-data
+                if-let
+                  raw-session $ get (:sessions db) sid
+                  let
+                      session-data $ assert-type raw-session app.schema/Session
+                    assoc db :sessions $ assoc (:sessions db) sid
+                      if-let (raw-user maybe-user)
+                        let
+                            user-data $ assert-type raw-user app.schema/User
+                          if
+                            = (md5 password) (:password user-data)
+                            struct-with session-data $ :user-id
+                              %some $ :id user-data
+                            struct-with session-data $ :messages
+                              assoc (:messages session-data) op-id $ %{} app.schema/Message (:id op-id)
+                                :text $ str "|Wrong password for " username
+                        struct-with session-data $ :messages
+                          assoc (:messages session-data) op-id $ %{} app.schema/Message (:id op-id)
                             :text $ str "|No user named: " username
+                  , db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
           :tests $ []
             %{} 'TestEntry (:name |existing-session-callbacks)
               :code $ quote
                 let
                     sid 1
-                    db $ {}
-                      :sessions $ {}
-                        sid $ {} (:id sid) (:user-id nil)
-                          :messages $ {}
-                      :users $ {}
-                        |user-1 $ {} (:id |user-1) (:name |demo)
-                          :password $ md5 |secret
+                    session-data $ %{} app.schema/Session (:id sid)
+                      :user-id $ %none
+                      :nickname $ %none
+                      :router app.schema/router
+                      :messages $ {}
+                    user-data $ %{} app.schema/User (:id |user-1) (:name |demo)
+                      :nickname $ %none
+                      :avatar $ %none
+                      :password $ md5 |secret
+                    db $ %{} app.schema/Db
+                      :sessions $ {} (sid session-data)
+                      :users $ {} (|user-1 user-data)
                     missing $ log-in db |missing |secret sid |op-missing 0
                     wrong $ log-in db |demo |wrong sid |op-wrong 0
                     success $ log-in db |demo |secret sid |op-success 0
-                  assert= "|No user named: missing" $ option:unwrap
-                    get-in missing $ [] :sessions sid :messages |op-missing :text
-                  assert= "|Wrong password for demo" $ option:unwrap
-                    get-in wrong $ [] :sessions sid :messages |op-wrong :text
-                  assert= |user-1 $ option:unwrap
-                    get-in success $ [] :sessions sid :user-id
+                    missing-session $ assert-type
+                      option:unwrap $ get (:sessions missing) sid
+                      , app.schema/Session
+                    wrong-session $ assert-type
+                      option:unwrap $ get (:sessions wrong) sid
+                      , app.schema/Session
+                    success-session $ assert-type
+                      option:unwrap $ get (:sessions success) sid
+                      , app.schema/Session
+                  assert= "|No user named: missing" $ :text
+                    option:unwrap $ get (:messages missing-session) |op-missing
+                  assert= "|Wrong password for demo" $ :text
+                    option:unwrap $ get (:messages wrong-session) |op-wrong
+                  assert= (%some |user-1) (:user-id success-session)
               :tags $ #{} :protocol :server
         'log-out $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn log-out (db sid op-id op-time)
-              assoc-in db ([] :sessions sid :user-id) nil
+              if-let
+                raw-session $ get (:sessions db) sid
+                let
+                    session-data $ assert-type raw-session app.schema/Session
+                  assoc db :sessions $ assoc (:sessions db) sid
+                    struct-with session-data $ :user-id (%none)
+                , db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'Number 'String 'Number
         'sign-up $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sign-up (db username password sid op-id op-time)
               let
-                  users $ option:unwrap-or (get db :users) ({})
-                  maybe-user $ find (-> users vals .to-list)
-                    fn (user)
-                      = username $ option:unwrap (get user :name)
-                if-let (user maybe-user)
-                  update-in db ([] :sessions sid :messages)
-                    fn (messages)
-                      assoc (option:unwrap messages) op-id $ {} (:id op-id)
-                        :text $ str "|Name is taken: " username
-                  -> db
-                    assoc-in ([] :sessions sid :user-id) op-id
-                    assoc-in ([] :users op-id)
-                      {} (:id op-id) (:name username) (:nickname username)
-                        :password $ md5 password
-                        :avatar nil
+                  maybe-user $ find
+                    -> (:users db) vals .to-list
+                    fn (raw-user)
+                      let
+                          user-data $ assert-type raw-user app.schema/User
+                        = username $ :name user-data
+                if-let
+                  raw-session $ get (:sessions db) sid
+                  let
+                      session-data $ assert-type raw-session app.schema/Session
+                    if (option:some? maybe-user)
+                      assoc db :sessions $ assoc (:sessions db) sid
+                        struct-with session-data $ :messages
+                          assoc (:messages session-data) op-id $ %{} app.schema/Message (:id op-id)
+                            :text $ str "|Name is taken: " username
+                      -> db
+                        assoc :sessions $ assoc (:sessions db) sid
+                          struct-with session-data $ :user-id (%some op-id)
+                        assoc :users $ assoc (:users db) op-id
+                          %{} app.schema/User (:id op-id) (:name username)
+                            :nickname $ %some username
+                            :password $ md5 password
+                            :avatar $ %none
+                  , db
           :examples $ []
           :schema $ :: 'Fn
-            {} (:return 'Map)
-              :args $ [] 'Map 'String 'String 'Number 'String 'Dynamic
+            {} (:return 'app.schema/Db)
+              :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
           :tests $ []
             %{} 'TestEntry (:name |duplicate-user-message-callback)
               :code $ quote
                 let
                     sid 1
-                    db $ {}
-                      :sessions $ {}
-                        sid $ {} (:id sid) (:user-id nil)
-                          :messages $ {}
-                      :users $ {}
-                        |user-1 $ {} (:id |user-1) (:name |demo)
-                          :password $ md5 |secret
+                    session-data $ %{} app.schema/Session (:id sid)
+                      :user-id $ %none
+                      :nickname $ %none
+                      :router app.schema/router
+                      :messages $ {}
+                    user-data $ %{} app.schema/User (:id |user-1) (:name |demo)
+                      :nickname $ %none
+                      :avatar $ %none
+                      :password $ md5 |secret
+                    db $ %{} app.schema/Db
+                      :sessions $ {} (sid session-data)
+                      :users $ {} (|user-1 user-data)
                     result $ sign-up db |demo |secret sid |op-taken 0
-                  assert= "|Name is taken: demo" $ option:unwrap
-                    get-in result $ [] :sessions sid :messages |op-taken :text
+                    next-session $ assert-type
+                      option:unwrap $ get (:sessions result) sid
+                      , app.schema/Session
+                  assert= "|Name is taken: demo" $ :text
+                    option:unwrap $ get (:messages next-session) |op-taken
               :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
