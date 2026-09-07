@@ -44,7 +44,17 @@ const named = user("{} (:id |u1) (:name |demo) (:nickname |nick) (:avatar |image
 assert.deepEqual(js(named).nickname, ["some", "nick"]);
 assert.deepEqual(js(named).avatar, ["some", "image"]);
 assert.deepEqual(js(parse(format(named))), js(named));
+
+const persistedDb = decodedValue(
+  decode_database(parse("{} (:sessions ({})) (:users ({} (|u1 $ {} (:id |u1) (:name |demo) (:nickname |) (:avatar nil) (:password |hash))))")),
+  "persisted database fixture",
+);
+const restoredDb = decodedValue(decode_database(parse(format(persistedDb))), "nominal persisted database");
+assert.deepEqual(js(restoredDb), js(persistedDb));
+
+const invalidNominalOption = "%{} 'Db (:sessions ({})) (:users ({} (|u1 $ %{} 'User (:id |u1) (:name |demo) (:nickname (%:: 'Option :some 42)) (:avatar (%:: 'Option :none)) (:password |hash))))";
+assert.equal(decode_database(parse(invalidNominalOption)).tag.value, "err");
 for (const source of ["{} (:id |u1) (:name |demo) (:nickname 42) (:password |hash)", "{} (:id |u1) (:name |demo) (:avatar false) (:password |hash)"]) {
   assert.throws(() => user(source), /Invalid user/);
 }
-console.log("Session/User Option JS: absent/present, zero/empty, invalid types and EDN roundtrips passed");
+console.log("Session/User Option JS: absent/present, nominal persistence, invalid types and EDN roundtrips passed");

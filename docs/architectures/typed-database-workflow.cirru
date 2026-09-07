@@ -132,6 +132,16 @@
           :generics $ [] 'T
           :args $ [] 'T 'String
           :return $ :: 'Result 'app.schema/User 'app.schema/DatabaseDecodeError
+    'app.schema/decode-optional-string $ {}
+      :mode :ensure
+      :kind :fn
+      :doc "|Normalize a persisted optional string from missing, nil, legacy String, or nominal Option data."
+      :params $ [] 'data 'path
+      :schema $ :: 'Fn
+        {}
+          :generics $ [] 'T
+          :args $ [] 'T 'String
+          :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
     'app.schema/decode-messages $ {}
       :mode :ensure
       :kind :fn
@@ -231,6 +241,8 @@
     :: :call 'app.schema/decode-database 'app.schema/decode-users
     :: :call 'app.schema/decode-session 'app.schema/decode-router
     :: :call 'app.schema/decode-session 'app.schema/decode-messages
+    :: :call 'app.schema/decode-session 'app.schema/decode-optional-string
+    :: :call 'app.schema/decode-user 'app.schema/decode-optional-string
     :: :call 'app.schema/decode-sessions 'app.schema/decode-session
     :: :call 'app.schema/decode-users 'app.schema/decode-user
     :: :call 'app.server/read-persisted-database 'app.schema/decode-database

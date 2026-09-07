@@ -220,7 +220,9 @@
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn render-app! () $ let
-                states $ option:unwrap-or (get @*states :states) ({})
+                states $ match (get @*states :states)
+                  (:some value) value
+                  (:none) ({})
                 app $ match @*store
                   (:loading)
                     comp-offline $ :: :loading
@@ -402,14 +404,12 @@
               div
                 {} $ :style
                   merge ui/global ui/fullscreen ui/column-dispersive $ {}
-                    :background-color $ option:unwrap (get config/site :theme)
+                    :background-color $ site-theme
                 div $ {}
                   :style $ {} (:height 0)
                 div $ {}
                   :style $ {}
-                    :background-image $ str "|url("
-                      option:unwrap $ get config/site :icon
-                      , "|)"
+                    :background-image $ str "|url(" (site-icon) "|)"
                     :width 128
                     :height 128
                     :background-size :contain
@@ -425,7 +425,9 @@
                     {} (:font-family ui/font-fancy) (:font-size 16)
                       :color $ hsl 0 0 50
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'respo.schema/Component)
+              :args $ [] 'Dynamic
         'comp-session-messages $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defcomp comp-session-messages (messages)
@@ -436,8 +438,8 @@
                   filter-map-kv $ fn (id message)
                     hint-fn $ {}
                       :args $ [] 'String 'app.schema/MessageView
-                      :return $ :: 'MapEntryDecision 'String 'respo.schema/Component
-                    MapEntryDecision :keep id $ div
+                      :return $ :: 'MapEntryDecision 'String 'respo.schema/Element
+                    %:: MapEntryDecision :keep id $ div
                       {}
                         :style $ {} (:padding 8) (:margin-bottom 8)
                           :background-color $ hsl 0 80 95
@@ -468,6 +470,20 @@
               |$0 $ {} (:position :absolute) (:bottom 60) (:left 8) (:border-radius |50%) (:opacity 0.6) (:pointer-events :none)
           :examples $ []
           :schema $ :: 'Dynamic
+        'site-icon $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn site-icon () $ assert-type (&map:get config/site :icon) String
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'String)
+              :args $ []
+        'site-theme $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn site-theme () $ assert-type (&map:get config/site :theme) String
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'String)
+              :args $ []
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.comp.container $ :require
@@ -1139,6 +1155,39 @@
                     (:ok _) (raise |Expected-invalid-remove-message-payload)
                     (:err _) &unit
               :tags $ #{} :protocol :schema
+        'decode-optional-string $ %{} 'CodeEntry (:doc "|Normalize a persisted optional string from missing, nil, legacy String, or nominal Option data.")
+          :code $ quote
+            defn decode-optional-string (data path)
+              hint-fn $ {}
+                :generics $ [] 'T
+                :args $ [] 'T 'String
+                :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
+              match data
+                (:none)
+                  %ok $ %none
+                (:some value)
+                  if (nil? value)
+                    %ok $ %none
+                    if (string? value)
+                      %ok $ %some value
+                      if
+                        = (type-of value) :enum
+                        match value
+                          (:none)
+                            %ok $ %none
+                          (:some item)
+                            if (string? item)
+                              %ok $ %some item
+                              %err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
+                          _ $ %err (%:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>")
+                        %err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] 'T 'String
+              :generics $ [] 'T
+              :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
+          :tags $ #{} :scaffold
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote
             defn decode-router (data path)
@@ -1246,24 +1295,8 @@
                       if-not (number? id)
                         %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
                         let
-                            user-id-result $ match (get source :user-id)
-                              (:none)
-                                %ok $ %none
-                              (:some value)
-                                if (nil? value)
-                                  %ok $ %none
-                                  if (string? value)
-                                    %ok $ %some value
-                                    %err $ %:: DatabaseDecodeError :invalid (str path |.user-id) "|Expected nil or String"
-                            nickname-result $ match (get source :nickname)
-                              (:none)
-                                %ok $ %none
-                              (:some value)
-                                if (nil? value)
-                                  %ok $ %none
-                                  if (string? value)
-                                    %ok $ %some value
-                                    %err $ %:: DatabaseDecodeError :invalid (str path |.nickname) "|Expected nil or String"
+                            user-id-result $ decode-optional-string (get source :user-id) (str path |.user-id)
+                            nickname-result $ decode-optional-string (get source :nickname) (str path |.nickname)
                             router-data $ option:unwrap-or (get source :router)
                               {} $ :name :home
                             messages-data $ option:unwrap-or (get source :messages) ({})
@@ -1343,24 +1376,8 @@
                             if-not (string? id)
                               %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
                               let
-                                  nickname-result $ match (get source :nickname)
-                                    (:none)
-                                      %ok $ %none
-                                    (:some value)
-                                      if (nil? value)
-                                        %ok $ %none
-                                        if (string? value)
-                                          %ok $ %some value
-                                          %err $ %:: DatabaseDecodeError :invalid (str path |.nickname) "|Expected nil or String"
-                                  avatar-result $ match (get source :avatar)
-                                    (:none)
-                                      %ok $ %none
-                                    (:some value)
-                                      if (nil? value)
-                                        %ok $ %none
-                                        if (string? value)
-                                          %ok $ %some value
-                                          %err $ %:: DatabaseDecodeError :invalid (str path |.avatar) "|Expected nil or String"
+                                  nickname-result $ decode-optional-string (get source :nickname) (str path |.nickname)
+                                  avatar-result $ decode-optional-string (get source :avatar) (str path |.avatar)
                                 match nickname-result
                                   (:err error) (%err error)
                                   (:ok nickname)
@@ -1591,13 +1608,8 @@
               :args $ [] 'app.schema/DomainOp 'Number 'String 'Number
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn get-backup-path! () $ let
-                now $ extract-time (get-time!)
-              join-path calcit-dirname |backups
-                str $ option:unwrap (get now :month)
-                str
-                  option:unwrap $ get now :day
-                  , |-snapshot.cirru
+            defn get-backup-path! () $ join-path calcit-dirname |backups
+              str (unix-time-ms) |-snapshot.cirru
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'String)
@@ -1680,16 +1692,10 @@
             defn main! () $ do
               println "|Running mode:" $ if config/dev? |dev |release
               let
-                  port $ if-let
-                    value $ get-env |port
-                    match (parse-float value)
-                      (:ok parsed) parsed
-                      (:err _)
-                        option:unwrap $ get config/site :port
-                    option:unwrap $ get config/site :port
+                  port $ resolve-port
                 do (run-server! port)
                   println $ str "|Server started on port:" port
-              do (; "|Initialize lazy definitions before starting background callbacks.") (identity Date) (identity @*reader-reel)
+              do (; "|Initialize lazy definitions before starting background callbacks.") (identity @*reader-reel)
               set-interval 5000 $ fn () (sweep-idle-clients!)
               set-interval 600000 $ fn () (persist-db!)
               on-control-c on-exit!
@@ -1722,7 +1728,7 @@
                           option:unwrap-or (get state :needs-snapshot?) false
                   next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
                 swap! *client-states assoc sid next-state
-                when resumed? (swap! *client-caches dissoc sid) (swap! *dirty-clients include sid) (request-sync!)
+                when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (request-sync!)
               , &unit
           :examples $ []
           :schema $ :: 'Fn
@@ -1737,8 +1743,8 @@
                   dissoc
                     merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:needs-snapshot? true)
                     , :sent-rev :sent-store
-                swap! *client-caches dissoc sid
-                swap! *dirty-clients exclude sid
+                swap! *client-caches remove-client-cache sid
+                swap! *dirty-clients remove-dirty-client sid
           :examples $ []
           :schema $ :: 'Dynamic
         'mark-clients-dirty! $ %{} 'CodeEntry (:doc |)
@@ -1884,9 +1890,11 @@
               :tags $ #{} :server
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn now-ms () $ get-timestamp (get-time!)
+            defn now-ms () $ unix-time-ms
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ []
         'on-exit! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn on-exit! () (persist-db!) (; println "|exit code is...") (quit! 0)
@@ -1997,6 +2005,23 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'remove-client-cache $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn remove-client-cache (caches sid) (dissoc caches sid)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] (:: 'Map 'Number 'T) 'Number
+              :generics $ [] 'T
+              :return $ :: 'Map 'Number 'T
+        'remove-dirty-client $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn remove-dirty-client (clients sid) (exclude clients sid)
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] (:: 'Set 'Number) 'Number
+              :return $ :: 'Set 'Number
         'render-loop! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn render-loop! ()
@@ -2032,12 +2057,31 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ []
+        'resolve-port $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn resolve-port ()
+              hint-fn $ {}
+                :args $ []
+                :return 'Number
+              match (get-env |port)
+                (:some value)
+                  match (parse-float value)
+                    (:ok parsed) parsed
+                    (:err _) (site-port)
+                (:none) (site-port)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ []
         'run-server! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn run-server! (port)
               wss-serve!
                 {} $ :port port
                 fn (data)
+                  hint-fn $ {}
+                    :args $ [] 'Dynamic
+                    :return 'Unit
                   match data
                     (:connect sid)
                       do
@@ -2057,22 +2101,36 @@
                     (:disconnect sid)
                       do (println "|Client closed!")
                         dispatch! (%:: schema/Op :session/disconnect) sid
-                        swap! *client-caches dissoc sid
+                        swap! *client-caches remove-client-cache sid
                         swap! *client-states dissoc sid
-                        swap! *dirty-clients exclude sid
+                        swap! *dirty-clients remove-dirty-client sid
                     _ $ println "|unknown data:" data
               , &unit
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number
+        'site-port $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn site-port () $ assert-type (&map:get config/site :port) Number
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Number)
+              :args $ []
+        'site-storage-file $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn site-storage-file () $ assert-type (&map:get config/site :storage-file) String
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'String)
+              :args $ []
         'storage-file $ %{} 'CodeEntry (:doc |)
           :code $ quote
             def storage-file $ if (empty? calcit-dirname)
-              str calcit-dirname $ option:unwrap (get config/site :storage-file)
-              str calcit-dirname |/ $ option:unwrap (get config/site :storage-file)
+              str calcit-dirname $ site-storage-file
+              str calcit-dirname |/ $ site-storage-file
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'String
         'sweep-idle-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn sweep-idle-clients! () $ let
@@ -2093,7 +2151,7 @@
               :args $ []
         'sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defn sync-client! (sid reel revision) (swap! *dirty-clients exclude sid)
+            defn sync-client! (sid reel revision) (swap! *dirty-clients remove-dirty-client sid)
               let
                   state $ option:unwrap (get @*client-states sid)
                 when
@@ -2466,10 +2524,12 @@
                     raw-session $ option:unwrap
                       get (:sessions result) sid
                     next-session $ assert-type raw-session app.schema/Session
+                    next-message $ assert-type
+                      option:unwrap $ get (:messages next-session) |m2
+                      , app.schema/Message
                   assert= (%none)
                     get (:messages next-session) |m1
-                  assert= |keep $ :text
-                    option:unwrap $ get (:messages next-session) |m2
+                  assert= |keep $ :text next-message
               :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
@@ -2538,10 +2598,14 @@
                     success-session $ assert-type
                       option:unwrap $ get (:sessions success) sid
                       , app.schema/Session
-                  assert= "|No user named: missing" $ :text
-                    option:unwrap $ get (:messages missing-session) |op-missing
-                  assert= "|Wrong password for demo" $ :text
-                    option:unwrap $ get (:messages wrong-session) |op-wrong
+                    missing-message $ assert-type
+                      option:unwrap $ get (:messages missing-session) |op-missing
+                      , app.schema/Message
+                    wrong-message $ assert-type
+                      option:unwrap $ get (:messages wrong-session) |op-wrong
+                      , app.schema/Message
+                  assert= "|No user named: missing" $ :text missing-message
+                  assert= "|Wrong password for demo" $ :text wrong-message
                   assert= (%some |user-1) (:user-id success-session)
               :tags $ #{} :protocol :server
         'log-out $ %{} 'CodeEntry (:doc |)
@@ -2611,8 +2675,10 @@
                     next-session $ assert-type
                       option:unwrap $ get (:sessions result) sid
                       , app.schema/Session
-                  assert= "|Name is taken: demo" $ :text
-                    option:unwrap $ get (:messages next-session) |op-taken
+                    next-message $ assert-type
+                      option:unwrap $ get (:messages next-session) |op-taken
+                      , app.schema/Message
+                  assert= "|Name is taken: demo" $ :text next-message
               :tags $ #{} :protocol :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
