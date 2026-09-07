@@ -1023,7 +1023,10 @@
                             match decoded
                               (:err error) (%err error)
                               (:ok message)
-                                %ok $ assoc messages id message
+                                if
+                                  = id $ :id message
+                                  %ok $ assoc messages id message
+                                  %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
           :examples $ []
           :schema $ :: 'Fn
             {}
@@ -1031,6 +1034,16 @@
               :generics $ [] 'T
               :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
+          :tests $ []
+            %{} 'TestEntry (:name |rejects-mismatched-message-key)
+              :code $ quote
+                assert=
+                  %err $ %:: DatabaseDecodeError :invalid |messages.m1.id "|Message id must match map key"
+                  decode-messages
+                    {} $ |m1
+                      {} (:id |m2) (:text |hello)
+                    , |messages
+              :tags $ #{} :schema :server
         'decode-operation $ %{} 'CodeEntry (:doc "|Reconstruct a nominal application Op from an untrusted or legacy enum value.")
           :code $ quote
             defn decode-operation (data)
@@ -1949,12 +1962,7 @@
         'reel-db $ %{} 'CodeEntry (:doc "|Named adapter for the legacy generic ReelState database slot.")
           :code $ quote
             defn reel-db (reel)
-              let
-                  decoded $ schema/decode-database (:db reel)
-                match decoded
-                  (:ok db) db
-                  (:err error)
-                    raise $ str "|Invalid nominal database in ReelState: " error
+              assert-type (:db reel) app.schema/Db
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.schema/Db)

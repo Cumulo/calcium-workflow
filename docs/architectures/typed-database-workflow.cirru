@@ -2,7 +2,7 @@
   :schema-version 1
   :feature 'typed-database-workflow
   :doc "|Keep nominal database values from persistence decoding through domain updates and client projections, while accepting legacy bare-map storage at one named boundary."
-  :roots $ #{} 'app.schema/database 'app.schema/decode-database 'app.server/read-persisted-database 'app.server/dispatch-domain! 'app.server/persist-db! 'app.server/reel-db 'app.server/reel-record-count 'app.updater/updater 'app.twig.container/twig-shared 'app.twig.container/twig-container
+  :roots $ #{} 'app.schema/database 'app.schema/decode-database 'app.server/read-persisted-database 'app.server/dispatch-domain! 'app.server/persist-db! 'app.server/reel-db 'app.server/reel-record-count 'app.server/get-shared-twig 'app.updater/updater 'app.twig.container/twig-shared 'app.twig.container/twig-container
   :definitions $ {}
     'app.schema/Message $ {}
       :mode :ensure
@@ -183,6 +183,13 @@
         {}
           :args $ [] 'cumulo-reel.core/ReelState
           :return 'Number
+    'app.server/get-shared-twig $ {}
+      :mode :external
+      :kind :fn
+      :schema $ :: 'Fn
+        {}
+          :args $ [] 'cumulo-reel.core/ReelState 'Number
+          :return 'app.schema/SharedTwig
     'app.server/persist-db! $ {}
       :mode :external
       :kind :fn
@@ -228,7 +235,9 @@
     :: :call 'app.schema/decode-users 'app.schema/decode-user
     :: :call 'app.server/read-persisted-database 'app.schema/decode-database
     :: :type 'app.server/reel-db 'app.schema/Db
-    :: :call 'app.twig.container/twig-shared 'app.server/reel-record-count
+    :: :call 'app.server/get-shared-twig 'app.server/reel-record-count
+    :: :call 'app.server/get-shared-twig 'app.server/reel-db
+    :: :call 'app.server/get-shared-twig 'app.twig.container/twig-shared
     :: :call 'app.server/persist-db! 'app.server/reel-db
     :: :call 'app.server/dispatch-domain! 'app.updater/updater
     :: :type 'app.updater/updater 'app.schema/DomainOp
