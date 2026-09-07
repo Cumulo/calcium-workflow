@@ -171,6 +171,7 @@
               add-watch *store :changes $ fn (store prev) (render-app!)
               add-watch *states :changes $ fn (states prev) (render-app!)
               install-activity-lifecycle!
+              workload-entry!
               println "|App started!"
           :examples $ []
           :schema $ :: 'Fn
@@ -329,6 +330,13 @@
                     (:ready next-store) (assert= store next-store)
                     _ $ raise |Expected-ready-state
               :tags $ #{} :client
+        'workload-entry! $ %{} 'CodeEntry (:doc |)
+          :code $ quote
+            defn workload-entry! () $ workload/main!
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote
           ns app.client $ :require
@@ -345,6 +353,7 @@
             |./calcit.build-errors :default client-errors
             recollect.schema :as patch-schema
             cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
+            app.workload.diff-patch :as workload
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
@@ -2037,3 +2046,249 @@
         :code $ quote
           ns app.updater.user $ :require
             calcit.std.hash :refer $ md5
+    'app.workload.diff-patch $ %{} 'FileEntry
+      :defs $ {}
+        'DomainOp $ %{} 'CodeEntry (:doc "|A replayable state transition covering no-op, leaf, insert, remove, reorder, and replacement cases.")
+          :code $ quote
+            defenum DomainOp (:noop) (:set-label 'String 'String) (:insert 'Entity) (:remove 'String)
+              :reorder $ :: 'List 'String
+              :replace $ :: 'List 'Entity
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Entity $ %{} 'CodeEntry (:doc "|One deterministic keyed entity used by the workload.")
+          :code $ quote
+            defstruct Entity (:id 'String) (:rank 'Number) (:label 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'WorkloadInput $ %{} 'CodeEntry (:doc "|A fixed seed, base state, and deterministic DomainOp sequence.")
+          :code $ quote
+            defstruct WorkloadInput (:seed 'Number) (:base 'WorkloadState)
+              :ops $ :: 'List 'DomainOp
+          :examples $ []
+          :schema $ :: 'StructDef
+        'WorkloadState $ %{} 'CodeEntry (:doc "|Server-side keyed entities plus their explicit presentation order.")
+          :code $ quote
+            defstruct WorkloadState
+              :entities $ :: 'Map 'String 'Entity
+              :order $ :: 'List 'String
+          :examples $ []
+          :schema $ :: 'StructDef
+        'WorkloadStore $ %{} 'CodeEntry (:doc "|Client projection consumed by data diff and browser rendering.")
+          :code $ quote
+            defstruct WorkloadStore
+              :rows $ :: 'List 'Entity
+              :count 'Number
+          :examples $ []
+          :schema $ :: 'StructDef
+        'apply-domain-op $ %{} 'CodeEntry (:doc "|Apply one DomainOp without mutating the previous WorkloadState.")
+          :code $ quote
+            defn apply-domain-op (state op)
+              match op
+                (:noop) state
+                (:set-label id label)
+                  match
+                    get (:entities state) id
+                    (:some entity)
+                      %{} WorkloadState
+                        :order $ :order state
+                        :entities $ assoc (:entities state) id (assoc entity :label label)
+                    (:none) state
+                (:insert raw-entity)
+                  let
+                      entity $ assert-type raw-entity Entity
+                      entity-id $ :id entity
+                      next-entities $ assoc (:entities state) entity-id entity
+                      next-order $ append (:order state) entity-id
+                    %{} WorkloadState (:entities next-entities) (:order next-order)
+                (:remove id)
+                  %{} WorkloadState
+                    :entities $ dissoc (:entities state) id
+                    :order $ filter (:order state)
+                      fn (item-id) (not= item-id id)
+                (:reorder order)
+                  %{} WorkloadState
+                    :entities $ :entities state
+                    :order order
+                (:replace entities)
+                  %{} WorkloadState
+                    :entities $ entities-by-id entities
+                    :order $ map entities
+                      fn (raw-entity)
+                        let
+                            entity $ assert-type raw-entity Entity
+                          :id entity
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'WorkloadState)
+              :args $ [] 'WorkloadState 'DomainOp
+          :tags $ #{} :scaffold
+        'entities-by-id $ %{} 'CodeEntry (:doc "|Index an entity list by its stable identifier.")
+          :code $ quote
+            defn entities-by-id (entities)
+              -> entities
+                map $ fn (raw-entity)
+                  let
+                      entity $ assert-type raw-entity Entity
+                    [] (:id entity) entity
+                pairs-map
+          :examples $ []
+          :schema $ :: 'Fn
+            {}
+              :args $ [] (:: 'List 'Entity)
+              :return $ :: 'Map 'String 'Entity
+          :tags $ #{} :scaffold
+        'entity-id $ %{} 'CodeEntry (:doc "|Derive a stable entity key from the fixed seed and index.")
+          :code $ quote
+            defn entity-id (seed index) (str |entity- seed |- index)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'String)
+              :args $ [] 'Number 'Number
+          :tags $ #{} :scaffold
+        'main! $ %{} 'CodeEntry (:doc "|Provide a side-effect-free entry for deterministic workload code generation.")
+          :code $ quote
+            defn main! () $ let
+                input-data $ make-workload-input 2 794
+                next-state $ replay-domain-ops (:base input-data) (:ops input-data)
+                next-store $ project-state next-state
+              do (workload-view next-store) &unit
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ []
+          :tags $ #{} :scaffold
+        'make-entity $ %{} 'CodeEntry (:doc "|Construct one deterministic typed entity.")
+          :code $ quote
+            defn make-entity (seed index)
+              %{} Entity
+                :id $ entity-id seed index
+                :rank index
+                :label $ str |item- seed |- index
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Entity)
+              :args $ [] 'Number 'Number
+          :tags $ #{} :scaffold
+        'make-workload-input $ %{} 'CodeEntry (:doc "|Construct a deterministic workload of the requested size and seed.")
+          :code $ quote
+            defn make-workload-input (size seed)
+              let
+                  entities $ map (range size)
+                    fn (index) (make-entity seed index)
+                  order $ map entities
+                    fn (raw-entity)
+                      let
+                          entity $ assert-type raw-entity Entity
+                        :id entity
+                  base $ %{} WorkloadState
+                    :entities $ entities-by-id entities
+                    :order order
+                  inserted $ make-entity seed size
+                  inserted-id $ :id inserted
+                  extended-order $ append order inserted-id
+                  removed-id $ entity-id seed 1
+                  trimmed-order $ dissoc extended-order 1
+                  reordered $ reverse trimmed-order
+                  replacement $ map (range size)
+                    fn (index)
+                      make-entity (inc seed) index
+                  ops $ [] (DomainOp :noop)
+                    DomainOp :set-label (entity-id seed 0) |updated
+                    DomainOp :insert inserted
+                    DomainOp :remove removed-id
+                    DomainOp :reorder reordered
+                    DomainOp :replace replacement
+                %{} WorkloadInput (:seed seed) (:base base) (:ops ops)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'WorkloadInput)
+              :args $ [] 'Number 'Number
+          :tags $ #{} :scaffold
+          :tests $ []
+            %{} 'TestEntry (:name |deterministic-shape)
+              :code $ quote
+                let
+                    input-data $ make-workload-input 4 794
+                    base-state $ :base input-data
+                    operations $ :ops input-data
+                  do
+                    assert= 4 $ count (:order base-state)
+                    assert= 6 $ count operations
+              :tags $ #{} :client
+        'project-state $ %{} 'CodeEntry (:doc "|Project ordered keyed entities into the client WorkloadStore.")
+          :code $ quote
+            defn project-state (state)
+              let
+                  rows $ map (:order state)
+                    fn (id)
+                      option:unwrap $ get (:entities state) id
+                %{} WorkloadStore (:rows rows)
+                  :count $ count rows
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'WorkloadStore)
+              :args $ [] 'WorkloadState
+          :tags $ #{} :scaffold
+        'replay-domain-ops $ %{} 'CodeEntry (:doc "|Replay the same DomainOp sequence against a WorkloadState.")
+          :code $ quote
+            defn replay-domain-ops (state ops)
+              list-match ops
+                () state
+                (op remaining)
+                  recur (apply-domain-op state op) remaining
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'WorkloadState)
+              :args $ [] 'WorkloadState (:: 'List 'DomainOp)
+          :tags $ #{} :scaffold
+          :tests $ []
+            %{} 'TestEntry (:name |deterministic-replay)
+              :code $ quote
+                let
+                    input-data $ make-workload-input 4 794
+                    final-state $ replay-domain-ops (:base input-data) (:ops input-data)
+                    final-store $ project-state final-state
+                    raw-first-row $ option:unwrap
+                      nth (:rows final-store) 0
+                    first-row $ assert-type raw-first-row Entity
+                  do
+                    assert= 4 $ :count final-store
+                    assert= |entity-795-0 $ :id first-row
+              :tags $ #{} :client
+        'workload-ref! $ %{} 'CodeEntry (:doc "|Stable no-op ref callback used to detect unexpected ref churn at the browser FFI boundary.")
+          :code $ quote
+            defn workload-ref! (_target) &unit
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'Unit)
+              :args $ [] 'respo.dom/DomElement
+              :features $ #{} :js-ffi
+          :tags $ #{} :scaffold
+        'workload-view $ %{} 'CodeEntry (:doc "|Render keyed rows plus stable focus and listener probes for browser checks.")
+          :code $ quote
+            defn workload-view (store)
+              div
+                {} $ :class-name |workload-root
+                input $ {} (:id |workload-focus-probe) (:value |focus-probe) (:ref workload-ref!)
+                  :on-input $ fn (_event _dispatch!) &unit
+                list->
+                  {} $ :class-name |workload-rows
+                  map (:rows store)
+                    fn (raw-entity)
+                      let
+                          entity $ assert-type raw-entity Entity
+                        [] (:id entity)
+                          div $ {} (:class-name |workload-row)
+                            :data-name $ :id entity
+                            :inner-text $ str (:rank entity) |: (:label entity)
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'respo.schema/Element)
+              :args $ [] 'WorkloadStore
+          :tags $ #{} :scaffold
+      :ns $ %{} 'NsEntry (:doc |)
+        :code $ quote
+          ns app.workload.diff-patch $ :require
+            respo.core :refer $ div input list->
+            recollect.diff :refer $ diff-twig
+            recollect.patch :refer $ patch-twig

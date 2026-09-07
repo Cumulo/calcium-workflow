@@ -6,6 +6,9 @@
   "scripts": {
     "compile-page": "calcit calcit.cirru js",
     "release-page": "yarn vite build --base=./",
+    "workload:benchmark": "caps verify --toolchain && yarn compile-page && yarn node --stack_size=65500 tests/diff-patch-workload.mjs --mode full",
+    "workload:browser": "caps verify --toolchain && yarn compile-page && yarn vite --host 127.0.0.1",
+    "workload:smoke": "caps verify --toolchain && yarn compile-page && yarn node tests/diff-patch-workload.mjs --mode smoke",
     "watch-page": "calcit -w calcit.cirru js"
   },
   "devDependencies": {
