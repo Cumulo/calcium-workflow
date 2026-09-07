@@ -71,8 +71,18 @@ or payload type mismatch, invalid index, or unsupported operation rejects the
 whole batch and deterministically requests a full snapshot. No partial tree is
 published. Diffs above the configured operation threshold
 fall back to snapshots, bounding the retained patch and client-side patch work.
-The current threshold is checked after diffing; an interruptible node/time
-budget inside Recollect is still required to bound worst-case diff CPU.
+Server diff traversal also uses deterministic budgets of 50,000 visited nodes
+and 80,000 operation-construction units. A budget-exceeded result contains no
+partial patch and goes directly to the existing snapshot/send policy. These
+limits bound counted traversal work, not wall-clock time: map key
+materialization, comparisons, large leaves, snapshot encoding, queue admission,
+and backpressure remain independently bounded or observed.
+
+服务端 diff 遍历还使用 50,000 个 visited node 与 80,000 个 operation-construction
+unit 的确定性预算。超限结果不携带 partial patch，直接进入既有 snapshot/send
+策略。这些上限约束的是已计数的遍历工作，而不是 wall-clock：map key
+materialization、比较、大叶子、snapshot 编码、queue admission 与 backpressure
+仍需分别设限或观测。
 
 The per-client cache is the last acknowledged store, not merely the last value
 offered to the socket. An accepted send keeps its candidate store separately
@@ -177,7 +187,9 @@ Calcium 带 cleanup 的 lifecycle watcher 只发送应用 activity 和 revision 
 Server synchronization observability is available through
 `app.server/read-sync-metrics`. The typed `SyncMetrics` snapshot records the
 latest diff latency, the latest patch payload's real UTF-8 byte length, patch
-and snapshot send attempts, explicit resync requests, and the latest revision.
+and snapshot payload byte lengths, latest visited/emitted diff work, budget
+fallback count, patch and snapshot send attempts, explicit resync requests, and
+the latest revision.
 Pending-ACK and slow-client gauges are calculated only when the snapshot is
 read, so ordinary dispatch/send paths do not rescan every connection. Attempt
 counts include transport retries; combine them with calcit-wss `wss-metrics`
@@ -185,7 +197,8 @@ when transport admission and queue details are needed.
 
 服务端同步观测可通过 `app.server/read-sync-metrics` 获取。Typed
 `SyncMetrics` snapshot 记录最近 diff 延迟、最近 patch payload 的真实 UTF-8
-字节数、patch/snapshot 发送尝试次数、显式 resync 请求数与最新 revision。
+字节数、最近 snapshot 字节数、visited/emitted 工作量、预算回退次数、
+patch/snapshot 发送尝试次数、显式 resync 请求数与最新 revision。
 等待 ACK 和 slow-client gauge 只在读取 snapshot 时计算，普通 dispatch/send
 热路径不会重新扫描所有连接。发送尝试包含传输重试；需要 transport admission
 与队列细节时，可与 calcit-wss 的 `wss-metrics` 组合使用。
@@ -223,7 +236,8 @@ yarn workload:smoke
 
 Run the performance workload only on a fixed environment. It warms up first,
 then records at least 30 samples for both 1,000 and 10,000 entities, including
-p50, p95, variance, stage work counts, toolchain/environment metadata, input and
+p50, p95, variance, stage throughput, visited/emitted diff work, patch and
+snapshot bytes, process memory, toolchain/environment metadata, input and
 dependency hashes, and the raw report hash. Keep raw results outside this
 repository; allocation data is reported as unavailable because JavaScript does
 not expose a stable per-stage allocator API. The benchmark script raises Node's
@@ -250,7 +264,8 @@ Calcit binary that differs from `deps.cirru` fails before producing a baseline.
 
 完整基线仅在固定环境运行：先 warmup，再分别对 1,000/10,000 entity 采集至少 30
 次，输出 p50、p95、方差、阶段工作量、环境/工具链、输入/依赖哈希和 raw hash。原始
-结果必须保存在仓库外；JavaScript 没有稳定的逐阶段 allocator API，因此 allocation
+结果还包含阶段吞吐、visited/emitted diff 工作量、patch/snapshot 字节数与进程内存；
+必须保存在仓库外。JavaScript 没有稳定的逐阶段 allocator API，因此 allocation
 明确记录为 unavailable。10,000 行的 Recollect vector diff 会超过 Node 默认的
 JavaScript 栈，因此 benchmark 脚本显式提高栈上限。浏览器 runner 独立测量 VDOM
 diff 与 DOM write，并验证 patched DOM 等于 fresh render、no-op 不产生 DOM

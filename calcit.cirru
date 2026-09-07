@@ -1510,7 +1510,7 @@
           :schema $ :: 'Dynamic
         '*sync-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote
-            defatom *sync-metrics $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
+            defatom *sync-metrics $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:last-snapshot-bytes 0) (:last-visited-nodes 0) (:last-emitted-ops 0) (:budget-fallback-count 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
           :examples $ []
           :schema $ :: 'Dynamic
         '*sync-retry-scheduled? $ %{} 'CodeEntry (:doc "|Whether a slower backpressure retry callback is pending.")
@@ -1525,9 +1525,17 @@
           :code $ quote (defatom *sync-scheduled? false)
           :examples $ []
           :schema $ :: 'Ref 'Bool
-        'SyncMetrics $ %{} 'CodeEntry (:doc "|Application-level synchronization metrics; pending and slow client fields are gauges refreshed on read.")
+        'SyncDiffPlan $ %{} 'CodeEntry (:doc "|Atomic server decision. Snapshot variants carry statistics and an optional budget reason but never partial changes.")
           :code $ quote
-            defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
+            defenum SyncDiffPlan
+              :snapshot 'recollect.diff/DiffStats $ :: 'Option 'recollect.diff/DiffBudgetReason
+              :patch (:: 'List 'recollect.schema/change-op) 'recollect.diff/DiffStats
+              :idle 'recollect.diff/DiffStats
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'SyncMetrics $ %{} 'CodeEntry (:doc "|Application-level synchronization latency, wire-byte, deterministic diff-work, budget-fallback, revision, resync, pending-client, and slow-client metrics; pending and slow fields are gauges refreshed on read.")
+          :code $ quote
+            defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
           :examples $ []
           :schema $ :: 'Enum
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
@@ -1606,6 +1614,11 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'app.schema/DomainOp 'Number 'String 'Number
+        'empty-diff-stats $ %{} 'CodeEntry (:doc "|Zero work statistics used when an existing recovery state already requires a snapshot and no diff runs.")
+          :code $ quote
+            def empty-diff-stats $ %{} DiffStats (:visited-nodes 0) (:emitted-ops 0)
+          :examples $ []
+          :schema $ :: 'recollect.diff/DiffStats
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn get-backup-path! () $ join-path calcit-dirname |backups
@@ -1793,9 +1806,15 @@
               :tags $ #{} :server
         'next-sync-metrics $ %{} 'CodeEntry (:doc "|Purely advance synchronization counters for one attempted snapshot or patch send.")
           :code $ quote
-            defn next-sync-metrics (metrics message-kind revision diff-latency payload)
+            defn next-sync-metrics (metrics message-kind revision diff-latency payload stats budget-fallback?)
               struct-with metrics (:last-diff-latency-ms diff-latency)
                 :last-patch-bytes $ if (= message-kind :patch) payload.utf8-byte-count (:last-patch-bytes metrics)
+                :last-snapshot-bytes $ if (= message-kind :snapshot) payload.utf8-byte-count (:last-snapshot-bytes metrics)
+                :last-visited-nodes $ :visited-nodes stats
+                :last-emitted-ops $ :emitted-ops stats
+                :budget-fallback-count $ if budget-fallback?
+                  inc $ :budget-fallback-count metrics
+                  :budget-fallback-count metrics
                 :patch-attempts $ if (= message-kind :patch)
                   inc $ :patch-attempts metrics
                   :patch-attempts metrics
@@ -1806,16 +1825,18 @@
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'app.server/SyncMetrics)
-              :args $ [] 'app.server/SyncMetrics 'Tag 'Number 'Number 'String
+              :args $ [] 'app.server/SyncMetrics 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
           :tests $ []
             %{} 'TestEntry (:name |advances-patch-and-snapshot-counters)
               :code $ quote
                 let
-                    initial $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
-                    after-patch $ next-sync-metrics initial :patch 7 3 "|A😀"
+                    initial $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:last-snapshot-bytes 0) (:last-visited-nodes 0) (:last-emitted-ops 0) (:budget-fallback-count 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
+                    patch-stats $ %{} DiffStats (:visited-nodes 7) (:emitted-ops 3)
+                    snapshot-stats $ %{} DiffStats (:visited-nodes 9) (:emitted-ops 4)
+                    after-patch $ next-sync-metrics initial :patch 7 3 "|A😀" patch-stats false
                   assert=
-                    %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
-                    next-sync-metrics after-patch :snapshot 8 2 |ignored
+                    %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:last-snapshot-bytes 7) (:last-visited-nodes 9) (:last-emitted-ops 4) (:budget-fallback-count 1) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
+                    next-sync-metrics after-patch :snapshot 8 2 |ignored snapshot-stats true
               :tags $ #{} :server
         'next-sync-send-state $ %{} 'CodeEntry (:doc |)
           :code $ quote
@@ -1961,12 +1982,12 @@
               :args $ []
         'record-sync-send! $ %{} 'CodeEntry (:doc "|Record metrics for one synchronization send attempt before transport admission.")
           :code $ quote
-            defn record-sync-send! (message-kind revision diff-latency payload)
-              swap! *sync-metrics $ fn (metrics) (next-sync-metrics metrics message-kind revision diff-latency payload)
+            defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
+              swap! *sync-metrics $ fn (metrics) (next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?)
           :examples $ []
           :schema $ :: 'Fn
             {} (:return 'Unit)
-              :args $ [] 'Tag 'Number 'Number 'String
+              :args $ [] 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
         'reel-db $ %{} 'CodeEntry (:doc "|Named adapter for the legacy generic ReelState database slot.")
           :code $ quote
             defn reel-db (reel)
@@ -2110,6 +2131,68 @@
           :schema $ :: 'Fn
             {} (:return 'Unit)
               :args $ [] 'Number
+        'select-sync-diff $ %{} 'CodeEntry (:doc "|Convert one atomic Recollect outcome into patch, snapshot, or idle policy while retaining the existing top-level patch-operation limit.")
+          :code $ quote
+            defn select-sync-diff (outcome)
+              match outcome
+                (:budget-exceeded reason stats)
+                  %:: SyncDiffPlan :snapshot stats $ %some reason
+                (:complete changes stats)
+                  cond
+                      empty? changes
+                      %:: SyncDiffPlan :idle stats
+                    (> (count changes) patch-operation-limit)
+                      %:: SyncDiffPlan :snapshot stats $ %none
+                    true $ %:: SyncDiffPlan :patch changes stats
+          :examples $ []
+          :schema $ :: 'Fn
+            {} (:return 'app.server/SyncDiffPlan)
+              :args $ [] 'recollect.diff/DiffOutcome
+          :tests $ []
+            %{} 'TestEntry (:name |budget-exceeded-discards-partial-path)
+              :code $ quote
+                let
+                    stats $ %{} DiffStats (:visited-nodes 3) (:emitted-ops 1)
+                    reason $ %:: recollect.diff/DiffBudgetReason :visited-nodes
+                    outcome $ %:: recollect.diff/DiffOutcome :budget-exceeded reason stats
+                  assert=
+                    %:: SyncDiffPlan :snapshot stats $ %some reason
+                    select-sync-diff outcome
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |complete-selects-idle-patch-and-operation-fallback)
+              :code $ quote
+                let
+                    stats $ %{} DiffStats (:visited-nodes 1) (:emitted-ops 1)
+                    change $ %:: recollect.schema/change-op :replace 2
+                    idle-outcome $ %:: recollect.diff/DiffOutcome :complete ([]) stats
+                    patch-outcome $ %:: recollect.diff/DiffOutcome :complete ([] change) stats
+                    large-outcome $ %:: recollect.diff/DiffOutcome :complete (repeat change 65) stats
+                  do
+                    assert= (%:: SyncDiffPlan :idle stats) (select-sync-diff idle-outcome)
+                    assert=
+                      %:: SyncDiffPlan :patch ([] change) stats
+                      select-sync-diff patch-outcome
+                    assert=
+                      %:: SyncDiffPlan :snapshot stats $ %none
+                      select-sync-diff large-outcome
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |real-budget-overflow-is-atomic)
+              :code $ quote
+                let
+                    budget $ %{} DiffBudget
+                      :max-visited $ %some 3
+                      :max-emitted $ %none
+                    outcome $ diff-twig-budgeted ([] 1 2 3) ([] 1 2 4) ({}) budget
+                    plan $ select-sync-diff outcome
+                  match plan
+                    (:snapshot stats reason)
+                      do
+                        assert= 3 $ :visited-nodes stats
+                        assert=
+                          %some $ %:: recollect.diff/DiffBudgetReason :visited-nodes
+                          , reason
+                    _ $ assert |overflow-must-select-snapshot false
+              :tags $ #{} :server
         'site-port $ %{} 'CodeEntry (:doc |)
           :code $ quote
             defn site-port () $ assert-type (&map:get config/site :port) Number
@@ -2171,25 +2254,26 @@
                             option:unwrap-or (get state :needs-snapshot?) true
                             option:none? old-store-option
                           diff-start $ now-ms
-                          changes $ if needs-snapshot? ([])
-                            diff-twig (option:unwrap old-store-option) new-store $ {} (:key :id)
+                          diff-plan $ if needs-snapshot?
+                            %:: SyncDiffPlan :snapshot empty-diff-stats $ %none
+                            select-sync-diff $ diff-twig-budgeted (option:unwrap old-store-option) new-store
+                              {} $ :key :id
+                              , sync-diff-budget
                           diff-latency $ - (now-ms) diff-start
-                          send-snapshot? $ or needs-snapshot?
-                            > (count changes) patch-operation-limit
                           base-revision $ option:unwrap-or (get state :acked-rev) 0
-                        if send-snapshot?
-                          let
-                              payload $ format-cirru-edn (%:: schema/ServerMessage :snapshot revision new-store)
-                            record-sync-send! :snapshot revision diff-latency payload
-                            handle-sync-send! sid revision new-store $ wss-send! sid payload
-                          if
-                            not= changes $ []
+                        match diff-plan
+                          (:snapshot stats budget-reason)
+                            let
+                                payload $ format-cirru-edn (%:: schema/ServerMessage :snapshot revision new-store)
+                              record-sync-send! :snapshot revision diff-latency payload stats $ option:some? budget-reason
+                              handle-sync-send! sid revision new-store $ wss-send! sid payload
+                          (:patch changes stats)
                             let
                                 payload $ format-cirru-edn (%:: schema/ServerMessage :patch base-revision revision changes)
-                              record-sync-send! :patch revision diff-latency payload
+                              record-sync-send! :patch revision diff-latency payload stats false
                               handle-sync-send! sid revision new-store $ wss-send! sid payload
-                            , &unit
-                      do (eprintln "|Missing typed session during sync:" sid) &unit
+                          (:idle _stats) &unit
+                      do (eprintln |Missing-typed-session-during-sync: sid) &unit
               , &unit
           :examples $ []
           :schema $ :: 'Fn
@@ -2218,6 +2302,21 @@
           :code $ quote (def sync-coalesce-delay 16)
           :examples $ []
           :schema $ :: 'Number
+        'sync-diff-budget $ %{} 'CodeEntry (:doc "|Deterministic per-client diff budget; snapshot size and transport admission remain independent limits.")
+          :code $ quote
+            def sync-diff-budget $ %{} DiffBudget
+              :max-visited $ %some sync-diff-visited-limit
+              :max-emitted $ %some sync-diff-emitted-limit
+          :examples $ []
+          :schema $ :: 'recollect.diff/DiffBudget
+        'sync-diff-emitted-limit $ %{} 'CodeEntry (:doc "|Operation-construction ceiling selected above the measured 10k workload maximum of 70001.")
+          :code $ quote (def sync-diff-emitted-limit 80000)
+          :examples $ []
+          :schema $ :: 'Number
+        'sync-diff-visited-limit $ %{} 'CodeEntry (:doc "|Visited-node ceiling selected above the measured 10k workload maximum of 40002.")
+          :code $ quote (def sync-diff-visited-limit 50000)
+          :examples $ []
+          :schema $ :: 'Number
         'sync-retry-delay $ %{} 'CodeEntry (:doc "|Retry delay in milliseconds after WebSocket backpressure.")
           :code $ quote (def sync-retry-delay 200)
           :examples $ []
@@ -2241,7 +2340,7 @@
             cumulo-reel.core :refer $ reel-reducer refresh-reel reel-schema
             app.config :as config
             app.twig.container :refer $ twig-container twig-shared
-            recollect.diff :refer $ diff-twig
+            recollect.diff :refer $ diff-twig-budgeted DiffBudget DiffStats
             wss.core :refer $ wss-serve! wss-send!
             recollect.twig :refer $ clear-twig-caches!
             app.$meta :refer $ calcit-dirname
