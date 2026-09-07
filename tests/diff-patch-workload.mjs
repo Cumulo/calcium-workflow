@@ -14,7 +14,7 @@ import {
   make_workload_input,
   project_state,
 } from "../js-out/app.workload.diff-patch.mjs";
-import { listValues, stats } from "./workload-shared.mjs";
+import { allocationUnavailable, listValues, stats } from "./workload-shared.mjs";
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -272,10 +272,10 @@ for (const size of sizes) {
     stages: Object.fromEntries(
       Object.entries(accumulated).map(([name, samples]) => [
         name,
-        { ...stats(samples), work: stageWork[name] },
+        { ...stats(samples), work: stageWork[name], allocation: allocationUnavailable },
       ]),
     ),
-    allocations: { status: "unavailable", reason: "no stable per-stage allocator API" },
+    allocations: allocationUnavailable,
     protocol: verifyProtocolFailures(size),
   });
 }

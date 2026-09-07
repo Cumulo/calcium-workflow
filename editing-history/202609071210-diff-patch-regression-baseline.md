@@ -20,9 +20,9 @@ Base: `74be20c`; calcit-lang/calcit#794.
 - Full fixed-environment validation completed 5 warmups and 30 repetitions for
   both sizes. The data report was written outside the repository at
   `/private/tmp/calcium-794-data.json` with raw hash
-  `2041aa9780345599989c6093f80a5663e51c7fe8c0c9635c7edfff87949b49de`.
+  `c939e368bccb1d2a60967df059515dc6ca07528ef73cc359acd80ed00398f3ec`.
   The Chrome 152 browser report raw hash is
-  `a15c42db62df59c2b6eaa2b86997d5974594bf5c4c9f418401f052fb769ccd9a`.
+  `54bcd2b5990188646f895669ab48add34609b65097b8337ff5f2c4a2fb5a3b17`.
   Allocation is explicitly unavailable because JavaScript exposes no stable
   per-stage allocator API.
 - Recollect's 10,000-row vector diff exceeds Node's default JavaScript stack;
@@ -47,9 +47,9 @@ Base: `74be20c`; calcit-lang/calcit#794.
   focus/selection，以及 no-op 的零 patch/零 DOM mutation。
 - 固定环境完整验证对两个规模均完成 5 次 warmup 与 30 次正式采样。数据 raw 结果
   保存在仓库外 `/private/tmp/calcium-794-data.json`，hash 为
-  `2041aa9780345599989c6093f80a5663e51c7fe8c0c9635c7edfff87949b49de`；Chrome 152
+  `c939e368bccb1d2a60967df059515dc6ca07528ef73cc359acd80ed00398f3ec`；Chrome 152
   浏览器报告 hash 为
-  `a15c42db62df59c2b6eaa2b86997d5974594bf5c4c9f418401f052fb769ccd9a`。
+  `54bcd2b5990188646f895669ab48add34609b65097b8337ff5f2c4a2fb5a3b17`。
   JavaScript 没有稳定的逐阶段 allocator API，因此 allocation 明确记为 unavailable。
 - Recollect 的 10,000 行 vector diff 会超过 Node 默认 JavaScript 栈，基线命令只
   显式提高 Node stack size；CI 保持默认栈，只运行小规模正确性 smoke，不设置易

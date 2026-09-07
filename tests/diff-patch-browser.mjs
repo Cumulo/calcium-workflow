@@ -10,7 +10,7 @@ import {
   project_state,
   workload_view,
 } from "/js-out/app.workload.diff-patch.mjs";
-import { listValues, stats } from "/tests/workload-shared.mjs";
+import { allocationUnavailable, listValues, stats } from "/tests/workload-shared.mjs";
 
 const params = new URLSearchParams(location.search);
 const mode = params.get("mode") ?? "smoke";
@@ -124,9 +124,10 @@ try {
       seed,
       cases: last.cases,
       stages: {
-        vdomDiff: stats(samples.vdomDiff),
-        domWrite: stats(samples.domWrite),
+        vdomDiff: { ...stats(samples.vdomDiff), allocation: allocationUnavailable },
+        domWrite: { ...stats(samples.domWrite), allocation: allocationUnavailable },
       },
+      allocations: allocationUnavailable,
       semantics: {
         patchedEqualsFreshRender: true,
         keyIdentityPreserved: true,

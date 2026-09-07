@@ -11,9 +11,9 @@
   serialization outside the no-op check, and document that `rawHash` covers the
   full environment- and timing-dependent report.
 - Revalidated 1,000/10,000 entities with 5 warmups and 30 repetitions. The data
-  report hash is `2041aa9780345599989c6093f80a5663e51c7fe8c0c9635c7edfff87949b49de`;
+  report hash is `c939e368bccb1d2a60967df059515dc6ca07528ef73cc359acd80ed00398f3ec`;
   the Chrome 152 browser report hash is
-  `a15c42db62df59c2b6eaa2b86997d5974594bf5c4c9f418401f052fb769ccd9a`.
+  `54bcd2b5990188646f895669ab48add34609b65097b8337ff5f2c4a2fb5a3b17`.
 
 ## 中文
 
@@ -24,6 +24,6 @@
 - Node 与浏览器 harness 共用列表/统计 helper；仅在 no-op 检查时序列化 DOM；并
   明确 `rawHash` 覆盖包含环境和时间数据的完整报告。
 - 对 1,000/10,000 entity 重新完成 5 次 warmup 与 30 次采样；数据报告 hash 为
-  `2041aa9780345599989c6093f80a5663e51c7fe8c0c9635c7edfff87949b49de`，Chrome 152
+  `c939e368bccb1d2a60967df059515dc6ca07528ef73cc359acd80ed00398f3ec`，Chrome 152
   浏览器报告 hash 为
-  `a15c42db62df59c2b6eaa2b86997d5974594bf5c4c9f418401f052fb769ccd9a`。
+  `54bcd2b5990188646f895669ab48add34609b65097b8337ff5f2c4a2fb5a3b17`。
