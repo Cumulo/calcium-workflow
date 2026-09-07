@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calcium diff/patch browser workload</title>
+    <style>
+      body { font-family: ui-monospace, monospace; margin: 24px; }
+      #fresh { display: none; }
+      .workload-rows { max-height: 240px; overflow: auto; }
+      .workload-row { padding: 1px 4px; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Calcium diff/patch browser workload</h1>
+    <p id="status">running</p>
+    <div id="mount"></div>
+    <div id="fresh"></div>
+    <pre id="result"></pre>
+    <script type="module" src="./diff-patch-browser.mjs"></script>
+  </body>
+</html>

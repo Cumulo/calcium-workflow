@@ -204,6 +204,55 @@ implementing cache bookkeeping. Twig code should use the typed
 `memo-twig-by0`, `memo-twig-by1`, or `memo-twig-by2` helpers. The generic
 `memof` module is not part of the Calcium dependency graph.
 
+### Diff/patch regression workload
+
+The deterministic workload replays the same typed `DomainOp` sequence over
+keyed entities: no-op, leaf update, insert, remove, reorder, and full replace.
+The data runner checks each patched client Store against a fresh projection and
+also covers a slow client, out-of-order and duplicate acknowledgements, wrong
+revisions, invalid payloads, recovery convergence, and a deliberately corrupted
+baseline oracle. CI runs only the small correctness smoke:
+
+```bash
+yarn workload:smoke
+```
+
+Run the performance workload only on a fixed environment. It warms up first,
+then records at least 30 samples for both 1,000 and 10,000 entities, including
+p50, p95, variance, stage work counts, toolchain/environment metadata, input and
+dependency hashes, and the raw report hash. Keep raw results outside this
+repository; allocation data is reported as unavailable because JavaScript does
+not expose a stable per-stage allocator API. The benchmark script raises Node's
+stack explicitly because Recollect's 10,000-row vector diff exceeds Node's
+default JavaScript stack.
+
+```bash
+yarn workload:benchmark --out /absolute/path/outside/repo/calcium-data.json
+yarn workload:browser
+# then open:
+# http://127.0.0.1:5173/tests/diff-patch-browser.html?mode=full
+```
+
+The browser runner measures VDOM diff and DOM write independently and compares
+every patched DOM with a fresh render. It also asserts zero no-op DOM mutation,
+stable keyed node identity and ref behavior, listener continuity, and retained
+focus/selection. Both commands begin with `caps verify --toolchain`, so a global
+Calcit binary that differs from `deps.cirru` fails before producing a baseline.
+
+差量回归会对固定 seed 的 keyed entity 重放同一组 typed `DomainOp`：no-op、叶子
+更新、插入、删除、重排和全量替换。数据 runner 会逐步比较 patch 后的客户端 Store
+与 fresh projection，并覆盖慢客户端、乱序/重复 ack、错误 revision、非法 payload、
+恢复收敛以及故意损坏 baseline 的 oracle。CI 只运行小规模正确性 smoke。
+
+完整基线仅在固定环境运行：先 warmup，再分别对 1,000/10,000 entity 采集至少 30
+次，输出 p50、p95、方差、阶段工作量、环境/工具链、输入/依赖哈希和 raw hash。原始
+结果必须保存在仓库外；JavaScript 没有稳定的逐阶段 allocator API，因此 allocation
+明确记录为 unavailable。10,000 行的 Recollect vector diff 会超过 Node 默认的
+JavaScript 栈，因此 benchmark 脚本显式提高栈上限。浏览器 runner 独立测量 VDOM
+diff 与 DOM write，并验证 patched DOM 等于 fresh render、no-op 不产生 DOM
+mutation，以及 key/ref/listener/focus/selection 语义不变。命令会先执行
+`caps verify --toolchain`，避免静默混用全局 Calcit 版本。
+
 ### License
 
 MIT
