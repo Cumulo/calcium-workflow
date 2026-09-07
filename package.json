@@ -1,15 +1,15 @@
 {
   "dependencies": {
-    "@calcit/procs": "0.13.78-rc.1"
+    "@calcit/procs": "0.14.0"
   },
   "packageManager": "yarn@4.12.0",
   "scripts": {
-    "compile-page": "calcit calcit.cirru js",
+    "compile-page": "calcit --compat-types calcit.cirru js",
     "release-page": "yarn vite build --base=./",
     "workload:benchmark": "caps verify --toolchain && yarn compile-page && yarn node --stack_size=65500 tests/diff-patch-workload.mjs --mode full",
     "workload:browser": "caps verify --toolchain && yarn compile-page && yarn vite --host 127.0.0.1",
     "workload:smoke": "caps verify --toolchain && yarn compile-page && yarn node tests/diff-patch-workload.mjs --mode smoke",
-    "watch-page": "calcit -w calcit.cirru js"
+    "watch-page": "calcit --compat-types -w calcit.cirru js"
   },
   "devDependencies": {
     "bottom-tip": "^0.1.5",

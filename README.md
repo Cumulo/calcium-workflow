@@ -31,11 +31,15 @@ Run backend in calcit-rs:
 
 ```bash
 # dev mode
-mode=dev calcit -w calcit.cirru --entry server
+mode=dev calcit --compat-types -w calcit.cirru --entry server
 
 # release mode
-calcit calcit.cirru --entry server
+calcit --compat-types calcit.cirru --entry server
 ```
+
+Calcit 0.14.0 enables strict preprocessing by default. Calcium currently uses
+the documented `--compat-types` migration bridge while its remaining dynamic UI
+boundaries are migrated to fully strict schemas.
 
 ### Realtime sync lifecycle
 

@@ -41,17 +41,17 @@ jobs:
           caps verify --toolchain
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
-          calcit calcit.cirru --check-only
-          calcit calcit.cirru analyze dynamic-methods --max 1
-          calcit calcit.cirru --entry server --check-only
-          calcit calcit.cirru --entry server analyze dynamic-methods --max 1
-          calcit calcit.cirru analyze deprecated --summary-only --format json \
+          calcit --compat-types calcit.cirru --check-only
+          calcit --compat-types calcit.cirru analyze dynamic-methods --max 1
+          calcit --compat-types calcit.cirru --entry server --check-only
+          calcit --compat-types calcit.cirru --entry server analyze dynamic-methods --max 1
+          calcit --compat-types calcit.cirru analyze deprecated --summary-only --format json \
             | jq -e '.data.summary.calls == 0' > /dev/null
-          calcit calcit.cirru --entry server analyze deprecated --summary-only --format json \
+          calcit --compat-types calcit.cirru --entry server analyze deprecated --summary-only --format json \
             | jq -e '.data.summary.calls == 0' > /dev/null
-          calcit calcit.cirru test --tag client --require-match --summary-only --format json
-          calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
-          calcit calcit.cirru analyze quality --baseline config/calcit-quality.cirru
+          calcit --compat-types calcit.cirru test --tag client --require-match --summary-only --format json
+          calcit --compat-types calcit.cirru --entry server test --tag server --require-match --summary-only --format json
+          calcit --compat-types calcit.cirru analyze quality --baseline config/calcit-quality.cirru
 
       - run: yarn compile-page && yarn release-page
 
