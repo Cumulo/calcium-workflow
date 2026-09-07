@@ -10,6 +10,7 @@ import {
   project_state,
   workload_view,
 } from "/js-out/app.workload.diff-patch.mjs";
+import { listValues, stats } from "/tests/workload-shared.mjs";
 
 const params = new URLSearchParams(location.search);
 const mode = params.get("mode") ?? "smoke";
@@ -27,22 +28,6 @@ function field(struct, name) {
   const index = struct.fields.findIndex((item) => item.value === name);
   if (index < 0) throw new Error(`missing struct field: ${name}`);
   return struct.values[index];
-}
-
-function listValues(list) {
-  return list.value.slice(list.start, list.end);
-}
-
-function stats(samples) {
-  const ordered = [...samples].sort((a, b) => a - b);
-  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
-  return {
-    unit: "microseconds",
-    samples: samples.length,
-    p50: ordered[Math.ceil(ordered.length * 0.5) - 1],
-    p95: ordered[Math.ceil(ordered.length * 0.95) - 1],
-    variance: samples.reduce((sum, value) => sum + (value - mean) ** 2, 0) / samples.length,
-  };
 }
 
 function invariant(condition, message) {
@@ -81,7 +66,7 @@ function runBrowserSequence(size, measured) {
     const nextStore = project_state(nextState);
     const nextTree = workload_view(nextStore);
     const domOperations = [];
-    const beforeHtml = mount.innerHTML;
+    const beforeHtml = caseName === "noop" ? mount.innerHTML : null;
     const diffStarted = performance.now();
     findElementDiffs((change) => domOperations.push(change), emptyCoord, emptyCoord, tree, nextTree);
     vdomDiff.push((performance.now() - diffStarted) * 1_000);
@@ -167,6 +152,7 @@ try {
     warmups,
     repetitions,
     results,
+    rawHashScope: "full report excluding rawHash; includes environment and timing",
   };
   const digest = await crypto.subtle.digest(
     "SHA-256",

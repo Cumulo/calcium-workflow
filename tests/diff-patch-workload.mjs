@@ -8,11 +8,13 @@ import { performance } from "node:perf_hooks";
 import * as calcit from "../js-out/calcit.core.mjs";
 import { diff_twig } from "../js-out/recollect.diff.mjs";
 import { patch_twig, try_patch_twig } from "../js-out/recollect.patch.mjs";
+import { change_op } from "../js-out/recollect.schema.mjs";
 import {
   apply_domain_op,
   make_workload_input,
   project_state,
 } from "../js-out/app.workload.diff-patch.mjs";
+import { listValues, stats } from "./workload-shared.mjs";
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -27,6 +29,7 @@ const warmups = Number(args.get("--warmups") ?? (mode === "full" ? 5 : 1));
 const sizes = mode === "full" ? [1_000, 10_000] : [100];
 const tags = calcit.init_tags(["id", "key"]);
 const diffOptions = calcit._$n__$M_(tags.key, tags.id);
+const patchTags = calcit.init_tags(["pick", "missing"]);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const elapsed = (started) => (performance.now() - started) * 1_000;
 const equal = (left, right) => calcit._$n__$e_(left, right);
@@ -37,28 +40,8 @@ function field(struct, name) {
   return struct.values[index];
 }
 
-function listValues(list) {
-  return list.value.slice(list.start, list.end);
-}
-
 function enumTag(value) {
   return value.tag.value;
-}
-
-function stats(samples) {
-  assert.ok(samples.length > 0);
-  const ordered = [...samples].sort((a, b) => a - b);
-  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
-  const variance =
-    samples.reduce((sum, value) => sum + (value - mean) ** 2, 0) / samples.length;
-  const percentile = (fraction) => ordered[Math.ceil(ordered.length * fraction) - 1];
-  return {
-    unit: "microseconds",
-    samples: samples.length,
-    p50: percentile(0.5),
-    p95: percentile(0.95),
-    variance,
-  };
 }
 
 function timeStage(samples, name, action) {
@@ -102,6 +85,7 @@ function runSequence(size, measured) {
     }
     cases.push({
       name: caseName,
+      projectedRows: listValues(field(freshStore, "rows")).length,
       patchOperations: listValues(changes).length,
       encodedBytes: Buffer.byteLength(encoded),
     });
@@ -180,9 +164,13 @@ function verifyProtocolFailures(size) {
   assert.equal(wrongRevision.accepted, false, "wrong revision must be rejected");
   assert.strictEqual(wrongRevision.client, client, "wrong revision must preserve baseline");
 
-  const invalid = applyEnvelope(client, { ...envelopes[0], changes: "invalid" });
+  const invalidChanges = calcit._$L_(
+    calcit._PCT__$o__$o_(change_op, patchTags.pick, patchTags.missing, calcit._$L_()),
+  );
+  const invalid = applyEnvelope(client, { ...envelopes[0], changes: invalidChanges });
   assert.equal(invalid.accepted, false, "invalid payload must be rejected");
   assert.strictEqual(invalid.client, client, "invalid payload must preserve baseline");
+  assert.strictEqual(invalid.client.store, initialStore, "invalid patch must preserve client store");
 
   for (const envelope of envelopes) client = applyEnvelope(client, envelope).client;
   assertConverged(client.store, finalStore, "slow-client recovery");
@@ -229,6 +217,38 @@ function verifyProtocolFailures(size) {
 }
 
 const results = [];
+const workByStage = (cases, measuredRepetitions) => {
+  const perSequence = {
+    updater: { unit: "domain-operations", count: cases.length },
+    projection: {
+      unit: "projected-rows",
+      count: cases.reduce((sum, item) => sum + item.projectedRows, 0),
+    },
+    dataDiff: {
+      unit: "change-operations",
+      count: cases.reduce((sum, item) => sum + item.patchOperations, 0),
+    },
+    encode: {
+      unit: "encoded-bytes",
+      count: cases.reduce((sum, item) => sum + item.encodedBytes, 0),
+    },
+    decode: {
+      unit: "decoded-change-operations",
+      count: cases.reduce((sum, item) => sum + item.patchOperations, 0),
+    },
+    apply: {
+      unit: "applied-change-operations",
+      count: cases.reduce((sum, item) => sum + item.patchOperations, 0),
+    },
+  };
+  return Object.fromEntries(
+    Object.entries(perSequence).map(([name, work]) => [
+      name,
+      { ...work, measuredTotal: work.count * measuredRepetitions },
+    ]),
+  );
+};
+
 for (const size of sizes) {
   for (let index = 0; index < warmups; index += 1) runSequence(size, false);
   const accumulated = Object.fromEntries(
@@ -242,6 +262,7 @@ for (const size of sizes) {
     last = runSequence(size, true);
     for (const name of Object.keys(accumulated)) accumulated[name].push(...last.samples[name]);
   }
+  const stageWork = workByStage(last.cases, repetitions);
   results.push({
     entityCount: size,
     seed,
@@ -249,7 +270,10 @@ for (const size of sizes) {
     inputHash: sha256(last.input.toString()),
     cases: last.cases,
     stages: Object.fromEntries(
-      Object.entries(accumulated).map(([name, samples]) => [name, stats(samples)]),
+      Object.entries(accumulated).map(([name, samples]) => [
+        name,
+        { ...stats(samples), work: stageWork[name] },
+      ]),
     ),
     allocations: { status: "unavailable", reason: "no stable per-stage allocator API" },
     protocol: verifyProtocolFailures(size),
@@ -275,6 +299,7 @@ const report = {
   warmups,
   repetitions,
   results,
+  rawHashScope: "full report excluding rawHash; includes environment and timing",
 };
 report.rawHash = sha256(JSON.stringify(report));
 const output = `${JSON.stringify(report, null, 2)}\n`;
