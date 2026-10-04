@@ -234,3 +234,24 @@ ClientPatchError 增加 invalid-result String，和 patch 执行错误分别保�
 - 服务端检查使用当前已记录的 native realization，calcit-wss/calcit.std 实际版本仍早于 manifest 声明，不能称为全部发布依赖已对齐，也不能据静态检查宣称真实 WebSocket/浏览器集成通过。
 
 日志：`/private/tmp/calcium-194-reel-adapter-{formal-check,candidate-check,formal-tests,candidate-tests,client-formal,client-candidate}.log`。后续继续处理泛型 ReelState、避免热路径重复深度解码，并完成依赖与实际运行验收；milestone 保持进行中。
+
+## 第十一阶段：ReelState 保留 Db，实时路径移除重复解码
+
+Cumulo Reel 的独立工作区 `/Users/chenyong/repo/cumulo/cumulo-reel-db-types-194` 已在本地提交 `28c3b21`：ReelState<Db> 的 base/db 使用同一泛型，reel-reducer 的 updater 从 Db 返回 Db，reset/merge/refresh 保留这个关系。移除从开放数据库或历史记录槽断言出业务类型的做法。历史记录仍是四项 List，重放 callback 接受 Db 与四个 Dynamic 参数，调用方负责验证操作和元数据。
+
+Calcium 的 *reel 与六处相关合同改为 ReelState<app.schema/Db>，使用字段已知的新构造器。reel-db 直接取得 typed db，移除旧浅层断言；dispatch-domain! 直接传入原业务 updater。updater-from-reel 只用于历史重放，验证操作、sid、op-id、op-time，数据库由容器保留类型，不再为每次实时操作或每条记录深度解码、重建 Db。初始数据库仍在持久化输入边界验证。
+
+正式 0.28 的部分局部构造器不能自行保留调用 callback 所需的泛型关系，测试为全新、字段已知的 ReelState 构造器显式提供 ReelState<Db> 类型上下文；没有把开放旧状态强转成已验证 Db。原坏数据库测试移到 decode-database 边界，typed replay adapter 不再接收 Number 数据库。reset/merge 使用抛出异常的 control updater，确保控制分支不会调用业务 callback。
+
+这项 Cumulo Reel API 尚未发布：manifest 仍声明 0.0.38，忽略的 `.calcit/modules/cumulo-reel.calcit` 链接实际指向上述本地工作区（基线版本 0.0.47，加上未发布泛型改动）。这不是按已发布 manifest 完整解析成功，也不能把本地提交写成已发布 tag。
+
+重新验证当前源码与最新 JS-FFI main 后：
+
+- 正式 0.28.0 与候选 0.29.0-alpha.1 完整客户端、服务端 main!/reload! 严格检查均通过。
+- 两者 `--entry server test --require-match --summary-only` 均为 67/67 通过，覆盖真实 reducer/replay、操作顺序、reset/merge、非法操作/元数据与状态发布。server entry 必须加载 native 模块；默认客户端 entry 的测试发现会缺少 calcit.std.hash/md5，不能作为服务端测试命令。
+- Cumulo Reel 核心 3 个回归及整个项目 7 个附带测试，两者均通过。临时负例传入 Number → String updater，两者严格检查均以 W_FN_ARG_TYPE_MISMATCH 拒绝；非法源码仅位于 /private/tmp，未入库。
+- 正式重新生成 JS 后，client-patch 和 respo-client-boundaries 回归通过：非法 patch 保留原状态身份与 revision、请求 resume，合法 patch 发布并 ack；dispatch、生命周期 cleanup 和三个 SSR 页面继续通过。没有真实网络连接。
+
+日志：`/private/tmp/calcium-194-typed-reel-{formal,candidate}-check.log`、`/private/tmp/calcium-194-typed-reel-client-{formal,candidate}.log`、`/private/tmp/calcium-194-typed-reel-{formal,candidate}-tests.log`、`/private/tmp/calcium-194-typed-reel-js{,-patch,-client}.log`、`/private/tmp/cumulo-reel-194-owner-{tests,candidate-tests}.log`、`/private/tmp/cumulo-reel-194-negative-{formal,candidate}.log`。
+
+Cumulo Reel 自身 demo 的正式服务端严格检查通过，候选服务端仍有 Node callback/Recollect memo 合同警告，客户端仍有已发布 ws-edn 的旧 WsClient 断言问题。只修正实际连接重放测试发现的一个 Struct 被当 Map 读取的问题，没有验证全部 demo CRUD。Calcium native realization 版本差异、发布依赖解析、真实浏览器/网络回归和 issue/PR 交付仍未完成。#194 与整个 milestone 保持进行中。
