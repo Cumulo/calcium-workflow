@@ -6,11 +6,15 @@
 
 - 开发、构建和 CI 移除 `--compat-types`，使用默认严格检查。
 - 将 136 处旧 Option/Result 构造调用迁移到具名构造器，废弃调用降为 0。
-- 原有 67 项附属测试的名称和标签集合保持一致，新增 5 项测试。
+- 原有 67 项附属测试的名称和标签集合保持一致，累计新增 14 项测试。
 - `enum-definition-matches?` 先解开 Option，再比较 EnumDef，保留原来的定义相等语义。
 - 服务端补丁解码先验证 change-op 定义，再通过 `try-decode-map-as` 验证完整参数。错误数量参数、递归操作中的错误参数及非 Enum 元素返回错误结果。删除该入口的两处 `unsafe-coerce`。
 - 客户端源码显式导入 `calcit.build-errors.mjs`，满足 Node ESM 路径要求。
 - CI 增加补丁原子发布、旧 cursor/Tag 分派、生命周期清理、挂载节点、存储登录及连接 URL 回归。
+- `Op :states` 的 cursor 改为 `List Dynamic`，保留 Tag、String、Number 路径键及开放状态值。解码器拒绝非列表 cursor；混合路径经过真实 Respo 分派和状态更新回归。
+- 客户端消息及操作解码器先判断 Enum，非 Enum 外层值和 dispatch payload 返回 `Result :err`，不再在 match 中抛错。
+- 十处已知 Db/Entity 更新使用 `struct-with`，保持原来字段、名义类型及不可变更新语义，避免通用 `.assoc` 分派。相同 81 项 native 测试日志中的动态分派警告由 24 条降至 11 条；仍有测试及依赖告警。
+- 修复 CI 中不受支持的 `dynamic-methods --max` 参数，改为 JSON 汇总与 jq 验证，保持原先阈值 1。
 
 Node 测试入口只为 bottom-tip 0.1.5 的 `virtual-dom/create-element` 导入补充 `.js`。仍执行真实 bottom-tip/virtual-dom 代码，不替换客户端或依赖实现；生产 Vite 构建继续使用其自身解析。
 
@@ -19,8 +23,9 @@ Node 测试入口只为 bottom-tip 0.1.5 的 `virtual-dom/create-element` 导入
 | 验证 | 结果 |
 | --- | --- |
 | Calcit 0.28.0 客户端与服务端严格检查 | 通过 |
-| Calcit 0.28.0 全部原生附属测试 | 72/72 |
-| 候选 0.29.0-alpha.1 全部原生附属测试 | 72/72 |
+| Calcit 0.28.0 全部原生附属测试 | 81/81 |
+| 候选 0.29.0-alpha.1 全部原生附属测试 | 81/81 |
+| 客户端/服务端项目动态方法静态汇总 | 两个入口均为 0，CI jq 门禁通过 |
 | 正式编译器新生成 JS 的五组客户端回归 | 通过 |
 | Node 24 + Vite 8 生产构建 | 通过 |
 | 确定性 diff/patch workload smoke | 通过，包含 EDN 往返与错误基线收敛反例 |

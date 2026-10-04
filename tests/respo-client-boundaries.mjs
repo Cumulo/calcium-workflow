@@ -45,6 +45,13 @@ const wrapped = wrap_dispatch(c.atom(client.dispatch_from_respo_$x_));
 const payload = c.parse_cirru_edn("{} (:value |kept)");
 assert.equal(wrapped(c.parse_cirru_edn("[] :field"), payload), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.field.data, { value: "kept" });
+assert.equal(wrapped(c.parse_cirru_edn("[] :mixed |id 7"), payload), undefined);
+assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.mixed.id["7"].data, { value: "kept" });
+const priorStates = c.deref(client._$s_states);
+for (const raw of [42, c.parse_cirru_edn("{}"), c.parse_cirru_edn(":: :states 42 $ {}")]) {
+  assert.throws(() => client.dispatch_from_respo_$x_(raw), /Invalid-UI-operation/);
+  assert.strictEqual(c.deref(client._$s_states), priorStates);
+}
 assert.throws(() => client.dispatch_from_respo_$x_(c.parse_cirru_edn(":: :unknown")), /Invalid-UI-operation/);
 
 const sent = [];

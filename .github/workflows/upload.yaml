@@ -42,9 +42,11 @@ jobs:
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
           calcit calcit.cirru --check-only
-          calcit calcit.cirru analyze dynamic-methods --max 1
+          calcit calcit.cirru analyze dynamic-methods --summary-only --format json \
+            | jq -e '.data.summary.findings <= 1' > /dev/null
           calcit calcit.cirru --entry server --check-only
-          calcit calcit.cirru --entry server analyze dynamic-methods --max 1
+          calcit calcit.cirru --entry server analyze dynamic-methods --summary-only --format json \
+            | jq -e '.data.summary.findings <= 1' > /dev/null
           calcit calcit.cirru analyze deprecated --summary-only --format json \
             | jq -e '.data.summary.calls == 0' > /dev/null
           calcit calcit.cirru --entry server analyze deprecated --summary-only --format json \

@@ -36,6 +36,9 @@ for (const envelope of [
 const validEnvelope = decode_server_message(c._$o__$o_(patchTag, 1, 2, list(op("replace", 3))));
 assert.equal(validEnvelope.tag.value, "ok");
 assert.ok(c._$n__$e_(validEnvelope.get(1).get(3), list(op("replace", 3))));
+for (const value of [42, c.parse_cirru_edn("{}"), list(patchTag), c.parse_cirru_edn(":: :dispatch 42")]) {
+  assert.equal(decode_client_message(value).tag.value, "err");
+}
 const base = twig_container(database, session, twig_shared(database, 0));
 const keys = c.init_tags(["count", "color", "missing", "session", "id"]);
 const updated = validate_server_patch(base, 9, 9, list(op("assoc", keys.count, 2)), decode_store);

@@ -861,7 +861,8 @@
           :examples $ []
           :schema $ :: 'StructDef
         'Op $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:states 'Dynamic 'Dynamic)
+          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
+            :states (:: 'List 'Dynamic) 'Dynamic
           :examples $ []
           :schema $ :: 'EnumDef
         'RemoveMessage $ %{} 'CodeEntry
@@ -951,36 +952,38 @@
                 message $ if (enum? data)
                   assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
                   , data
-              match message
-                (:sync/active revision)
-                  if (number? revision)
-                    %:: Result :ok $ %:: ClientMessage :sync/active revision
-                    invalid-message $ str "|Expected numeric active revision, got: " revision
-                (:sync/heartbeat revision)
-                  if (number? revision)
-                    %:: Result :ok $ %:: ClientMessage :sync/heartbeat revision
-                    invalid-message $ str "|Expected numeric heartbeat revision, got: " revision
-                (:sync/idle revision)
-                  if (number? revision)
-                    %:: Result :ok $ %:: ClientMessage :sync/idle revision
-                    invalid-message $ str "|Expected numeric idle revision, got: " revision
-                (:sync/resume revision)
-                  if (number? revision)
-                    %:: Result :ok $ %:: ClientMessage :sync/resume revision
-                    invalid-message $ str "|Expected numeric resume revision, got: " revision
-                (:sync/ack revision)
-                  if (number? revision)
-                    %:: Result :ok $ %:: ClientMessage :sync/ack revision
-                    invalid-message $ str "|Expected numeric acknowledgement revision, got: " revision
-                (:dispatch op)
-                  match (decode-operation op)
+              if (enum? message)
+                match message
+                  (:sync/active revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/active revision
+                      invalid-message $ str "|Expected numeric active revision, got: " revision
+                  (:sync/heartbeat revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/heartbeat revision
+                      invalid-message $ str "|Expected numeric heartbeat revision, got: " revision
+                  (:sync/idle revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/idle revision
+                      invalid-message $ str "|Expected numeric idle revision, got: " revision
+                  (:sync/resume revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/resume revision
+                      invalid-message $ str "|Expected numeric resume revision, got: " revision
+                  (:sync/ack revision)
+                    if (number? revision)
+                      %:: Result :ok $ %:: ClientMessage :sync/ack revision
+                      invalid-message $ str "|Expected numeric acknowledgement revision, got: " revision
+                  (:dispatch op)
+                    match (decode-operation op)
+                      (:ok typed-op)
+                        %:: Result :ok $ %:: ClientMessage :dispatch typed-op
+                      (:err error) (%:: Result :err error)
+                  _ $ match (decode-operation message)
                     (:ok typed-op)
                       %:: Result :ok $ %:: ClientMessage :dispatch typed-op
                     (:err error) (%:: Result :err error)
-                _ $ match (decode-operation message)
-                  (:ok typed-op)
-                    %:: Result :ok $ %:: ClientMessage :dispatch typed-op
-                  (:err error) (%:: Result :err error)
+                invalid-message $ str "|Expected-enum-message: " message
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
@@ -1010,6 +1013,33 @@
                 %:: Result :ok $ %:: ClientMessage :dispatch $ %:: Op :effect/ping
                 decode-client-message $ parse-cirru-edn "|%:: 'ClientMessage 'dispatch $ %:: 'Op 'effect/ping"
               :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-non-enum-scalar)
+              :code $ quote $ assert= true
+                match (decode-client-message 42)
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-map)
+              :code $ quote $ assert= true
+                match
+                  decode-client-message $ {}
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-list)
+              :code $ quote $ assert= true
+                match
+                  decode-client-message $ [] :effect/ping
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-dispatch-payload)
+              :code $ quote $ assert= true
+                match
+                  decode-client-message $ :: :dispatch 42
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
         'decode-database $ %{} 'CodeEntry
           :doc "|Deeply validate a wire or legacy bare-map database and reconstruct nominal Db, Session, User, Router, and Message values."
           :code $ quote $ defn decode-database (data)
@@ -1204,84 +1234,121 @@
                 op $ if (enum? data)
                   assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
                   , data
-              match op
-                (:session/connect)
-                  Result :ok $ %:: Op :session/connect
-                (:session/disconnect)
-                  Result :ok $ %:: Op :session/disconnect
-                (:session/remove-message message)
-                  if
-                    or
-                      = (type-of message) :map
-                      = (type-of message) :struct
+              if (enum? op)
+                match op
+                  (:session/connect)
+                    Result :ok $ %:: Op :session/connect
+                  (:session/disconnect)
+                    Result :ok $ %:: Op :session/disconnect
+                  (:session/remove-message message)
+                    if
+                      or
+                        = (type-of message) :map
+                        = (type-of message) :struct
+                      let
+                          source $ if
+                            = (type-of message) :struct
+                            &struct:to-map message
+                            , message
+                        match (get source :id)
+                          (:none) (invalid-message "|Invalid remove-message id")
+                          (:some id)
+                            if (string? id)
+                              Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id id)
+                              invalid-message $ str "|Invalid remove-message id: " id
+                      invalid-message $ str "|Invalid remove-message payload: " message
+                  (:user/log-in username password)
+                    if
+                      and (string? username) (string? password)
+                      Result :ok $ %:: Op :user/log-in username password
+                      invalid-message $ str "|Invalid log-in operation: " op
+                  (:user/sign-up username password)
+                    if
+                      and (string? username) (string? password)
+                      Result :ok $ %:: Op :user/sign-up username password
+                      invalid-message $ str "|Invalid sign-up operation: " op
+                  (:user/log-out)
+                    Result :ok $ %:: Op :user/log-out
+                  (:router/change router-data)
                     let
-                        source $ if
-                          = (type-of message) :struct
-                          &struct:to-map message
-                          , message
-                      match (get source :id)
-                        (:none) (invalid-message "|Invalid remove-message id")
-                        (:some id)
-                          if (string? id)
-                            Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id id)
-                            invalid-message $ str "|Invalid remove-message id: " id
-                    invalid-message $ str "|Invalid remove-message payload: " message
-                (:user/log-in username password)
-                  if
-                    and (string? username) (string? password)
-                    Result :ok $ %:: Op :user/log-in username password
-                    invalid-message $ str "|Invalid log-in operation: " op
-                (:user/sign-up username password)
-                  if
-                    and (string? username) (string? password)
-                    Result :ok $ %:: Op :user/sign-up username password
-                    invalid-message $ str "|Invalid sign-up operation: " op
-                (:user/log-out)
-                  Result :ok $ %:: Op :user/log-out
-                (:router/change router-data)
-                  let
-                      decoded-router $ decode-router router-data |operation.router
-                    match decoded-router
-                      (:ok typed-router)
-                        Result :ok $ %:: Op :router/change typed-router
-                      (:err error)
-                        invalid-message $ str "|Invalid router operation: " error
-                (:effect/persist)
-                  Result :ok $ %:: Op :effect/persist
-                (:effect/ping)
-                  Result :ok $ %:: Op :effect/ping
-                (:effect/pong)
-                  Result :ok $ %:: Op :effect/pong
-                (:effect/connect)
-                  Result :ok $ %:: Op :effect/connect
-                (:reel/reset)
-                  Result :ok $ %:: Op :reel/reset
-                (:reel/merge)
-                  Result :ok $ %:: Op :reel/merge
-                (:states cursor state)
-                  Result :ok $ %:: Op :states cursor state
-                _ $ invalid-message $ str "|Unknown application operation: " op
+                        decoded-router $ decode-router router-data |operation.router
+                      match decoded-router
+                        (:ok typed-router)
+                          Result :ok $ %:: Op :router/change typed-router
+                        (:err error)
+                          invalid-message $ str "|Invalid router operation: " error
+                  (:effect/persist)
+                    Result :ok $ %:: Op :effect/persist
+                  (:effect/ping)
+                    Result :ok $ %:: Op :effect/ping
+                  (:effect/pong)
+                    Result :ok $ %:: Op :effect/pong
+                  (:effect/connect)
+                    Result :ok $ %:: Op :effect/connect
+                  (:reel/reset)
+                    Result :ok $ %:: Op :reel/reset
+                  (:reel/merge)
+                    Result :ok $ %:: Op :reel/merge
+                  (:states cursor state)
+                    if (list? cursor)
+                      Result :ok $ %:: Op :states cursor state
+                      invalid-message |Expected-list-state-cursor
+                  _ $ invalid-message $ str "|Unknown application operation: " op
+                invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
             :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
-          :tests $ [] $ %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
-            :code $ quote $ do
-              assert=
-                Result :ok $ %:: Op :router/change $ %{} Router (:name :profile)
-                decode-operation $ :: :router/change $ {} (:name :profile)
-              assert=
-                Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id |m1)
-                decode-operation $ :: :session/remove-message $ {} (:id |m1)
-              match
-                decode-operation $ :: :router/change |profile
-                (:ok _) (raise |Expected-invalid-router-payload)
-                (:err _) &unit
-              match
-                decode-operation $ :: :session/remove-message $ {} (:id 1)
-                (:ok _) (raise |Expected-invalid-remove-message-payload)
-                (:err _) &unit
-            :tags $ #{} :protocol :schema
+          :tests $ []
+            %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
+              :code $ quote $ do
+                assert=
+                  Result :ok $ %:: Op :router/change $ %{} Router (:name :profile)
+                  decode-operation $ :: :router/change $ {} (:name :profile)
+                assert=
+                  Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id |m1)
+                  decode-operation $ :: :session/remove-message $ {} (:id |m1)
+                match
+                  decode-operation $ :: :router/change |profile
+                  (:ok _) (raise |Expected-invalid-router-payload)
+                  (:err _) &unit
+                match
+                  decode-operation $ :: :session/remove-message $ {} (:id 1)
+                  (:ok _) (raise |Expected-invalid-remove-message-payload)
+                  (:err _) &unit
+              :tags $ #{} :protocol :schema
+            %{} 'TestEntry (:name |accepts-mixed-state-cursor)
+              :code $ quote $ assert=
+                Result :ok $ Op :states ([] :field |id 7) ({})
+                decode-operation $ :: :states ([] :field |id 7) ({})
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-scalar-state-cursor)
+              :code $ quote $ assert= true
+                match
+                  decode-operation $ :: :states 42 $ {}
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-scalar)
+              :code $ quote $ assert= true
+                match (decode-operation 42)
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-map)
+              :code $ quote $ assert= true
+                match
+                  decode-operation $ {}
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
+            %{} 'TestEntry (:name |rejects-non-enum-list)
+              :code $ quote $ assert= true
+                match
+                  decode-operation $ [] :effect/ping
+                  (:err _) true
+                  _ false
+              :tags $ #{} :client :server
         'decode-optional-string $ %{} 'CodeEntry
           :doc "|Normalize a persisted optional string from missing, nil, legacy String, or nominal Option data."
           :code $ quote $ defn decode-optional-string (data path)
@@ -3027,7 +3094,8 @@
               raw-session $ get (:sessions db) sid
               let
                   session-data $ assert-type raw-session app.schema/Session
-                assoc db :sessions $ assoc (:sessions db) sid $ struct-with session-data (:router op-data)
+                struct-with db $ :sessions $ assoc (:sessions db) sid
+                  struct-with session-data $ :router op-data
               , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3038,18 +3106,19 @@
       :defs $ {}
         'connect $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connect (db sid op-id op-time)
-            assoc db :sessions $ assoc (:sessions db) sid $ %{} schema/Session
-              :user-id $ Option :none
-              :id sid
-              :nickname $ Option :none
-              :router schema/router
-              :messages $ {}
+            struct-with db $ :sessions $ assoc (:sessions db) sid
+              %{} schema/Session
+                :user-id $ Option :none
+                :id sid
+                :nickname $ Option :none
+                :router schema/router
+                :messages $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'Number 'String 'Number
         'disconnect $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn disconnect (db sid op-id op-time)
-            assoc db :sessions $ dissoc (:sessions db) sid
+            struct-with db $ :sessions $ dissoc (:sessions db) sid
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'Number 'String 'Number
@@ -3059,8 +3128,8 @@
               raw-session $ get (:sessions db) sid
               let
                   session-data $ assert-type raw-session app.schema/Session
-                assoc db :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                  :messages $ dissoc (:messages session-data) (:id op-data)
+                struct-with db $ :sessions $ assoc (:sessions db) sid
+                  struct-with session-data $ :messages $ dissoc (:messages session-data) (:id op-data)
               , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3108,18 +3177,19 @@
                 raw-session $ get (:sessions db) sid
                 let
                     session-data $ assert-type raw-session app.schema/Session
-                  assoc db :sessions $ assoc (:sessions db) sid $ if-let (raw-user maybe-user)
-                    let
-                        user-data $ assert-type raw-user app.schema/User
-                      if
-                        = (md5 password) (:password user-data)
-                        struct-with session-data $ :user-id $ Option :some (:id user-data)
-                        struct-with session-data $ :messages $ assoc (:messages session-data) op-id
-                          %{} app.schema/Message (:id op-id)
-                            :text $ str "|Wrong password for " username
-                    struct-with session-data $ :messages $ assoc (:messages session-data) op-id
-                      %{} app.schema/Message (:id op-id)
-                        :text $ str "|No user named: " username
+                  struct-with db $ :sessions $ assoc (:sessions db) sid
+                    if-let (raw-user maybe-user)
+                      let
+                          user-data $ assert-type raw-user app.schema/User
+                        if
+                          = (md5 password) (:password user-data)
+                          struct-with session-data $ :user-id $ Option :some (:id user-data)
+                          struct-with session-data $ :messages $ assoc (:messages session-data) op-id
+                            %{} app.schema/Message (:id op-id)
+                              :text $ str "|Wrong password for " username
+                      struct-with session-data $ :messages $ assoc (:messages session-data) op-id
+                        %{} app.schema/Message (:id op-id)
+                          :text $ str "|No user named: " username
                 , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3167,8 +3237,8 @@
               raw-session $ get (:sessions db) sid
               let
                   session-data $ assert-type raw-session app.schema/Session
-                assoc db :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                  :user-id $ Option :none
+                struct-with db $ :sessions $ assoc (:sessions db) sid
+                  struct-with session-data $ :user-id $ Option :none
               , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3187,16 +3257,18 @@
                 let
                     session-data $ assert-type raw-session app.schema/Session
                   if (option:some? maybe-user)
-                    assoc db :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                      :messages $ assoc (:messages session-data) op-id $ %{} app.schema/Message (:id op-id)
-                        :text $ str "|Name is taken: " username
+                    struct-with db $ :sessions $ assoc (:sessions db) sid
+                      struct-with session-data $ :messages $ assoc (:messages session-data) op-id
+                        %{} app.schema/Message (:id op-id)
+                          :text $ str "|Name is taken: " username
                     -> db
-                      assoc :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                        :user-id $ Option :some op-id
-                      assoc :users $ assoc (:users db) op-id $ %{} app.schema/User (:id op-id) (:name username)
-                        :nickname $ Option :some username
-                        :password $ md5 password
-                        :avatar $ Option :none
+                      struct-with $ :sessions $ assoc (:sessions db) sid
+                        struct-with session-data $ :user-id $ Option :some op-id
+                      struct-with $ :users $ assoc (:users db) op-id
+                        %{} app.schema/User (:id op-id) (:name username)
+                          :nickname $ Option :some username
+                          :password $ md5 password
+                          :avatar $ Option :none
                 , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3273,7 +3345,7 @@
                   (:some entity)
                     %{} WorkloadState
                       :order $ :order state
-                      :entities $ assoc (:entities state) id $ assoc entity :label label
+                      :entities $ assoc (:entities state) id $ struct-with entity (:label label)
                   (:none) state
               (:insert raw-entity)
                 let
