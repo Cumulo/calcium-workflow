@@ -1083,6 +1083,48 @@
                   %err $ %:: DatabaseDecodeError :invalid |db.users.u1.password "|Expected String"
                   decode-database corrupt
               :tags $ #{} :schema :server
+        'decode-domain-operation $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-domain-operation (data)
+            if (enum? data)
+              match (decode-operation data)
+                (:err error) (%err error)
+                (:ok op)
+                  match op
+                    (:session/connect)
+                      %ok $ DomainOp :session/connect
+                    (:session/disconnect)
+                      %ok $ DomainOp :session/disconnect
+                    (:session/remove-message message)
+                      %ok $ DomainOp :session/remove-message message
+                    (:user/log-in username password)
+                      %ok $ DomainOp :user/log-in username password
+                    (:user/sign-up username password)
+                      %ok $ DomainOp :user/sign-up username password
+                    (:user/log-out)
+                      %ok $ DomainOp :user/log-out
+                    (:router/change router)
+                      %ok $ DomainOp :router/change router
+                    _ $ invalid-message |Expected-domain-operation
+              invalid-message |Expected-domain-operation
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/DomainOp 'app.schema/MessageDecodeError
+          :tests $ []
+            %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
+              :code $ quote $ assert=
+                %ok $ DomainOp :router/change $ %{} Router (:name :profile)
+                decode-domain-operation $ :: :router/change $ {} (:name :profile)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-effects-and-scalars)
+              :code $ quote $ do
+                assert=
+                  %err $ MessageDecodeError :invalid |Expected-domain-operation
+                  decode-domain-operation $ :: :effect/persist
+                assert=
+                  %err $ MessageDecodeError :invalid |Expected-domain-operation
+                  decode-domain-operation 42
+              :tags $ #{} :server
         'decode-message $ %{} 'CodeEntry (:doc "|Decode and validate one stored message.")
           :code $ quote $ defn decode-message (data path)
             let
@@ -1722,7 +1764,7 @@
         '*client-states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *client-states ({})
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Number 'Dynamic
+          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'Tag 'Dynamic)
         '*dirty-clients $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *dirty-clients (#{})
           :examples $ []
@@ -1806,6 +1848,40 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number 'Number
+        'assoc-client-state-field $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn assoc-client-state-field (states sid field value)
+            assoc states sid $ assoc
+              option:unwrap-or (get states sid) ({})
+              , field value
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ []
+              :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+              , 'Number 'Tag 'Dynamic
+            :return $ :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+          :tests $ []
+            %{} 'TestEntry
+              :name |updates-one-client-without-changing-other-fields
+              :code $ quote $ let
+                  state $ {} (:status :active)
+                    :opaque $ [] 1 |text
+                    :dirty-rev 3
+                  other $ {} $ :status :idle
+                  states $ {} (1 state) (2 other)
+                assert=
+                  {}
+                    1 $ {} (:status :active)
+                      :opaque $ [] 1 |text
+                      :dirty-rev 7
+                    2 other
+                  assoc-client-state-field states 1 :dirty-rev 7
+                assert= (%some state) (get states 1)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |creates-missing-client-state-map)
+              :code $ quote $ assert=
+                {} $ 9 $ {} (:last-heartbeat 123)
+                assoc-client-state-field ({}) 9 :last-heartbeat 123
+              :tags $ #{} :server
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (op sid)
             let
@@ -1850,7 +1926,7 @@
         'dispatch-domain! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-domain! (op sid op-id op-time)
             do
-              reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
+              reset! *reel $ reel-reducer @*reel updater-from-reel op sid op-id op-time config/dev?
               request-sync!
               , &unit
           :examples $ []
@@ -1985,14 +2061,15 @@
               swap! *client-caches remove-client-cache sid
               swap! *dirty-clients remove-dirty-client sid
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'Number
         'mark-clients-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-clients-dirty! (revision)
             each (keys @*client-states)
               fn (sid)
                 let
                     state $ option:unwrap $ get @*client-states sid
-                  swap! *client-states assoc-in ([] sid :dirty-rev) revision
+                  swap! *client-states assoc-client-state-field sid :dirty-rev revision
                   when
                     = :active $ option:unwrap $ get state :status
                     swap! *dirty-clients include sid
@@ -2210,7 +2287,11 @@
         'record-sync-send! $ %{} 'CodeEntry
           :doc "|Record metrics for one synchronization send attempt before transport admission."
           :code $ quote $ defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
-            swap! *sync-metrics $ fn (metrics) (next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?)
+            swap! *sync-metrics $ fn (metrics)
+              hint-fn $ {}
+                :args $ [] 'app.server/SyncMetrics
+                :return 'app.server/SyncMetrics
+              next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
@@ -2257,7 +2338,7 @@
             if (not config/dev?) (raise "|reloading only happens in dev mode")
             clear-twig-caches!
             invalidate-sync-caches!
-            reset! *reel $ refresh-reel @*reel @*initial-db updater
+            reset! *reel $ refresh-reel @*reel @*initial-db updater-from-reel
             render-loop!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -2326,7 +2407,7 @@
               {} $ :port port
               fn (data)
                 hint-fn $ {}
-                  :args $ [] 'Dynamic
+                  :args $ [] 'wss.core/WssEvent
                   :return 'Unit
                 match data
                   (:connect sid)
@@ -2546,10 +2627,113 @@
                 state $ option:unwrap $ get @*client-states sid
               if
                 = :active $ option:unwrap $ get state :status
-                swap! *client-states assoc-in ([] sid :last-heartbeat) (now-ms)
+                swap! *client-states assoc-client-state-field sid :last-heartbeat $ now-ms
                 mark-client-active! sid client-revision true
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'Number
+        'updater-from-reel $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn updater-from-reel (db op sid op-id op-time)
+            let
+                typed-sid $ decode-map-as sid 'Number
+                typed-op-id $ decode-map-as op-id 'String
+                typed-op-time $ decode-map-as op-time 'Number
+              match (schema/decode-database db)
+                (:err error)
+                  raise $ str |Invalid-reel-database: error
+                (:ok typed-db)
+                  match (schema/decode-domain-operation op)
+                    (:err error)
+                      raise $ str |Invalid-reel-operation: error
+                    (:ok typed-op) (updater typed-db typed-op typed-sid typed-op-id typed-op-time)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'Dynamic 'Dynamic 'Sid 'OpId 'Time
+            :generics $ [] 'Sid 'OpId 'Time
+          :tests $ []
+            %{} 'TestEntry (:name |live-reducer-matches-business-updater)
+              :code $ quote $ let
+                  base schema/database
+                  connect-op $ schema/DomainOp :session/connect
+                  reel $ struct-with reel-schema (:db base) (:base base)
+                    :records $ []
+                    :merged? false
+                  updated $ reel-reducer reel updater-from-reel connect-op 1 |op-1 10 true
+                assert= (updater base connect-op 1 |op-1 10) (:db updated)
+                assert=
+                  [] $ [] connect-op 1 |op-1 10
+                  :records updated
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |replays-legacy-operations-in-order)
+              :code $ quote $ let
+                  base schema/database
+                  connect-op $ schema/DomainOp :session/connect
+                  reel $ struct-with reel-schema (:db base) (:base base)
+                    :records $ []
+                    :merged? false
+                  router $ %{} schema/Router $ :name :profile
+                  expected $ updater (updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
+                  records $ []
+                    [] (:: :session/connect) 1 |op-1 10
+                    []
+                      :: :router/change $ {} $ :name :profile
+                      , 1 |op-2 20
+                  replayed $ refresh-reel (assoc reel :records records) base updater-from-reel
+                assert= expected $ :db replayed
+                assert= records $ :records replayed
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |preserves-reset-and-merged-replay-base)
+              :code $ quote $ let
+                  base schema/database
+                  connect-op $ schema/DomainOp :session/connect
+                  reel $ struct-with reel-schema (:db base) (:base base)
+                    :records $ []
+                    :merged? false
+                  updated $ reel-reducer reel updater-from-reel connect-op 1 |op-1 10 true
+                  reset $ reel-reducer updated updater-from-reel (schema/Op :reel/reset) 1 |reset 20 true
+                  merged $ reel-reducer updated updater-from-reel (schema/Op :reel/merge) 1 |merge 30 true
+                  refreshed $ refresh-reel merged base updater-from-reel
+                assert= base $ :db reset
+                assert= ([]) (:records reset)
+                assert= (:db updated) (:base merged)
+                assert= (:db updated) (:db refreshed)
+                assert= ([]) (:records merged)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-invalid-database)
+              :code $ quote $ assert= true
+                try
+                  do
+                    updater-from-reel 42 (:: :session/connect) 1 |op-1 10
+                    , false
+                  fn (detail) (includes? detail |Invalid-reel-database:)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-effect-record-during-replay)
+              :code $ quote $ let
+                  base schema/database
+                  connect-op $ schema/DomainOp :session/connect
+                  reel $ struct-with reel-schema (:db base) (:base base)
+                    :records $ []
+                    :merged? false
+                  records $ [] $ [] (:: :effect/persist) 1 |op-1 10
+                assert= true $ try
+                  do
+                    refresh-reel (assoc reel :records records) base updater-from-reel
+                    , false
+                  fn (detail) (includes? detail |Invalid-reel-operation:)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-invalid-record-metadata)
+              :code $ quote $ let
+                  base schema/database
+                  reel $ struct-with reel-schema (:db base) (:base base)
+                    :records $ []
+                    :merged? false
+                  records $ [] $ [] (:: :session/connect) |not-a-number |op-1 10
+                assert= true $ try
+                  do
+                    refresh-reel (assoc reel :records records) base updater-from-reel
+                    , false
+                  fn (detail) (includes? detail "|expected number, got string")
+              :tags $ #{} :server
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.server
           :require (app.schema :as schema)

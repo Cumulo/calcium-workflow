@@ -209,3 +209,28 @@ ClientPatchError 增加 invalid-result String，和 patch 执行错误分别保�
 同时实际检查完整服务端 main!/reload!，两个编译器都报 `E_ERASED_GENERIC_RELATION`：Cumulo Reel 0.0.38 的 updater 参数为 Fn<Dynamic,Dynamic,Sid,OpId,Number>，应用 updater 是 Fn<Db,DomainOp,Number,String,Number>。附带测试通过不能证明完整服务端通过。已读取较新缓存 0.0.46：它将记录槽具体化并增加 Db/Op 泛型，但从开放数据库/记录槽取得具名值时仍使用 assert-type；不能仅用这种断言当作数据已验证的证明。后续需解决真实 reducer 调用边界，继续保留重放与 reset/merge 语义。
 
 日志：`/private/tmp/calcium-194-server-contracts-{formal,candidate,client-formal,client-candidate,formal-check,candidate-check}.log`、`/private/tmp/calcium-194-server-reel-slot.log`。本阶段没有宣称完整服务端、发布依赖或整个 milestone 完成。
+
+## 第十阶段：Reel 适配器与完整服务端严格检查
+
+新增 decode-domain-operation，复用现有 decode-operation 对旧操作进行重建，只将七类业务操作转换为 DomainOp，拒绝 effect、reel 控制操作和非 Enum 输入。既有纯业务 updater 的 Db/DomainOp 合同保持不变。
+
+新增 updater-from-reel，供旧 Cumulo Reel 的实时 reducer 和 refresh-reel 重放共同使用：数据库复用 decode-database 深度验证，操作经 decode-domain-operation，sid/op-id/op-time 通过 decode-map-as 验证为 Number/String/Number，再进入原业务 updater。元数据输入保留泛型，因为旧记录 List 中的数据本来没有静态类型证据；没有先宣称它们已是 Number/String，再用可能被静态类型折叠掉的谓词冒充运行时验证。非法元数据在 typed decoder 拒绝，数据库和操作失败保留诊断后抛出。没有新增 unsafe-coerce，记录仍保持原来的四项 List 布局。
+
+此适配器每次调用都会深度验证、重建数据库，成本随数据库大小增长。它是旧开放 ReelState 的迁移边界，尚未解决让 ReelState 本身携带 Db 类型证据的工作；不能把这一开销当作最终的框架性能优化成果。旧 reel-db 的浅层 assert-type 也仍存在，完整泛型状态迁移还需继续推进。
+
+完整服务端检查暴露的其他合同同时修正：
+
+- *client-states 明确为 Ref<Map<Number,Map<Tag,Dynamic>>>，与创建和更新的实际客户端状态一致。
+- assoc-client-state-field 用两层 typed assoc 替代两个固定两项路径的 assoc-in 调用，保持已有/缺失 client state 的行为，不将 Dynamic 返回值断言成已验证 Map。
+- touch-client!/mark-client-idle! 声明 Number/Number → Unit；record-sync-send! 的 callback 声明 SyncMetrics → SyncMetrics，正式编译器也能保留返回证据。
+- wss-serve! callback 声明注册的 WssEvent → Unit，继续使用原 connect/message/disconnect 逻辑。没有启动 WebSocket 服务来检查合同。
+
+新增 10 个附带测试：实时 reducer 与原业务 updater 等值、旧格式操作按序重放、reset 和 merged replay base、坏数据库、effect 记录、坏元数据拒绝、旧 Router 操作重建、非业务操作拒绝，以及两项客户端状态更新行为。
+
+验证结果：
+
+- 正式 0.28.0 与候选 0.29.0-alpha.1：完整客户端 main!/reload! 和完整服务端 main!/reload! 的严格检查均通过。
+- 两个编译器下全部 67/67 附带测试通过，重放测试调用真实 Cumulo Reel reducer/refresh-reel；不是只直接调用新适配器。
+- 服务端检查使用当前已记录的 native realization，calcit-wss/calcit.std 实际版本仍早于 manifest 声明，不能称为全部发布依赖已对齐，也不能据静态检查宣称真实 WebSocket/浏览器集成通过。
+
+日志：`/private/tmp/calcium-194-reel-adapter-{formal-check,candidate-check,formal-tests,candidate-tests,client-formal,client-candidate}.log`。后续继续处理泛型 ReelState、避免热路径重复深度解码，并完成依赖与实际运行验收；milestone 保持进行中。
