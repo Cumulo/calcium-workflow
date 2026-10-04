@@ -87,3 +87,38 @@ connect! 的地址读取抽为 connection-url：继续使用现有 url-parse 的
 - 完整客户端严格检查已越过旧可选参数和 URL 原始 JsObject 访问，当前停在 simulate-login! 的 localStorage 词法边界。后续仍需处理 callback 及 dispatch 合同。
 
 日志：`/private/tmp/calcium-194-url-{formal,candidate}-check.log`、`/private/tmp/calcium-194-url-replay.log`、`/private/tmp/calcium-194-url-stage-native.log`、`/private/tmp/calcium-194-connection-adapter-check.log`。
+
+## 第五阶段：登录存储与直接依赖核对
+
+simulate-login! 的 raw getItem 访问移入 stored-login 小适配器，使用 StorageHost `.get-item` 和 `js-nullish->option`。String 内容在边界以 `parse-cirru-edn-as` 验证为 List<String>，返回 Option<List<String>>；业务调用仍使用原来的两项读取与 nominal 登录操作。移除原 raw String unsafe-coerce。存储缺失走原无凭据分支，宿主读异常仍向外抛出；非法 List 元素现在在解析边界更早拒绝，不宣称其异常时机完全不变，也没有把异常静默当作无凭据。
+
+connect! 的单 String console.error 改用既有 console-error!；on-server-data 与 apply-server-patch! 中保留的多参数 console 诊断则显式声明自身词法 js-ffi 能力，保留其参数结构。
+
+核对后发现多个直接依赖的忽略目录链接实际早于 deps.cirru 的声明。已仅修正当前迁移工作区的链接到匹配版本缓存，没有修改缓存或原工作区：
+
+| 模块 | 修正后的声明版本 | 缓存源提交 |
+| --- | --- | --- |
+| cumulo-reel.calcit | 0.0.38 | 5940d2d37807c2eabb4c70c2d1e07e104e6a0edd |
+| cumulo-util.calcit | 0.0.18 | 5fd2a5634a2f9fa920b99fea9ce0568f7864dd69 |
+| alerts.calcit | 0.10.30 | 01288f07c1b04f59e4a0bf419770bcbde2a6f7f7 |
+| respo-feather.calcit | 0.4.11 | 5a058551361d07a641d9d98b975472c9469a773f |
+| respo-message.calcit | 0.0.20 | a1de3c42ceae416cfed2b0733249a786d564d88b |
+| respo-ui.calcit | 0.7.19 | 112d52dee1c493be666d6dc6e843614de3873129 |
+| ws-edn.calcit | 0.0.26 | 6f46ccce20565865d9a2016f076352204ff82052 |
+
+calcit-wss 与 calcit.std 仍使用原 native realization；同版本存在多个候选缓存或 realization，尚未核实 ABI 与 tag 对应关系，因此没有任意替换。这一步也不证明所有传递依赖锁已正确。
+
+当前验证：
+
+- stored-login 在修正链接后的正式与候选编译器下独立严格检查通过。
+- 正式生成 JS，`tests/stored-login.mjs` 配套正式 procs 通过：nil 缺失、正常/空 String 凭据、非法元素/容器拒绝、getItem 异常原样传播，读取的 key 为 calcium-storage；没有登录或连接网络。
+- 修正七个直接依赖链接后，正式原生附带测试仍为 37/37 通过。
+- 完整客户端检查现在报 cumulo-util.activity/watch-browser-lifecycle! 的 E_JS_FFI_FEATURE_REQUIRED（原始 js/setInterval）。匹配的 0.0.18 缓存函数没有 js-ffi feature，不能退回缺少生命周期 API 的旧缓存或给整个项目开放权限。
+
+依赖问题的独立复现（不执行监听器或计时器）：
+
+```bash
+calcit --check-only --init-fn cumulo-util.activity/watch-browser-lifecycle! --reload-fn cumulo-util.activity/watch-browser-lifecycle!
+```
+
+对应 owner 为 Cumulo/cumulo-util.calcit；后续应在其源码工作区修正与验证，不能编辑缓存。日志为 `/private/tmp/calcium-194-lifecycle-pin-repro.log`、`/private/tmp/calcium-194-direct-pins-client-check.log`。登录检查与回归日志为 `/private/tmp/calcium-194-stored-login-aligned-{formal,candidate}.log`、`/private/tmp/calcium-194-stored-login-replay.log`，全部测试为 `/private/tmp/calcium-194-aligned-direct-native.log`。完整客户端和 dispatch 运行回归仍未完成。

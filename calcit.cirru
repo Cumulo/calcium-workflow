@@ -92,6 +92,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number 'Number $ :: 'List 'recollect.schema/change-op
+            :features $ #{} :js-ffi
         'cleanup-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Run and clear the current application activity cleanup capability."
           :code $ quote $ defn cleanup-activity-lifecycle! ()
@@ -115,7 +116,7 @@
                     do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
                   :on-close $ fn (event) (reset! *connected? false)
                     reset! *store $ ClientState :offline
-                    js/console.error "|Lost connection!"
+                    console-error! "|Lost connection!"
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
                   :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
@@ -221,6 +222,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Dynamic
+            :features $ #{} :js-ffi
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
@@ -274,19 +276,33 @@
             :args $ []
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
-            let
-                raw $ js/localStorage.getItem $ option:unwrap (get config/site :storage-key)
-              if (js-present? raw)
-                let
-                    pair $ parse-cirru-edn $ unsafe-coerce raw 'String
-                  do (println "|Found storage.")
-                    dispatch! $ %:: app.schema/Op :user/log-in
-                      option:unwrap $ nth pair 0
-                      option:unwrap $ nth pair 1
-                println "|Found no storage."
+            match (stored-login)
+              (:some pair)
+                do (println "|Found storage.")
+                  dispatch! $ %:: app.schema/Op :user/log-in
+                    option:unwrap $ nth pair 0
+                    option:unwrap $ nth pair 1
+              (:none) (println "|Found no storage.")
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
+        'stored-login $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn stored-login ()
+            let
+                storage $ browser/window-local-storage
+                key $ assert-type
+                  option:unwrap $ get config/site :storage-key
+                  , String
+              match
+                js-nullish->option $ storage .get-item key
+                (:none) (%none)
+                (:some raw)
+                  %some $ parse-cirru-edn-as raw $ :: 'List 'String
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ []
+            :features $ #{} :js-ffi
+            :return $ :: 'Option $ :: 'List 'String
         'validate-server-patch $ %{} 'CodeEntry
           :doc "|Validate base revision and apply one patch batch without mutating client state."
           :code $ quote $ defn validate-server-patch (store local-revision base-revision changes)
@@ -369,6 +385,7 @@
             app.workload.diff-patch :as workload
             js-ffi.browser :as browser
             respo.ffi.browser :refer $ narrow-element
+            js-ffi.shared :refer $ console-error!
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
