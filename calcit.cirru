@@ -1119,7 +1119,9 @@
               = (type-of data) :map
               %err $ %:: DatabaseDecodeError :invalid path "|Expected message Map"
               foldl (&map:to-list data)
-                %ok $ {}
+                assert-type
+                  %ok $ {}
+                  :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
                     (:err error) (%err error)
@@ -1423,7 +1425,9 @@
               = (type-of data) :map
               %err $ %:: DatabaseDecodeError :invalid path "|Expected session Map"
               foldl (&map:to-list data)
-                %ok $ {}
+                assert-type
+                  %ok $ {}
+                  :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
                     (:err error) (%err error)
@@ -1445,6 +1449,15 @@
             :generics $ [] 'T
             :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-session-key)
+            :code $ quote $ assert=
+              %err $ DatabaseDecodeError :invalid |sessions.1.id "|Session id must match map key"
+              decode-sessions
+                {} $ 1 $ {} (:id 2) (:user-id nil) (:nickname nil)
+                  :router $ {} $ :name :home
+                  :messages $ {}
+                , |sessions
+            :tags $ #{} :server
         'decode-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-store (value)
             if
@@ -1592,7 +1605,9 @@
               = (type-of data) :map
               %err $ %:: DatabaseDecodeError :invalid path "|Expected user Map"
               foldl (&map:to-list data)
-                %ok $ {}
+                assert-type
+                  %ok $ {}
+                  :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
                     (:err error) (%err error)
@@ -1614,6 +1629,13 @@
             :generics $ [] 'T
             :return $ :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-user-key)
+            :code $ quote $ assert=
+              %err $ DatabaseDecodeError :invalid |users.u1.id "|User id must match map key"
+              decode-users
+                {} $ |u1 $ {} (:id |u2) (:name |demo) (:nickname nil) (:avatar nil) (:password |hash)
+                , |users
+            :tags $ #{} :server
         'invalid-message $ %{} 'CodeEntry
           :doc "|Build a typed decode failure while preserving the expected success type."
           :code $ quote $ defn invalid-message (detail)
@@ -1983,26 +2005,37 @@
               merge current $ {} (:acked-rev revision) (:in-flight? false)
               , :sent-rev :sent-store
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'C)
-            :args $ [] 'C 'Number
-            :generics $ [] 'C
-          :tests $ [] $ %{} 'TestEntry
-            :name |repeated-backpressure-converges-to-latest-revision
-            :code $ quote $ let
-                initial $ {} (:status :active) (:acked-rev 3) (:dirty-rev 4) (:in-flight? false) (:needs-snapshot? false)
-                after-first-backpressure $ next-sync-send-state initial 4
-                  {} $ :value 4
-                  %:: wss.core/WssSendOutcome :backpressured
-                after-latest-backpressure $ next-sync-send-state (assoc after-first-backpressure :dirty-rev 7) 7
-                  {} $ :value 7
-                  %:: wss.core/WssSendOutcome :backpressured
-                accepted-latest $ next-sync-send-state (assoc after-latest-backpressure :dirty-rev 9) 9
-                  {} $ :value 9
-                  %:: wss.core/WssSendOutcome :accepted
-              assert=
-                {} (:status :active) (:acked-rev 9) (:dirty-rev 9) (:in-flight? false) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
-                next-sync-ack-state accepted-latest 9
-            :tags $ #{} :server
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'Number
+            :return $ :: 'Map 'Tag 'Dynamic
+          :tests $ []
+            %{} 'TestEntry
+              :name |repeated-backpressure-converges-to-latest-revision
+              :code $ quote $ let
+                  initial $ {} (:status :active) (:acked-rev 3) (:dirty-rev 4) (:in-flight? false) (:needs-snapshot? false)
+                  after-first-backpressure $ next-sync-send-state initial 4
+                    {} $ :value 4
+                    %:: wss.core/WssSendOutcome :backpressured
+                  after-latest-backpressure $ next-sync-send-state (assoc after-first-backpressure :dirty-rev 7) 7
+                    {} $ :value 7
+                    %:: wss.core/WssSendOutcome :backpressured
+                  accepted-latest $ next-sync-send-state (assoc after-latest-backpressure :dirty-rev 9) 9
+                    {} $ :value 9
+                    %:: wss.core/WssSendOutcome :accepted
+                assert=
+                  {} (:status :active) (:acked-rev 9) (:dirty-rev 9) (:in-flight? false) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
+                  next-sync-ack-state accepted-latest 9
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |preserves-extra-state-fields)
+              :code $ quote $ let
+                  extra $ {} $ :heterogeneous ([] 1 |text)
+                  current $ {} (:opaque extra) (:status :active) (:sent-rev 7)
+                    :sent-store $ [] |pending
+                    :in-flight? true
+                assert=
+                  {} (:opaque extra) (:status :active) (:acked-rev 7) (:in-flight? false)
+                  next-sync-ack-state current 7
+              :tags $ #{} :server
         'next-sync-metrics $ %{} 'CodeEntry
           :doc "|Purely advance synchronization counters for one attempted snapshot or patch send."
           :code $ quote $ defn next-sync-metrics (metrics message-kind revision diff-latency payload stats budget-fallback?)
@@ -2059,9 +2092,10 @@
                   merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                   , :sent-rev :sent-store
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'C)
-            :args $ [] 'C 'Number 'U 'wss.core/WssSendOutcome
-            :generics $ [] 'C 'U
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'Number 'U 'wss.core/WssSendOutcome
+            :generics $ [] 'U
+            :return $ :: 'Map 'Tag 'Dynamic
           :tests $ []
             %{} 'TestEntry (:name |accepted-records-pending-store)
               :code $ quote $ assert=
@@ -2104,6 +2138,14 @@
                   , 7
                     {} $ :value 1
                     %:: wss.core/WssSendOutcome :backpressured
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |preserves-extra-fields-and-newer-dirty-revision)
+              :code $ quote $ let
+                  extra $ {} $ :heterogeneous ([] 1 |text)
+                  current $ {} (:opaque extra) (:status :active) (:dirty-rev 12)
+                assert=
+                  {} (:opaque extra) (:status :active) (:dirty-rev 12) (:slow-client? true) (:last-send-outcome :backpressured)
+                  next-sync-send-state current 7 ([] |new-store) (wss.core/WssSendOutcome :backpressured)
               :tags $ #{} :server
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn now-ms () (unix-time-ms)
@@ -2189,10 +2231,27 @@
             :tags $ #{} :server :type
         'reel-record-count $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reel-record-count (reel)
-            count $ :records reel
+            &list:count $ :records reel
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Number)
             :args $ [] 'cumulo-reel.core/ReelState
+          :tests $ []
+            %{} 'TestEntry (:name |counts-heterogeneous-records)
+              :code $ quote $ let
+                  reel $ struct-with reel-schema (:db schema/database) (:base schema/database)
+                    :records $ [] ([] :first 1 |op-1 10) ([] :second 2 |op-2 20)
+                    :merged? false
+                assert= 2 $ reel-record-count reel
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |rejects-non-list-record-slot)
+              :code $ quote $ let
+                  reel $ struct-with reel-schema (:db schema/database) (:base schema/database)
+                    :records $ {} $ :wrong |container
+                    :merged? false
+                assert= true $ try
+                  do (reel-record-count reel) false
+                  fn (detail) (includes? detail |list)
+              :tags $ #{} :server
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
             if (not config/dev?) (raise "|reloading only happens in dev mode")

@@ -193,3 +193,19 @@ ClientPatchError 增加 invalid-result String，和 patch 执行错误分别保�
 - 候选完整附带测试为 48 passed / 3 failed：decode-database 的 fold Result 类型、next-sync-send-state/next-sync-ack-state 的泛型返回、reel-record-count 的 Countable 证据仍待迁移。这些服务端问题没有被兼容参数或强转绕过，不能称为完整候选下游通过。
 
 日志：`/private/tmp/calcium-194-open-patch-{formal,candidate,native,candidate-tests,candidate-decoder,candidate-all,js,candidate-js,replay,candidate-replay,ssr,candidate-ssr}.log`。依赖发布对齐、真实浏览器交互与 issue/PR 交付仍未完成，milestone 保持进行中。
+
+## 第九阶段：服务端 helper 的真实合同
+
+修正候选测试中的三类问题：
+
+- decode-sessions/decode-users/decode-messages 的 fold 初始空成功值显式声明 Result<Map<key,nominal>,DatabaseDecodeError>，同时保留成功与失败类型。原先只从 `%ok {}` 推出开放 Map 与 never 错误类型，后续 error 分支无法满足 reducer 的合同。这是空值的编译期类型说明，没有把开放数据断言成已验证业务值。
+- next-sync-send-state/next-sync-ack-state 的输入和输出改为实际使用的 Map<Tag,Dynamic>。这些函数 merge/dissoc 状态键，不能承诺保留任意输入 C 的类型；new-store 仍保留独立泛型 U。状态 Map 本来就包含 revision、Bool、Tag、Store 等异构值，额外状态字段继续保留。
+- reel-record-count 对旧 ReelState 的开放 records 槽使用 `&list:count`。Cumulo Reel 的实现用空 List 初始化、conj 添加操作记录；底层计数 proc 检查 List 容器后返回 Number，不需要从 Dynamic 伪造 Countable 证明，也避免为计数递归 decode/复制整个记录 List。非 List 的损坏槽现在明确拒绝，不承诺保留对非法 ReelState 的旧计数行为。
+
+新增 6 个附带回归：ack 保留异构额外字段、backpressure 保留较新的 dirty revision 和额外字段、非空异构记录计数、损坏 records 容器拒绝，以及 session/user 的 id 与集合 key 一致性检查。全部使用显式断言。
+
+正式 0.28.0 与候选 0.29.0-alpha.1 的全部 57/57 附带测试均通过；两者完整客户端严格检查仍通过。
+
+同时实际检查完整服务端 main!/reload!，两个编译器都报 `E_ERASED_GENERIC_RELATION`：Cumulo Reel 0.0.38 的 updater 参数为 Fn<Dynamic,Dynamic,Sid,OpId,Number>，应用 updater 是 Fn<Db,DomainOp,Number,String,Number>。附带测试通过不能证明完整服务端通过。已读取较新缓存 0.0.46：它将记录槽具体化并增加 Db/Op 泛型，但从开放数据库/记录槽取得具名值时仍使用 assert-type；不能仅用这种断言当作数据已验证的证明。后续需解决真实 reducer 调用边界，继续保留重放与 reset/merge 语义。
+
+日志：`/private/tmp/calcium-194-server-contracts-{formal,candidate,client-formal,client-candidate,formal-check,candidate-check}.log`、`/private/tmp/calcium-194-server-reel-slot.log`。本阶段没有宣称完整服务端、发布依赖或整个 milestone 完成。
