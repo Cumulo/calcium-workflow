@@ -28,7 +28,7 @@
             {} $ :states $ {}
               :cursor $ []
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref $ :: 'Map 'Dynamic 'Dynamic
         '*store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *store (ClientState :loading)
           :examples $ []
@@ -152,15 +152,30 @@
                   _ true
                 println |Dispatch op op-data
               if (tag? op)
-                recur $ :: op op-data
+                match
+                  schema/decode-operation $ :: op op-data
+                  (:ok normalized-op)
+                    recur normalized-op $ %none
+                  (:err error)
+                    raise $ str |Invalid-legacy-operation: error
                 match op
                   (:states cursor s)
-                    reset! *states $ update-states @*states cursor s
+                    reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Dynamic 'Dynamic)
                   (:effect/connect) (connect!)
                   _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'app.schema/Op $ :: 'Option 'Dynamic
+        'dispatch-from-respo! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn dispatch-from-respo! (raw-op)
+            match (schema/decode-operation raw-op)
+              (:ok op) (dispatch! op)
+              (:err error)
+                raise $ str |Invalid-UI-operation: error
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Dynamic
         'install-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership."
           :code $ quote $ defn install-activity-lifecycle! ()
@@ -176,6 +191,7 @@
                         (= signal :heartbeat)
                           when @*connected? $ ws-send! $ schema/ClientMessage :sync/heartbeat @*sync-revision
                         true &unit
+                      , &unit
                     %some 30000
                 reset! *activity-cleanup $ %some cleanup
                 , &unit
@@ -190,8 +206,8 @@
               if config/dev? $ load-console-formatter!
               render-app!
               connect!
-              add-watch *store :changes $ fn (store prev) (render-app!)
-              add-watch *states :changes $ fn (states prev) (render-app!)
+              add-watch *store :changes on-store-change!
+              add-watch *states :changes on-states-change!
               install-activity-lifecycle!
               workload-entry!
               println "|App started!"
@@ -223,6 +239,16 @@
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Dynamic
             :features $ #{} :js-ffi
+        'on-states-change! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-states-change! (states prev) (render-app!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] (:: 'Map 'Dynamic 'Dynamic) (:: 'Map 'Dynamic 'Dynamic)
+        'on-store-change! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-store-change! (store prev) (render-app!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.client/ClientState 'app.client/ClientState
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
@@ -235,12 +261,7 @@
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (some? client-errors) (hud! |error client-errors)
-              do (hud! |inactive nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!)
-                add-watch *store :changes $ fn (store prev) (render-app!)
-                add-watch *states :changes $ fn (states prev) (render-app!)
-                install-activity-lifecycle!
-                ws-set-on-data! on-server-data
-                println "|Code updated."
+              do (hud! |inactive nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!) (add-watch *store :changes on-store-change!) (add-watch *states :changes on-states-change!) (install-activity-lifecycle!) (ws-set-on-data! on-server-data) (println "|Code updated.")
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -256,7 +277,7 @@
                   (:offline)
                     comp-offline $ :: :offline
                   (:ready store) (comp-container states store)
-              render! mount-target app dispatch!
+              render! mount-target app dispatch-from-respo!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []

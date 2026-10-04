@@ -122,3 +122,35 @@ calcit --check-only --init-fn cumulo-util.activity/watch-browser-lifecycle! --re
 ```
 
 对应 owner 为 Cumulo/cumulo-util.calcit；后续应在其源码工作区修正与验证，不能编辑缓存。日志为 `/private/tmp/calcium-194-lifecycle-pin-repro.log`、`/private/tmp/calcium-194-direct-pins-client-check.log`。登录检查与回归日志为 `/private/tmp/calcium-194-stored-login-aligned-{formal,candidate}.log`、`/private/tmp/calcium-194-stored-login-replay.log`，全部测试为 `/private/tmp/calcium-194-aligned-direct-native.log`。完整客户端和 dispatch 运行回归仍未完成。
+
+## 第六阶段：完整客户端与 Respo 回归
+
+核对 GitHub tags 后，发现 cumulo-util 已发布的 0.0.23（bf21934ab982bd667a1aae03b73bcba439d4ec33）包含 typed browser lifecycle 修复，升级依赖并复用其匹配缓存即可越过第五阶段的问题，无需修改缓存或再实现监听器。
+
+ws-edn 升级声明至已发布的 0.0.32，但该发布仍有 WsClient → WsClient0 的断言冲突。实际迁移链接复用已有源码工作区 `ws-edn-client-traits-194` 的 ce23074：它检查布局后保留同一状态句柄，已有原生、generation/retry/heartbeat/lifecycle 验证记录。该提交仍是本地覆盖，不能声称 0.0.32 发布已经包含修复。
+
+Calcium 的回调边界调整：
+
+- render! 使用内部 dispatch-from-respo! 适配器：接收 Respo 已归一化的 Dynamic 操作，经现有 decode-operation 重建应用 Op，再调用原 dispatch!，只在这个适配器末尾返回 Unit。应用 dispatch! 的返回值仍保留；没有新增另一套 Respo 公共 dispatch API，也未修改全局 Respo Op 的身份规则。
+- 旧 Tag 分支保留，通过同一 decoder 取得 Op 后，以显式 Option :none recur。非法操作现在在边界拒绝；这不是“任意旧非法 payload 行为不变”的承诺。
+- *states 显式为 Ref<Map<Dynamic,Dynamic>>，符合实际异构状态树，避免初始空 cursor 将全部未来状态推为 List。update-states 的返回合同目前仍是 Dynamic，但实现始终 assoc 当前 Map；在这一调用点保留 Map 类型断言，未使用 unsafe-coerce，未改动状态树布局。
+- 两组 watch 回调改为共享具名函数，分别声明 ClientState 和状态 Map 参数；仍只调用 render-app!。activity signal 回调末尾显式 Unit，符合生命周期合同，不改变可见/隐藏/心跳的发送分支。
+
+验证结果：
+
+- 正式 Calcit 0.28.0 的完整 main! / reload! 严格检查通过，零警告；实际完整客户端 JS 生成通过。
+- 同一完整输出配套正式 procs 0.28.0，client-patch、stored-login、connection-url 三个既有迁移回归再次通过。
+- 新增 `tests/respo-client-boundaries.mjs`：真实 Respo wrap-dispatch 转发旧双参数 cursor、Tag + nil；验证状态 payload、nominal wire 操作与非法操作拒绝。使用可控 socket factory，没有建立网络连接。
+- 同一测试验证两次安装后只保留一组监听器和一个 30 秒心跳，hidden/visible 信号工作且 cleanup 清理监听器、interval 与 touch timeout。DOM 会忽略外层事件 listener 的返回值，visible 分支的库 touch cooldown 返回 timer handle 不作为应用 callback Unit 的断言。
+- 对实际 comp-offline/comp-container 做 SSR，检查 loading/offline 文本、登录页四个控件标签，以及 comp-offline/comp-login 的组件身份。不是只比较输出长度，也不代表真实浏览器 DOM 交互全部通过。
+- 正式服务端入口的附带测试仍为 37/37 通过。
+- 候选完整客户端仍失败于 Recollect 的两个泛型返回合同（try-patch-get、try-patch-one-at）；不能宣称候选编译器通过。
+
+生成与回放命令（临时目录已配置匹配 runtime 和原安装的 npm 依赖；loader 只补已知 Node ESM 扩展）：
+
+```bash
+calcit --emit-path /private/tmp/calcium-194-complete-client-js js
+node --experimental-loader /Users/chenyong/repo/respo/respo-render-node-boundaries-194/test/downstream/resolve-diary-ssr-imports.mjs tests/respo-client-boundaries.mjs /private/tmp/calcium-194-complete-client-js
+```
+
+日志：`/private/tmp/calcium-194-complete-client-{formal,candidate}.log`、`/private/tmp/calcium-194-complete-client-js.log`、`/private/tmp/calcium-194-respo-client-replay.log`、`/private/tmp/calcium-194-full-js-{patch,login,url}.log`、`/private/tmp/calcium-194-lifecycle-dispatch-native.log`。#194 的完整发布依赖解析、真实浏览器回归与 issue/PR 交付仍未完成；这些本地结果不是整个 milestone 完成证明。
