@@ -72,3 +72,18 @@ decode-server-message 已检查 revision 类型、Store 的结构匹配，以及
 - 最新完整客户端严格检查仍被旧 dispatch! 可选参数阻断，没有宣称实际 UI/浏览器全部验收通过。
 
 日志：`/private/tmp/calcium-194-boundaries-{formal,candidate}-tests.log`、`/private/tmp/calcium-194-patch-js-replay.log`、`/private/tmp/calcium-194-latest-client-check.log`。
+
+## 第四阶段：可选参数与连接地址适配器
+
+dispatch! 的旧 `?` 尾参数改为 `Option<Dynamic>`，入口 unwrap-or nil 后保留原分支，包括旧 Tag 的 recur 路径。首参数仍为原 Op，未扩大其输入类型。静态 usages 显示应用登录以单个 nominal Op 调用；Respo 的 wrap-dispatch 也先归一化 cursor/Tag，再以单个 enum 转发。显式提供尾数据的调用方现在必须提供 `%some data`，省略参数由 Option omission sugar 处理。此步骤尚未证明 Fn<Op> 与 Respo Fn<Dynamic> 回调合同兼容，也未完成 dispatch 的运行回归，不能称为 #195 解决方案。
+
+connect! 的地址读取抽为 connection-url：继续使用现有 url-parse 的 `true` 查询解析模式，对其已安装源码返回的 query 对象声明两个最小外部 trait（可空 String host/port），并复用 JS-FFI LocationHost。原来 5 次地址相关 unsafe-coerce 收敛为一次 parser 对象边界转换；query 属性读取有静态合同。恢复默认值使用 js-nullish->option，保留空字符串与第一项重复 query 的行为。request-snapshot! 与 send-activity! 按既有 ws-send! Unit 返回合同声明零参数 Fn<Unit>。
+
+验证：
+
+- connection-url 在正式与候选编译器下均严格通过，正式生成 JS。
+- `tests/connection-url.mjs` 使用配套正式 procs 和原安装的 url-parse，对照旧表达式验证 7 个 query 场景；未启动 WebSocket。
+- 正式编译器服务端入口的 37/37 附带测试仍通过。其范围不包括 dispatch! 的新参数运行回归。
+- 完整客户端严格检查已越过旧可选参数和 URL 原始 JsObject 访问，当前停在 simulate-login! 的 localStorage 词法边界。后续仍需处理 callback 及 dispatch 合同。
+
+日志：`/private/tmp/calcium-194-url-{formal,candidate}-check.log`、`/private/tmp/calcium-194-url-replay.log`、`/private/tmp/calcium-194-url-stage-native.log`、`/private/tmp/calcium-194-connection-adapter-check.log`。

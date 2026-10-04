@@ -51,6 +51,18 @@
           :code $ quote $ defenum ClientState (:loading) (:offline) (:ready 'app.schema/Store)
           :examples $ []
           :schema $ :: 'EnumDef
+        'ConnectionQueryHost $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ deftrait ConnectionQueryHost
+            :host $ :: 'JsNullish 'String
+            :port $ :: 'JsNullish 'String
+          :examples $ []
+          :ffi $ {} (:backend :js) (:kind :external-object) (:target :browser)
+          :schema $ :: 'Trait
+        'ParsedConnectionHost $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ deftrait ParsedConnectionHost (:query 'app.client/ConnectionQueryHost)
+          :examples $ []
+          :ffi $ {} (:backend :js) (:kind :external-object) (:target :browser)
+          :schema $ :: 'Trait
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ack-sync! (revision)
             ws-send! $ %:: schema/ClientMessage :sync/ack revision
@@ -95,15 +107,9 @@
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connect! ()
             let
-                url-object $ unsafe-coerce (url-parse js/location.href true) 'JsObject
-                query $ unsafe-coerce (.-query url-object) 'JsObject
-                host-value $ .-host query
-                port-value $ .-port query
-                host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
-                port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
-                  str $ option:unwrap $ get config/site :port
+                url $ connection-url
               reset! *store $ ClientState :loading
-              reset! *ws-client $ %some $ ws-connect! (str |ws:// host |: port)
+              reset! *ws-client $ %some $ ws-connect! url
                 {}
                   :on-open $ fn (event)
                     do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
@@ -116,23 +122,44 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
+        'connection-url $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn connection-url ()
+            let
+                location $ browser/location-host
+                parsed $ unsafe-coerce
+                  url-parse (location :href) true
+                  , 'app.client/ParsedConnectionHost
+                query $ parsed :query
+                host $ option:unwrap-or
+                  js-nullish->option $ query :host
+                  location :hostname
+                port $ option:unwrap-or
+                  js-nullish->option $ query :port
+                  str $ option:unwrap $ get config/site :port
+              str |ws:// host |: port
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ []
+            :features $ #{} :js-ffi
         'dispatch! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn dispatch! (op ? op-data)
-            when
-              and config/dev? $ match op
-                (:states _ _) false
-                _ true
-              println |Dispatch op op-data
-            if (tag? op)
-              recur $ :: op op-data
-              match op
-                (:states cursor s)
-                  reset! *states $ update-states @*states cursor s
-                (:effect/connect) (connect!)
-                _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
+          :code $ quote $ defn dispatch! (op maybe-op-data)
+            let
+                op-data $ option:unwrap-or maybe-op-data nil
+              when
+                and config/dev? $ match op
+                  (:states _ _) false
+                  _ true
+                println |Dispatch op op-data
+              if (tag? op)
+                recur $ :: op op-data
+                match op
+                  (:states cursor s)
+                    reset! *states $ update-states @*states cursor s
+                  (:effect/connect) (connect!)
+                  _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'app.schema/Op 'Dynamic
+            :args $ [] 'app.schema/Op $ :: 'Option 'Dynamic
         'install-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership."
           :code $ quote $ defn install-activity-lifecycle! ()
@@ -235,14 +262,16 @@
           :code $ quote $ defn request-snapshot! ()
             ws-send! $ %:: schema/ClientMessage :sync/resume @*sync-revision
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
         'send-activity! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-activity! ()
             if (page-visible?)
               ws-send! $ %:: schema/ClientMessage :sync/active @*sync-revision
               ws-send! $ %:: schema/ClientMessage :sync/idle @*sync-revision
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
             let
