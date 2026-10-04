@@ -55,3 +55,20 @@ node tests/mount-boundary.mjs /private/tmp/calcium-194-mount-js
 - 服务端入口全部 37 个附带测试：25 passed / 12 failed。相对第一阶段，原有三个 Twig 测试由失败转为通过，并新增一个通过测试。剩余 decoder、patch 泛型等问题仍待迁移，完整客户端入口也仍受 dispatch 可选参数阻断。
 
 日志：`/private/tmp/calcium-194-twig-map-{formal,candidate}.log`、`/private/tmp/calcium-194-twig-js-replay.log`、`/private/tmp/calcium-194-twig-updated-server-tests.log`。该结果仍不满足 #194 的完整第二下游验收。
+
+## 第三阶段：Patch 与协议能力边界
+
+`patch-batch` 已返回实现 PatchBatchOps 的 nominal PatchBatch，validate-server-patch 移除旧 assert-traits 包装和对应 import。函数的泛型 T 输入/输出合同保留，未改成 Dynamic 或仅支持 Store。两个空 patch 测试为初始空 List 显式声明 change-op 元素类型。
+
+decode-server-message 已检查 revision 类型、Store 的结构匹配，以及 patch List 中 change-op 的 nominal 定义。为其中原有 unsafe-coerce 声明词法 js-ffi 能力，没有增加转换或给调用方扩大权限。此步骤仅明确既有转换的边界：Store 结构匹配不证明所有嵌套字段有效，nominal change-op 身份也不等于任意动态 payload 已递归验证；更深的协议解码仍需继续推进。
+
+同时发现依赖解析偏差：虽然 deps.cirru 声明 Recollect 0.0.45，原本忽略目录链接实际指向 0.0.38。已将该链接修正到现有 0.0.45 缓存 `b2aa7d7051ed79bdf9d546d71e281d899e6a5add`，没有编辑缓存源码。这解决了 DiffStats/DiffBudget 缺失。当前 JS-FFI 链接实际指向本地 main `605367e`，不再是第一阶段记录的 alpha.11 缓存；它仍是本地覆盖，不能声称声明的 alpha.11 pin 包含所有 main 修复。
+
+验证结果：
+
+- 正式 0.28.0：服务端入口全部 37/37 附带测试通过。
+- 候选 0.29.0-alpha.1：33 passed / 4 failed。失败包括 Recollect patch helper 的泛型返回合同，以及数据库解码和服务端状态 helper 的返回合同；不将其当作通过。
+- 正式生成 JS 配套正式 procs 0.28.0，`tests/client-patch.mjs` 通过：有效更新、非法第二条操作时原子拒绝且基线不变、revision mismatch、空 patch 保留 nominal Store。
+- 最新完整客户端严格检查仍被旧 dispatch! 可选参数阻断，没有宣称实际 UI/浏览器全部验收通过。
+
+日志：`/private/tmp/calcium-194-boundaries-{formal,candidate}-tests.log`、`/private/tmp/calcium-194-patch-js-replay.log`、`/private/tmp/calcium-194-latest-client-check.log`。

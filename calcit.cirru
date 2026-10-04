@@ -263,9 +263,7 @@
           :code $ quote $ defn validate-server-patch (store local-revision base-revision changes)
             if (= base-revision local-revision)
               match
-                .apply-to
-                  assert-traits (patch-batch changes) PatchBatchOps
-                  , store
+                .apply-to (patch-batch changes) store
                 (:ok next-store) (%ok next-store)
                 (:err error)
                   %err $ %:: ClientPatchError :invalid-patch error
@@ -287,7 +285,7 @@
             %{} 'TestEntry (:name |rejects-revision-mismatch)
               :code $ quote $ let
                   store $ {} $ :value 1
-                  changes $ []
+                  changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
                 assert=
                   %err $ %:: ClientPatchError :revision-mismatch 8 7
                   validate-server-patch store 7 8 changes
@@ -310,7 +308,7 @@
                   shared $ app.twig.container/twig-shared db 0
                   store $ app.twig.container/twig-container db app.schema/session shared
                   state $ match
-                    validate-server-patch store 7 7 $ []
+                    validate-server-patch store 7 7 $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
                     (:ok next-store) (ClientState :ready next-store)
                     (:err error) (raise |Unexpected-patch-error)
                 assert= (ClientState :ready store) state
@@ -333,7 +331,7 @@
             app.schema :refer $ Op
             app.config :as config
             ws-edn.client :refer $ ws-connect! ws-send! ws-set-on-data!
-            recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment PatchBatchOps
+            recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment
             |url-parse :default url-parse
             |bottom-tip :default hud!
             |./calcit.build-errors :default client-errors
@@ -1172,6 +1170,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
+            :features $ #{} :js-ffi
             :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |decodes-pong)
