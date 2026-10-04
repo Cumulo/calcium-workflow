@@ -2210,14 +2210,14 @@
                   %none
                 router-view $ %{} RouterView (:name router-name) (:data router-view-data)
                   :router $ %none
-                messages-view $ -> (:messages session-data) (.to-list)
-                  map $ fn (pair)
-                    let[] (id raw-message) pair $ let
-                        message $ assert-type raw-message app.schema/Message
-                      [] id $ %{} MessageView
-                        :id $ :id message
-                        :text $ :text message
-                  pairs-map
+                messages-view $ .filter-map-kv (:messages session-data)
+                  fn (id message)
+                    hint-fn $ {}
+                      :args $ [] 'String 'app.schema/Message
+                      :return $ :: 'MapEntryDecision 'String 'app.schema/MessageView
+                    %:: MapEntryDecision :keep id $ %{} app.schema/MessageView
+                      :id $ :id message
+                      :text $ :text message
                 session-view $ %{} SessionView (:user-id user-id-option)
                   :id $ %some $ :id session-data
                   :nickname $ :nickname session-data
@@ -2228,12 +2228,11 @@
                 user-option $ match user-id-option
                   (:none) (%none)
                   (:some user-id)
-                    if-let
-                      raw-user $ get (:users db) user-id
-                      let
-                          user-data $ assert-type raw-user app.schema/User
+                    match
+                      get (:users db) user-id
+                      (:some user-data)
                         %some $ twig-user user-data
-                      %none
+                      (:none) (%none)
               %{} Store (:logged-in? logged-in?) (:session session-view)
                 :reel-length $ :reel-length shared
                 :attached $ :attached shared
@@ -2279,7 +2278,9 @@
                 assert= (%some 0) (:id view)
                 assert= (%none) (:user-id view)
                 assert= (%none) (:nickname view)
-                assert= view $ parse-cirru-edn $ format-cirru-edn view
+                assert= view $ parse-cirru-edn (format-cirru-edn view)
+                  {} (:Option Option) (:SessionView view)
+                    :RouterView $ :router view
               :tags $ #{} :client :server :twig :type
             %{} 'TestEntry (:name |session-some-fields)
               :code $ quote $ let
@@ -2302,7 +2303,31 @@
                 assert= (%some |u1) (:user-id view)
                 assert= (%some ||) (:nickname view)
                 assert= true $ :logged-in? projected
-                assert= view $ parse-cirru-edn $ format-cirru-edn view
+                assert= view $ parse-cirru-edn (format-cirru-edn view)
+                  {} (:Option Option) (:SessionView view)
+                    :RouterView $ :router view
+              :tags $ #{} :client :server :twig :type
+            %{} 'TestEntry (:name |missing-user-retains-session)
+              :code $ quote $ let
+                  session-data $ %{} app.schema/Session (:id 0)
+                    :user-id $ %some |u1
+                    :nickname $ %some ||
+                    :router $ %{} app.schema/Router $ :name :home
+                    :messages $ {}
+                  db $ %{} app.schema/Db
+                    :sessions $ {} $ 0 session-data
+                    :users $ {}
+                  shared $ twig-shared db 0
+                  projected $ twig-container db session-data shared
+                  view $ :session projected
+                assert= (%some 0) (:id view)
+                assert= (%some |u1) (:user-id view)
+                assert= (%some ||) (:nickname view)
+                assert= true $ :logged-in? projected
+                assert= view $ parse-cirru-edn (format-cirru-edn view)
+                  {} (:Option Option) (:SessionView view)
+                    :RouterView $ :router view
+                assert= (%none) (:user projected)
               :tags $ #{} :client :server :twig :type
         'twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-members (sessions users)

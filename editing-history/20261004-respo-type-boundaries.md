@@ -39,3 +39,19 @@ node tests/mount-boundary.mjs /private/tmp/calcium-194-mount-js
 - 尚未完成完整客户端 JS、实际 UI SSR、浏览器及全部原生回归；不能将 Calcium 计入 #194 的第二个成功下游。
 
 原始检查日志均保留在 `/private/tmp/calcium-194-*.log`，不将大 JSON 或生成 JS 纳入仓库。
+
+## 第二阶段：Twig 的类型保留
+
+用户查找直接匹配 `Map<String,User>` 的 get 结果，避免 if-let 展开出的 Option 回调擦除 UserView 类型。消息投影使用 `.filter-map-kv` 与 `MapEntryDecision :keep`，保持原 key 与 MessageView 字段，不再经异构 pair List 转换。回调声明 String/Message → MapEntryDecision<String,MessageView> 合同，两个编译器都能检查。两处旧的 Message/User 断言因此移除；没有扩大 Dynamic 或添加 coercion。
+
+两个 SessionView 序列化测试继续比较完整值，并向普通 `parse-cirru-edn` 提供 Option 定义及 Struct prototype，以恢复名义身份。RouterView 仍含开放 Map，因此这里没有声称使用闭合递归 decoder，也不把身份恢复当作字段验证。
+
+新增 missing-user-retains-session 回归：session 中保留 user-id，但数据库已无该用户时，投影保留 session 与 logged-in? 的既有行为，`:user` 为 Option :none。
+
+验证结果：
+
+- 正式 0.28.0 与候选 0.29.0-alpha.1：twig-container 的 4/4 附带测试均通过。
+- 正式 0.28.0 生成 Twig JS，配套正式 procs 0.28.0 重放既有 `tests/session-option.mjs`（仅在临时副本调整生成目录）：缺失/存在 Option、nominal 数据库存储、非法字段拒绝和 EDN 往返均通过。
+- 服务端入口全部 37 个附带测试：25 passed / 12 failed。相对第一阶段，原有三个 Twig 测试由失败转为通过，并新增一个通过测试。剩余 decoder、patch 泛型等问题仍待迁移，完整客户端入口也仍受 dispatch 可选参数阻断。
+
+日志：`/private/tmp/calcium-194-twig-map-{formal,candidate}.log`、`/private/tmp/calcium-194-twig-js-replay.log`、`/private/tmp/calcium-194-twig-updated-server-tests.log`。该结果仍不满足 #194 的完整第二下游验收。
