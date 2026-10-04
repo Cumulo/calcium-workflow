@@ -154,3 +154,21 @@ node --experimental-loader /Users/chenyong/repo/respo/respo-render-node-boundari
 ```
 
 日志：`/private/tmp/calcium-194-complete-client-{formal,candidate}.log`、`/private/tmp/calcium-194-complete-client-js.log`、`/private/tmp/calcium-194-respo-client-replay.log`、`/private/tmp/calcium-194-full-js-{patch,login,url}.log`、`/private/tmp/calcium-194-lifecycle-dispatch-native.log`。#194 的完整发布依赖解析、真实浏览器回归与 issue/PR 交付仍未完成；这些本地结果不是整个 milestone 完成证明。
+
+## 第七阶段：Store 递归验证与 patch 契约核实
+
+运行复现确认旧 Recollect 0.0.45 的泛型返回合同不成立：以 Number 为基线执行 `:replace String`，validate-server-patch 返回成功 String，不能据此承诺 Result<Number>。路径读取的 V 同样没有输入证据。已核实发布 tag 0.0.53（b7da3695110d65a30a4d7f69f150cf7fbc1c3d54）改用 PatchResult 的开放成功值；不能用断言将它重新当作 Store。本阶段尚未升级 Recollect 或修复 validate-server-patch 的泛型合同。
+
+新增 decode-store，使用 `try-decode-map-as` 校验完整 Store 字段，返回 Result<Store,String>。现有 nominal Struct 先按 Store 中声明的结构转换为 decoder 所需的 Map：Store、SessionView、UserView、MessageView、AttachedView、RouterView，以及 session.messages 的值和 user 的 Option。转换前仍检查结构名和字段布局；这个检查只选择转换分支，字段类型证据来自后续 decoder。非法标量、容器和 Option 留给 decoder 报错，而不是通过 coercion 转换为业务类型。
+
+RouterView 的 data/router 明确为 Option<Map<Dynamic,Dynamic>>，表达原来真实的异构路由 payload。转换不会递归进入这些开放 payload，因此其中的 nominal 数据和异构 List 仍保留。此 decoder 保留正式编译器开放 Map decoder 的既有规则：它重建合法字段，包括 Option 的规范化，不承诺返回根对象身份或把所有原始字段形态都视为已验证 nominal 值。
+
+snapshot 接收路径已改用 decode-store；移除其中一处 unsafe-coerce。无效嵌套字段在构造 ServerMessage :snapshot 前拒绝，错误保留字段路径。patch payload 的两处既有转换和 validate-server-patch 的泛型问题仍待继续处理；本阶段只完成接收完整 snapshot 的 Store 验证，不能宣称 patch 发布边界已安全。
+
+验证：
+
+- 正式 0.28.0 全部 47/47 附带测试通过；新增 8 个 Store decoder 测试和 2 个 snapshot 集成测试，覆盖有效 Store、根类型、标量、嵌套 Option、消息字段、存在的用户字段与开放路由数据。
+- 候选 0.29.0-alpha.1 的独立 decoder 严格检查与 8/8 附带测试通过。完整候选客户端的旧 Recollect 泛型警告仍存在。
+- 正式完整客户端严格检查与 JS 生成通过。配套正式 procs 的 client-patch Node 回归验证实际 JS decoder 拒绝损坏的标量、嵌套 Option、非法 Option tag 与 snapshot；原来的 patch 原子拒绝和 revision 回归继续通过。
+
+日志：`/private/tmp/calcium-194-store-decoder-{native,candidate-native}.log`、`/private/tmp/calcium-194-decode-store-{formal,candidate}.log`、`/private/tmp/calcium-194-store-client-{check,js}.log`、`/private/tmp/calcium-194-store-js-replay.log`。下一步需在真正的 patch 结果边界使用已验证 Store，迁移 Recollect 的开放 PatchResult 合同，继续保持原子拒绝与 revision 行为。

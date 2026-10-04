@@ -795,8 +795,8 @@
           :schema $ :: 'StructDef
         'RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct RouterView (:name 'Tag)
-            :data $ :: 'Option 'Map
-            :router $ :: 'Option 'Map
+            :data $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
+            :router $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
           :examples $ []
           :schema $ :: 'StructDef
         'ServerMessage $ %{} 'CodeEntry
@@ -1216,9 +1216,12 @@
                   , data
               match message
                 (:snapshot revision store)
-                  if
-                    and (number? revision) (struct? store) (&struct:matches? store Store)
-                    %:: Result :ok $ %:: ServerMessage :snapshot revision $ unsafe-coerce store 'app.schema/Store
+                  if (number? revision)
+                    match (decode-store store)
+                      (:ok validated)
+                        %:: Result :ok $ %:: ServerMessage :snapshot revision validated
+                      (:err detail)
+                        invalid-message $ str "|Invalid snapshot envelope: " detail
                     invalid-message $ str "|Invalid snapshot envelope: " message
                 (:patch base-revision revision changes)
                   let
@@ -1263,6 +1266,30 @@
               :code $ quote $ assert=
                 %:: Result :ok $ %:: ServerMessage :patch 3 4 $ [] (%:: recollect.schema/change-op :replace 1)
                 decode-server-message $ %:: ServerMessage :patch 3 4 $ [] (%:: recollect.schema/change-op :replace 1)
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |decodes-validated-store-snapshot)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                assert=
+                  %ok $ ServerMessage :snapshot 7 store
+                  decode-server-message $ :: :snapshot 7 store
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-nominal-store-snapshot)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                let
+                    bad-session $ &struct:assoc (:session store) :id $ %some
+                      parse-cirru-edn $ format-cirru-edn |not-a-number
+                    corrupt $ &struct:assoc store :session bad-session
+                  match
+                    decode-server-message $ :: :snapshot 7 corrupt
+                    (:err error)
+                      match error $
+                        :invalid detail
+                        includes? detail |$.session.id
+                    _ false
               :tags $ #{} :client
         'decode-session $ %{} 'CodeEntry (:doc "|Decode and deeply validate one stored session.")
           :code $ quote $ defn decode-session (data path)
@@ -1336,6 +1363,97 @@
             :generics $ [] 'T
             :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
+        'decode-store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-store (value)
+            if
+              and (struct? value) (&struct:matches? value Store)
+              try-decode-map-as (store-struct-input value) 'app.schema/Store
+              %err |Expected-nominal-Store
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/Store 'String
+          :tests $ []
+            %{} 'TestEntry (:name |accepts-complete-nominal-store)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                assert= (%ok store) (decode-store store)
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-root)
+              :code $ quote $ assert= (%err |Expected-nominal-Store) (decode-store |wrong-root)
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-scalar-field)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                match
+                  decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
+                  (:err detail) (includes? detail |$.count)
+                  _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-nested-field)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                let
+                    bad-session $ &struct:assoc (:session store) :id $ %some
+                      parse-cirru-edn $ format-cirru-edn |not-a-number
+                  match
+                    decode-store $ &struct:assoc store :session bad-session
+                    (:err detail) (includes? detail |$.session.id)
+                    _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-optional-user)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                match
+                  decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
+                  (:err detail) (includes? detail |$.user)
+                  _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |preserves-open-router-payload)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                let
+                    payload $ {}
+                      :heterogeneous $ [] 1 |text
+                      :nominal $ :attached store
+                    router $ %{} RouterView (:name :profile)
+                      :data $ %some payload
+                      :router $ %none
+                    updated $ &struct:assoc store :router router
+                  assert= (%ok updated) (decode-store updated)
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-message-field)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                let
+                    message $ %{} MessageView (:id |m1) (:text |valid)
+                    bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
+                    bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
+                  match
+                    decode-store $ &struct:assoc store :session bad-session
+                    (:err detail) (includes? detail |$.session.messages)
+                    _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-present-user)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                let
+                    user $ %{} UserView (:name |name) (:id |id)
+                      :nickname $ %none
+                      :avatar $ %none
+                    bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
+                  match
+                    decode-store $ &struct:assoc store :user $ %some bad-user
+                    (:err detail) (includes? detail |$.user.id)
+                    _ false
+              :tags $ #{} :client
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
@@ -1433,6 +1551,49 @@
               :messages $ {}
           :examples $ []
           :schema $ :: 'app.schema/Session
+        'store-message-input $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn store-message-input (value)
+            if (map? value)
+              filter-map-kv
+                decode-map-as value $ :: 'Map 'Dynamic 'Dynamic
+                fn (key item)
+                  hint-fn $ {}
+                    :args $ [] 'Dynamic 'Dynamic
+                    :return $ :: 'MapEntryDecision 'Dynamic 'Dynamic
+                  MapEntryDecision :keep key $ store-struct-input item
+              , value
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Dynamic)
+            :args $ [] 'Dynamic
+        'store-struct-input $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn store-struct-input (value)
+            if (struct? value)
+              cond
+                  &struct:matches? value Store
+                  -> (&struct:to-map value) (update :session store-struct-input) (update :attached store-struct-input) (update :router store-struct-input) (update :user store-user-input)
+                (&struct:matches? value SessionView)
+                  -> (&struct:to-map value) (update :router store-struct-input) (update :messages store-message-input)
+                (or (&struct:matches? value RouterView) (&struct:matches? value UserView) (&struct:matches? value AttachedView) (&struct:matches? value MessageView))
+                  &struct:to-map value
+                true value
+              , value
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Dynamic)
+            :args $ [] 'Dynamic
+        'store-user-input $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn store-user-input (value)
+            if
+              and (enum? value)
+                = (enum-definition value) (%some Option)
+              match value
+                (:some user)
+                  %some $ store-struct-input user
+                (:none) value
+                _ value
+              , value
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Dynamic)
+            :args $ [] 'Dynamic
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def user
             %{} User (:name ||) (:id ||)
