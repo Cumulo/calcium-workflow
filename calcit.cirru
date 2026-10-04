@@ -3,17 +3,11 @@
   :about "|Machine-generated snapshot. Do not edit directly — changes will be overwritten. Use `calcit query` to inspect and `calcit edit`/`calcit tree` to modify. Run `calcit docs agents --contract` before mutations; use `--full` for first orientation or changed contract digest. Manual edits must follow format and schema conventions, then run `calcit edit format`."
   :package |app
   :entries $ {}
-    :default $ {} (:description |)
-      :init-fn 'app.client/main!
-      :mode :js
-      :reload-fn 'app.client/reload!
+    :default $ {} (:description |) (:init-fn 'app.client/main!) (:mode :js) (:reload-fn 'app.client/reload!) (:target :browser)
       :feature-policy $ {}
       :modules $ [] |respo.calcit/ |recollect/ |respo-ui.calcit/ |ws-edn.calcit/ |cumulo-util.calcit/ |respo-message.calcit/ |cumulo-reel.calcit/ |js-ffi/
       :type-slots $ {} $ :dispatch-op |app.schema/Op
-    :server $ {} (:description |)
-      :init-fn 'app.server/main!
-      :mode :native
-      :reload-fn 'app.server/reload!
+    :server $ {} (:description |) (:init-fn 'app.server/main!) (:mode :native) (:reload-fn 'app.server/reload!)
       :feature-policy $ {}
       :modules $ [] |recollect/ |ws-edn.calcit/ |cumulo-util.calcit/ |cumulo-reel.calcit/ |calcit-wss/ |calcit.std/
       :type-slots $ {} $ :dispatch-op |app.schema/Op
@@ -50,27 +44,25 @@
           :schema $ :: 'Ref $ :: 'Option 'ws-edn.client/WsClient
         'ClientPatchError $ %{} 'CodeEntry
           :doc "|Client-side reason for rejecting a revisioned patch before requesting a full snapshot."
-          :code $ quote $ defenum ClientPatchError
-            :revision-mismatch 'Number 'Number
-            :invalid-patch 'recollect.patch/PatchError
+          :code $ quote $ defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
           :examples $ []
           :schema $ :: 'EnumDef
         'ClientState $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum ClientState (:loading) (:offline)
-            :ready 'app.schema/Store
+          :code $ quote $ defenum ClientState (:loading) (:offline) (:ready 'app.schema/Store)
           :examples $ []
           :schema $ :: 'EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ack-sync! (revision)
             ws-send! $ %:: schema/ClientMessage :sync/ack revision
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number
+            :features $ #{} :js-ffi
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn apply-server-patch! (base-revision revision changes)
             match @*store
               (:ready store)
-                match
-                  validate-server-patch store @*sync-revision base-revision changes
+                match (validate-server-patch store @*sync-revision base-revision changes)
                   (:ok next-store)
                     do
                       reset! *store $ ClientState :ready next-store
@@ -79,15 +71,12 @@
                   (:err error)
                     do
                       match error
-                        (:revision-mismatch expected actual)
-                          js/console.warn |Sync-revision-mismatch expected actual
+                        (:revision-mismatch expected actual) (js/console.warn |Sync-revision-mismatch expected actual)
                         (:invalid-patch patch-error)
                           js/console.error |Failed-to-apply-server-patch $ patch-error-message patch-error
                       request-snapshot!
-              (:loading)
-                request-snapshot!
-              (:offline)
-                request-snapshot!
+              (:loading) (request-snapshot!)
+              (:offline) (request-snapshot!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number 'Number $ :: 'List 'recollect.schema/change-op
@@ -110,31 +99,20 @@
                 query $ unsafe-coerce (.-query url-object) 'JsObject
                 host-value $ .-host query
                 port-value $ .-port query
-                host $ if (js-present? host-value) (unsafe-coerce host-value 'String)
-                  unsafe-coerce js/location.hostname 'String
+                host $ if (js-present? host-value) (unsafe-coerce host-value 'String) (unsafe-coerce js/location.hostname 'String)
                 port $ if (js-present? port-value) (unsafe-coerce port-value 'String)
                   str $ option:unwrap $ get config/site :port
               reset! *store $ ClientState :loading
               reset! *ws-client $ %some $ ws-connect! (str |ws:// host |: port)
                 {}
                   :on-open $ fn (event)
-                    do (reset! *connected? true)
-                      request-snapshot!
-                      send-activity!
-                      simulate-login!
+                    do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
                   :on-close $ fn (event) (reset! *connected? false)
                     reset! *store $ ClientState :offline
                     js/console.error "|Lost connection!"
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
-                  :class-mapper $ {} (:Option Option) (:Store schema/Store)
-                    :SessionView schema/SessionView
-                    :RouterView schema/RouterView
-                    :AttachedView schema/AttachedView
-                    :UserView schema/UserView
-                    :MessageView schema/MessageView
-                    :ServerMessage schema/ServerMessage
-                    :change-op patch-schema/change-op
+                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -158,8 +136,7 @@
         'install-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership."
           :code $ quote $ defn install-activity-lifecycle! ()
-            do
-              cleanup-activity-lifecycle!
+            do (cleanup-activity-lifecycle!)
               let
                   cleanup $ watch-browser-lifecycle!
                     fn (signal)
@@ -195,14 +172,12 @@
             :args $ []
             :features $ #{} :js-ffi
         'mount-target $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ def mount-target
-            js/document.querySelector |.app
+          :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
           :schema $ :: 'Dynamic
         'on-server-data $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-server-data (data)
-            match
-              schema/decode-server-message data
+            match (schema/decode-server-message data)
               (:ok message)
                 match message
                   (:snapshot revision store)
@@ -215,11 +190,19 @@
                       when config/dev? $ js/console.log |Changes changes
                       apply-server-patch! base-revision revision changes
                   (:effect/pong) &unit
-              (:err error)
-                eprintln "|Invalid server message:" error
+              (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Dynamic
+        'query-mount-target $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn query-mount-target ()
+            match (browser/query-selector |.app)
+              (:none) nil
+              (:some host-element) (narrow-element host-element)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ []
+            :return $ :: 'JsNullish 'respo.dom/DomElement
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (some? client-errors) (hud! |error client-errors)
@@ -293,8 +276,7 @@
             :generics $ [] 'T
             :return $ :: 'Result 'T 'app.client/ClientPatchError
           :tests $ []
-            %{} 'TestEntry
-              :name |accepts-valid-revisioned-patch
+            %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
               :code $ quote $ let
                   store $ {} $ :value 1
                   changes $ [] $ %:: patch-schema/change-op :assoc :value 2
@@ -302,8 +284,7 @@
                   %ok $ {} $ :value 2
                   validate-server-patch store 7 7 changes
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |rejects-revision-mismatch
+            %{} 'TestEntry (:name |rejects-revision-mismatch)
               :code $ quote $ let
                   store $ {} $ :value 1
                   changes $ []
@@ -311,12 +292,10 @@
                   %err $ %:: ClientPatchError :revision-mismatch 8 7
                   validate-server-patch store 7 8 changes
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |rejects-invalid-patch-atomically
+            %{} 'TestEntry (:name |rejects-invalid-patch-atomically)
               :code $ quote $ let
                   store $ {} $ :stable 1
-                  changes $ []
-                    %:: patch-schema/change-op :assoc :temporary 2
+                  changes $ [] (%:: patch-schema/change-op :assoc :temporary 2)
                     %:: patch-schema/change-op :update :missing $ %:: patch-schema/change-op :replace 3
                   expected $ %err $ %:: ClientPatchError :invalid-patch
                     %:: PatchError :missing-node $ [] $ %:: PatchPathSegment :field :missing
@@ -325,8 +304,7 @@
                   {} $ :stable 1
                   , store
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |ready-store-retains-nominal-state
+            %{} 'TestEntry (:name |ready-store-retains-nominal-state)
               :code $ quote $ let
                   db app.schema/database
                   shared $ app.twig.container/twig-shared db 0
@@ -334,8 +312,7 @@
                   state $ match
                     validate-server-patch store 7 7 $ []
                     (:ok next-store) (ClientState :ready next-store)
-                    (:err error)
-                      raise |Unexpected-patch-error
+                    (:err error) (raise |Unexpected-patch-error)
                 assert= (ClientState :ready store) state
                 match state
                   (:ready next-store) (assert= store next-store)
@@ -363,6 +340,8 @@
             recollect.schema :as patch-schema
             cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
             app.workload.diff-patch :as workload
+            js-ffi.browser :as browser
+            respo.ffi.browser :refer $ narrow-element
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
@@ -404,9 +383,8 @@
                   comp-reel (:reel-length store) ({})
                   div $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'respo.schema/Component
-            :args $ [] 'Map 'app.schema/Store
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'Map 'Dynamic 'Dynamic) 'app.schema/Store
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -432,8 +410,7 @@
                   {} (:font-family ui/font-fancy) (:font-size 16)
                     :color $ hsl 0 0 50
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'respo.schema/Component
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
             :args $ [] 'Dynamic
         'comp-session-messages $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-session-messages (messages)
@@ -456,18 +433,17 @@
                     <> (:text message) nil
                 .to-list
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'respo.schema/Component
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
             :args $ [] $ :: 'Map 'String 'app.schema/MessageView
         'comp-status-color $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-status-color (color)
             div $ {} (:class-name css-status-color)
               :style $ let
                   size 24
-                {} (:width size) (:height size)
-                  :background-color color
+                {} (:width size) (:height size) (:background-color color)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'String
         'css-status-color $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-status-color
             {} $ |$0 $ {} (:position :absolute) (:bottom 60) (:left 8) (:border-radius |50%) (:opacity 0.6) (:pointer-events :none)
@@ -543,7 +519,8 @@
                         option:unwrap-or (get state :password) |
                         , false
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] $ :: 'Map 'Dynamic 'Dynamic
         'initial-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
@@ -555,13 +532,16 @@
               dispatch! $ if signup? (%:: app.schema/Op :user/sign-up username password) (%:: app.schema/Op :user/log-in username password)
               when (js-present? js/localStorage)
                 let
-                    storage $ unsafe-coerce js/localStorage 'JsObject
-                  .!setItem storage
-                    option:unwrap $ get config/site :storage-key
+                    storage $ unsafe-coerce js/localStorage 'js-ffi.browser/StorageHost
+                  storage .set-item!
+                    assert-type
+                      option:unwrap $ get config/site :storage-key
+                      , 'String
                     format-cirru-edn $ [] username password
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Fn)
             :args $ [] 'String 'String 'Bool
+            :features $ #{} :js-ffi
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.login
           :require
@@ -594,9 +574,10 @@
                     d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :profile)
                 <> $ if logged-in? |Me |Guest
                 =< 8 nil
-                <> count-members
+                <> $ str count-members
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'Bool 'Number
         'css-navigation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-navigation
             {} $ |$0 $ {} (:height 48) (:justify-content :space-between) (:padding "|0 16px") (:font-size 16)
@@ -655,9 +636,10 @@
                       , &unit
                   <> "|Log out"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'respo.schema/Component
-            :args $ [] 'app.schema/UserView 'Map
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'app.schema/UserView $ :: 'Map 'K 'V
+            :features $ #{} :js-ffi
+            :generics $ [] 'K 'V
         'css-member-label $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-member-label
             {} $ |$0 $ {} (:padding "|0 8px")
@@ -686,11 +668,7 @@
           :schema $ :: 'Dynamic
         'site $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def site
-            {} (:port 5021) (:title |Calcium)
-              :icon |https://cdn.tiye.me/logo/cumulo.png
-              :theme |#eeeeff
-              :storage-key |calcium-storage
-              :storage-file |storage.cirru
+            {} (:port 5021) (:title |Calcium) (:icon |https://cdn.tiye.me/logo/cumulo.png) (:theme |#eeeeff) (:storage-key |calcium-storage) (:storage-file |storage.cirru)
           :examples $ []
           :schema $ :: 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
@@ -720,17 +698,10 @@
           :schema $ :: 'StructDef
         'DomainOp $ %{} 'CodeEntry
           :doc "|Pure business operations accepted by the database reducer; local and server effects stay outside this enum."
-          :code $ quote $ defenum DomainOp (:session/connect)
-            :session/disconnect
-            :session/remove-message 'app.schema/RemoveMessage
-            :user/log-in 'String 'String
-            :user/sign-up 'String 'String
-            :user/log-out
-            :router/change 'app.schema/Router
+          :code $ quote $ defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router)
           :examples $ []
           :schema $ :: 'EnumDef
-        'Message $ %{} 'CodeEntry
-          :doc "|A persisted session message."
+        'Message $ %{} 'CodeEntry (:doc "|A persisted session message.")
           :code $ quote $ defstruct Message (:id 'String) (:text 'String)
           :examples $ []
           :schema $ :: 'StructDef
@@ -744,20 +715,7 @@
           :examples $ []
           :schema $ :: 'StructDef
         'Op $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum Op (:session/connect)
-            :session/disconnect
-            :session/remove-message 'app.schema/RemoveMessage
-            :user/log-in 'String 'String
-            :user/sign-up 'String 'String
-            :user/log-out
-            :router/change 'app.schema/Router
-            :effect/persist
-            :effect/ping
-            :effect/pong
-            :effect/connect
-            :reel/reset
-            :reel/merge
-            :states 'Dynamic 'Dynamic
+          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:states 'Dynamic 'Dynamic)
           :examples $ []
           :schema $ :: 'EnumDef
         'RemoveMessage $ %{} 'CodeEntry
@@ -778,14 +736,12 @@
           :schema $ :: 'StructDef
         'ServerMessage $ %{} 'CodeEntry
           :doc "|Typed synchronization and effect messages sent to a browser."
-          :code $ quote $ defenum ServerMessage
-            :snapshot 'Number 'app.schema/Store
+          :code $ quote $ defenum ServerMessage (:snapshot 'Number 'app.schema/Store)
             :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
             :effect/pong
           :examples $ []
           :schema $ :: 'EnumDef
-        'Session $ %{} 'CodeEntry
-          :doc "|A connected session in the nominal database."
+        'Session $ %{} 'CodeEntry (:doc "|A connected session in the nominal database.")
           :code $ quote $ defstruct Session
             :user-id $ :: 'Option 'String
             :id 'Number
@@ -822,8 +778,7 @@
             :color 'String
           :examples $ []
           :schema $ :: 'StructDef
-        'User $ %{} 'CodeEntry
-          :doc "|A persisted application user."
+        'User $ %{} 'CodeEntry (:doc "|A persisted application user.")
           :code $ quote $ defstruct User (:name 'String) (:id 'String)
             :nickname $ :: 'Option 'String
             :avatar $ :: 'Option 'String
@@ -885,20 +840,17 @@
             :args $ [] 'Dynamic
             :return $ :: 'Result 'app.schema/ClientMessage 'app.schema/MessageDecodeError
           :tests $ []
-            %{} 'TestEntry
-              :name |decodes-sync-control
+            %{} 'TestEntry (:name |decodes-sync-control)
               :code $ quote $ assert=
                 %:: Result :ok $ %:: ClientMessage :sync/ack 7
                 decode-client-message $ :: :sync/ack 7
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |accepts-legacy-direct-op
+            %{} 'TestEntry (:name |accepts-legacy-direct-op)
               :code $ quote $ assert=
                 %:: Result :ok $ %:: ClientMessage :dispatch $ %:: Op :effect/ping
                 decode-client-message $ %:: Op :effect/ping
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |rejects-invalid-revision
+            %{} 'TestEntry (:name |rejects-invalid-revision)
               :code $ quote $ match
                 decode-client-message $ :: :sync/active |bad
                 (:err error)
@@ -907,8 +859,7 @@
                     starts-with? detail "|Expected numeric active revision"
                 _ false
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |decodes-named-wire-operation
+            %{} 'TestEntry (:name |decodes-named-wire-operation)
               :code $ quote $ assert=
                 %:: Result :ok $ %:: ClientMessage :dispatch $ %:: Op :effect/ping
                 decode-client-message $ parse-cirru-edn "|%:: 'ClientMessage 'dispatch $ %:: 'Op 'effect/ping"
@@ -941,8 +892,7 @@
             :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
           :tests $ []
-            %{} 'TestEntry
-              :name |decodes-legacy-bare-map
+            %{} 'TestEntry (:name |decodes-legacy-bare-map)
               :code $ quote $ let
                   legacy $ {}
                     :sessions $ {} $ 1
@@ -962,11 +912,9 @@
                       assert= true $ &struct:matches?
                         option:unwrap $ get (:users db) |u1
                         , User
-                  (:err error)
-                    raise |Unexpected-decode-failure
+                  (:err error) (raise |Unexpected-decode-failure)
               :tags $ #{} :schema :server
-            %{} 'TestEntry
-              :name |rejects-corrupt-nested-message
+            %{} 'TestEntry (:name |rejects-corrupt-nested-message)
               :code $ quote $ let
                   corrupt $ {}
                     :sessions $ {} $ 1
@@ -979,8 +927,7 @@
                   %err $ %:: DatabaseDecodeError :invalid |db.sessions.1.messages.m1.text "|Expected String"
                   decode-database corrupt
               :tags $ #{} :schema :server
-            %{} 'TestEntry
-              :name |rejects-corrupt-nested-user
+            %{} 'TestEntry (:name |rejects-corrupt-nested-user)
               :code $ quote $ let
                   corrupt $ {}
                     :sessions $ {}
@@ -990,8 +937,7 @@
                   %err $ %:: DatabaseDecodeError :invalid |db.users.u1.password "|Expected String"
                   decode-database corrupt
               :tags $ #{} :schema :server
-        'decode-message $ %{} 'CodeEntry
-          :doc "|Decode and validate one stored message."
+        'decode-message $ %{} 'CodeEntry (:doc "|Decode and validate one stored message.")
           :code $ quote $ defn decode-message (data path)
             let
                 source $ if
@@ -1047,12 +993,9 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
             :generics $ [] 'T
-            :return $ :: 'Result
-              :: 'Map 'String 'app.schema/Message
-              , 'app.schema/DatabaseDecodeError
+            :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
-          :tests $ [] $ %{} 'TestEntry
-            :name |rejects-mismatched-message-key
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-message-key)
             :code $ quote $ assert=
               %err $ %:: DatabaseDecodeError :invalid |messages.m1.id "|Message id must match map key"
               decode-messages
@@ -1082,8 +1025,7 @@
                           &struct:to-map message
                           , message
                       match (get source :id)
-                        (:none)
-                          invalid-message "|Invalid remove-message id"
+                        (:none) (invalid-message "|Invalid remove-message id")
                         (:some id)
                           if (string? id)
                             %ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id id)
@@ -1128,8 +1070,7 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
             :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
-          :tests $ [] $ %{} 'TestEntry
-            :name |decodes-concrete-domain-payloads
+          :tests $ [] $ %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
             :code $ quote $ do
               assert=
                 %ok $ %:: Op :router/change $ %{} Router (:name :profile)
@@ -1139,13 +1080,11 @@
                 decode-operation $ :: :session/remove-message $ {} (:id |m1)
               match
                 decode-operation $ :: :router/change |profile
-                (:ok _)
-                  raise |Expected-invalid-router-payload
+                (:ok _) (raise |Expected-invalid-router-payload)
                 (:err _) &unit
               match
                 decode-operation $ :: :session/remove-message $ {} (:id 1)
-                (:ok _)
-                  raise |Expected-invalid-remove-message-payload
+                (:ok _) (raise |Expected-invalid-remove-message-payload)
                 (:err _) &unit
             :tags $ #{} :protocol :schema
         'decode-optional-string $ %{} 'CodeEntry
@@ -1180,8 +1119,7 @@
             :generics $ [] 'T
             :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
-        'decode-router $ %{} 'CodeEntry
-          :doc "|Decode and validate one stored route."
+        'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
                 source $ if
@@ -1222,13 +1160,11 @@
                       valid-changes? $ if (list? changes)
                         every? (unsafe-coerce changes 'List)
                           fn (change)
-                            = (enum-definition change)
-                              %some recollect.schema/change-op
+                            = (enum-definition change) (%some recollect.schema/change-op)
                         , false
                     if
                       and (number? base-revision) (number? revision) valid-changes?
-                      %:: Result :ok $ %:: ServerMessage :patch base-revision revision $ unsafe-coerce changes
-                        :: 'List 'recollect.schema/change-op
+                      %:: Result :ok $ %:: ServerMessage :patch base-revision revision $ unsafe-coerce changes (:: 'List 'recollect.schema/change-op)
                       invalid-message $ str "|Invalid patch envelope: " message
                 (:effect/pong)
                   %:: Result :ok $ %:: ServerMessage :effect/pong
@@ -1243,8 +1179,7 @@
                 %:: Result :ok $ %:: ServerMessage :effect/pong
                 decode-server-message $ :: :effect/pong
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |rejects-invalid-patch-payload
+            %{} 'TestEntry (:name |rejects-invalid-patch-payload)
               :code $ quote $ match
                 decode-server-message $ :: :patch 1 2 :bad
                 (:err error)
@@ -1253,22 +1188,17 @@
                     starts-with? detail "|Invalid patch envelope"
                 _ false
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |decodes-named-wire-pong
+            %{} 'TestEntry (:name |decodes-named-wire-pong)
               :code $ quote $ assert=
                 %:: Result :ok $ %:: ServerMessage :effect/pong
                 decode-server-message $ parse-cirru-edn "|%:: 'ServerMessage 'effect/pong"
               :tags $ #{} :client
-            %{} 'TestEntry
-              :name |validates-nominal-patch-list
+            %{} 'TestEntry (:name |validates-nominal-patch-list)
               :code $ quote $ assert=
-                %:: Result :ok $ %:: ServerMessage :patch 3 4 $ []
-                  %:: recollect.schema/change-op :replace 1
-                decode-server-message $ %:: ServerMessage :patch 3 4 $ []
-                  %:: recollect.schema/change-op :replace 1
+                %:: Result :ok $ %:: ServerMessage :patch 3 4 $ [] (%:: recollect.schema/change-op :replace 1)
+                decode-server-message $ %:: ServerMessage :patch 3 4 $ [] (%:: recollect.schema/change-op :replace 1)
               :tags $ #{} :client
-        'decode-session $ %{} 'CodeEntry
-          :doc "|Decode and deeply validate one stored session."
+        'decode-session $ %{} 'CodeEntry (:doc "|Decode and deeply validate one stored session.")
           :code $ quote $ defn decode-session (data path)
             let
                 source $ if
@@ -1338,12 +1268,9 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
             :generics $ [] 'T
-            :return $ :: 'Result
-              :: 'Map 'Number 'app.schema/Session
-              , 'app.schema/DatabaseDecodeError
+            :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
-        'decode-user $ %{} 'CodeEntry
-          :doc "|Decode and validate one stored user."
+        'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
                 source $ if
@@ -1468,15 +1395,12 @@
           :code $ quote $ defatom *initial-db
             if
               path-exists? $ w-log storage-file
-              do
-                println "|Found local EDN data"
+              do (println "|Found local EDN data")
                 match
                   read-persisted-database $ read-file storage-file
                   (:ok db) db
                   (:err error)
-                    do
-                      eprintln "|Invalid persisted database, starting empty:" error
-                      , schema/database
+                    do (eprintln "|Invalid persisted database, starting empty:" error) schema/database
               do (println "|Found no data") schema/database
           :examples $ []
           :schema $ :: 'Ref 'app.schema/Db
@@ -1496,19 +1420,7 @@
           :schema $ :: 'Dynamic
         '*sync-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *sync-metrics
-            %{} SyncMetrics
-              :last-diff-latency-ms 0
-              :last-patch-bytes 0
-              :last-snapshot-bytes 0
-              :last-visited-nodes 0
-              :last-emitted-ops 0
-              :budget-fallback-count 0
-              :pending-clients 0
-              :slow-clients 0
-              :resync-count 0
-              :patch-attempts 0
-              :snapshot-attempts 0
-              :last-revision 0
+            %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:last-snapshot-bytes 0) (:last-visited-nodes 0) (:last-emitted-ops 0) (:budget-fallback-count 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
           :examples $ []
           :schema $ :: 'Dynamic
         '*sync-retry-scheduled? $ %{} 'CodeEntry
@@ -1529,27 +1441,13 @@
           :doc "|Atomic server decision. Snapshot variants carry statistics and an optional budget reason but never partial changes."
           :code $ quote $ defenum SyncDiffPlan
             :snapshot 'recollect.diff/DiffStats $ :: 'Option 'recollect.diff/DiffBudgetReason
-            :patch
-              :: 'List 'recollect.schema/change-op
-              , 'recollect.diff/DiffStats
+            :patch (:: 'List 'recollect.schema/change-op) 'recollect.diff/DiffStats
             :idle 'recollect.diff/DiffStats
           :examples $ []
           :schema $ :: 'EnumDef
         'SyncMetrics $ %{} 'CodeEntry
           :doc "|Application-level synchronization latency, wire-byte, deterministic diff-work, budget-fallback, revision, resync, pending-client, and slow-client metrics; pending and slow fields are gauges refreshed on read."
-          :code $ quote $ defstruct SyncMetrics
-            :last-diff-latency-ms 'Number
-            :last-patch-bytes 'Number
-            :last-snapshot-bytes 'Number
-            :last-visited-nodes 'Number
-            :last-emitted-ops 'Number
-            :budget-fallback-count 'Number
-            :pending-clients 'Number
-            :slow-clients 'Number
-            :resync-count 'Number
-            :patch-attempts 'Number
-            :snapshot-attempts 'Number
-            :last-revision 'Number
+          :code $ quote $ defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
           :examples $ []
           :schema $ :: 'StructDef
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
@@ -1561,8 +1459,7 @@
                 let
                     sent-store $ option:unwrap $ get state :sent-store
                   swap! *client-caches assoc sid sent-store
-                swap! *client-states update sid $ fn (current)
-                  next-sync-ack-state current revision
+                swap! *client-states update sid $ fn (current) (next-sync-ack-state current revision)
                 when
                   >
                     option:unwrap-or (get state :dirty-rev) 0
@@ -1599,13 +1496,9 @@
                 (:session/connect)
                   dispatch-domain! (%:: schema/DomainOp :session/connect) sid op-id op-time
                 (:session/disconnect)
-                  dispatch-domain!
-                    %:: schema/DomainOp :session/disconnect
-                    , sid op-id op-time
+                  dispatch-domain! (%:: schema/DomainOp :session/disconnect) sid op-id op-time
                 (:session/remove-message data)
-                  dispatch-domain!
-                    %:: schema/DomainOp :session/remove-message data
-                    , sid op-id op-time
+                  dispatch-domain! (%:: schema/DomainOp :session/remove-message data) sid op-id op-time
                 (:user/log-in username password)
                   dispatch-domain! (%:: schema/DomainOp :user/log-in username password) sid op-id op-time
                 (:user/sign-up username password)
@@ -1614,9 +1507,7 @@
                   dispatch-domain! (%:: schema/DomainOp :user/log-out) sid op-id op-time
                 (:router/change data)
                   dispatch-domain! (%:: schema/DomainOp :router/change data) sid op-id op-time
-                _ $ do
-                  eprintln "|Ignoring client-local operation on server:" op
-                  , &unit
+                _ $ do (eprintln "|Ignoring client-local operation on server:" op) &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'app.schema/Op 'Number
@@ -1649,45 +1540,36 @@
                 = revision $ option:unwrap $ get cached :revision
                 option:unwrap $ get cached :value
                 let
-                    value $ twig-shared (reel-db reel)
-                      reel-record-count reel
+                    value $ twig-shared (reel-db reel) (reel-record-count reel)
                   reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                   , value
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.schema/SharedTwig
+          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
             :args $ [] 'cumulo-reel.core/ReelState 'Number
         'handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-client-message! (message sid)
             match message
-              (:sync/active client-revision)
-                mark-client-active! sid client-revision false
+              (:sync/active client-revision) (mark-client-active! sid client-revision false)
               (:sync/heartbeat client-revision)
                 do (touch-client! sid client-revision)
                   wss-send! sid $ format-cirru-edn $ %:: schema/ServerMessage :effect/pong
                   , &unit
-              (:sync/idle client-revision)
-                mark-client-idle! sid client-revision
+              (:sync/idle client-revision) (mark-client-idle! sid client-revision)
               (:sync/resume client-revision)
-                do (record-resync!)
-                  mark-client-active! sid client-revision true
-              (:sync/ack revision)
-                acknowledge-client! sid revision
+                do (record-resync!) (mark-client-active! sid client-revision true)
+              (:sync/ack revision) (acknowledge-client! sid revision)
               (:dispatch op) (dispatch! op sid)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'app.schema/ClientMessage 'Number
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-sync-send! (sid revision new-store outcome)
-            swap! *client-states update sid $ fn (current)
-              next-sync-send-state current revision new-store outcome
+            swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
             match outcome
               (:accepted) &unit
               (:backpressured)
-                do (swap! *dirty-clients include sid)
-                  request-sync-retry!
-              (:too-large)
-                println "|WebSocket sync payload is too large for client:" sid
+                do (swap! *dirty-clients include sid) (request-sync-retry!)
+              (:too-large) (println "|WebSocket sync payload is too large for client:" sid)
               (:closed) &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -1751,10 +1633,7 @@
                     :needs-snapshot? $ or resumed? $ option:unwrap-or (get state :needs-snapshot?) false
                 next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
               swap! *client-states assoc sid next-state
-              when resumed?
-                swap! *client-caches remove-client-cache sid
-                swap! *dirty-clients include sid
-                request-sync!
+              when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (request-sync!)
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -1800,26 +1679,20 @@
                 after-first-backpressure $ next-sync-send-state initial 4
                   {} $ :value 4
                   %:: wss.core/WssSendOutcome :backpressured
-                after-latest-backpressure $ next-sync-send-state
-                  assoc after-first-backpressure :dirty-rev 7
-                  , 7
-                    {} $ :value 7
-                    %:: wss.core/WssSendOutcome :backpressured
-                accepted-latest $ next-sync-send-state
-                  assoc after-latest-backpressure :dirty-rev 9
-                  , 9
-                    {} $ :value 9
-                    %:: wss.core/WssSendOutcome :accepted
+                after-latest-backpressure $ next-sync-send-state (assoc after-first-backpressure :dirty-rev 7) 7
+                  {} $ :value 7
+                  %:: wss.core/WssSendOutcome :backpressured
+                accepted-latest $ next-sync-send-state (assoc after-latest-backpressure :dirty-rev 9) 9
+                  {} $ :value 9
+                  %:: wss.core/WssSendOutcome :accepted
               assert=
-                {} (:status :active) (:acked-rev 9) (:dirty-rev 9) (:in-flight? false) (:needs-snapshot? false) (:slow-client? false)
-                  :last-send-outcome :accepted
+                {} (:status :active) (:acked-rev 9) (:dirty-rev 9) (:in-flight? false) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
                 next-sync-ack-state accepted-latest 9
             :tags $ #{} :server
         'next-sync-metrics $ %{} 'CodeEntry
           :doc "|Purely advance synchronization counters for one attempted snapshot or patch send."
           :code $ quote $ defn next-sync-metrics (metrics message-kind revision diff-latency payload stats budget-fallback?)
-            struct-with metrics
-              :last-diff-latency-ms diff-latency
+            struct-with metrics (:last-diff-latency-ms diff-latency)
               :last-patch-bytes $ if (= message-kind :patch) payload.utf8-byte-count $ :last-patch-bytes metrics
               :last-snapshot-bytes $ if (= message-kind :snapshot) payload.utf8-byte-count $ :last-snapshot-bytes metrics
               :last-visited-nodes $ :visited-nodes stats
@@ -1836,25 +1709,11 @@
                 :snapshot-attempts metrics
               :last-revision revision
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.server/SyncMetrics
+          :schema $ :: 'Fn $ {} (:return 'app.server/SyncMetrics)
             :args $ [] 'app.server/SyncMetrics 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
-          :tests $ [] $ %{} 'TestEntry
-            :name |advances-patch-and-snapshot-counters
+          :tests $ [] $ %{} 'TestEntry (:name |advances-patch-and-snapshot-counters)
             :code $ quote $ let
-                initial $ %{} SyncMetrics
-                  :last-diff-latency-ms 0
-                  :last-patch-bytes 0
-                  :last-snapshot-bytes 0
-                  :last-visited-nodes 0
-                  :last-emitted-ops 0
-                  :budget-fallback-count 0
-                  :pending-clients 0
-                  :slow-clients 0
-                  :resync-count 0
-                  :patch-attempts 0
-                  :snapshot-attempts 0
-                  :last-revision 0
+                initial $ %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:last-snapshot-bytes 0) (:last-visited-nodes 0) (:last-emitted-ops 0) (:budget-fallback-count 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
                 patch-stats $ %{} DiffStats (:visited-nodes 7) (:emitted-ops 3)
                 snapshot-stats $ %{} DiffStats (:visited-nodes 9) (:emitted-ops 4)
                 after-patch $ next-sync-metrics initial :patch 7 3 "|A😀" patch-stats false
@@ -1862,19 +1721,7 @@
                 after-retry $ next-sync-metrics after-fallback :snapshot 8 2 |ignored snapshot-stats true
               do
                 assert=
-                  %{} SyncMetrics
-                    :last-diff-latency-ms 2
-                    :last-patch-bytes 5
-                    :last-snapshot-bytes 7
-                    :last-visited-nodes 9
-                    :last-emitted-ops 4
-                    :budget-fallback-count 1
-                    :pending-clients 0
-                    :slow-clients 0
-                    :resync-count 0
-                    :patch-attempts 1
-                    :snapshot-attempts 1
-                    :last-revision 8
+                  %{} SyncMetrics (:last-diff-latency-ms 2) (:last-patch-bytes 5) (:last-snapshot-bytes 7) (:last-visited-nodes 9) (:last-emitted-ops 4) (:budget-fallback-count 1) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 1) (:snapshot-attempts 1) (:last-revision 8)
                   , after-fallback
                 assert= 1 $ :budget-fallback-count after-retry
                 assert= 2 $ :budget-fallback-count $ next-sync-metrics after-retry :snapshot 9 2 |ignored snapshot-stats true
@@ -1883,8 +1730,7 @@
           :code $ quote $ defn next-sync-send-state (current revision new-store outcome)
             match outcome
               (:accepted)
-                merge current $ {} (:sent-rev revision) (:sent-store new-store) (:in-flight? true) (:needs-snapshot? false) (:slow-client? false)
-                  :last-send-outcome :accepted
+                merge current $ {} (:sent-rev revision) (:sent-store new-store) (:in-flight? true) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
               (:backpressured)
                 merge current $ {}
                   :dirty-rev $ let
@@ -1893,20 +1739,17 @@
                   :slow-client? true
                   :last-send-outcome :backpressured
               (:too-large)
-                merge current $ {} (:needs-snapshot? true) (:slow-client? true)
-                  :last-send-outcome :too-large
+                merge current $ {} (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
               (:closed)
                 dissoc
-                  merge current $ {} (:status :idle) (:in-flight? false)
-                    :last-send-outcome :closed
+                  merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                   , :sent-rev :sent-store
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'C)
             :args $ [] 'C 'Number 'U 'wss.core/WssSendOutcome
             :generics $ [] 'C 'U
           :tests $ []
-            %{} 'TestEntry
-              :name |accepted-records-pending-store
+            %{} 'TestEntry (:name |accepted-records-pending-store)
               :code $ quote $ assert=
                 {} (:status :active) (:sent-rev 7)
                   :sent-store $ {} $ :value 1
@@ -1920,22 +1763,18 @@
                     {} $ :value 1
                     %:: wss.core/WssSendOutcome :accepted
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |oversized-payload-requires-snapshot
+            %{} 'TestEntry (:name |oversized-payload-requires-snapshot)
               :code $ quote $ assert=
-                {} (:status :active) (:needs-snapshot? true) (:slow-client? true)
-                  :last-send-outcome :too-large
+                {} (:status :active) (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
                 next-sync-send-state
                   {} $ :status :active
                   , 7
                     {} $ :value 1
                     %:: wss.core/WssSendOutcome :too-large
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |closed-clears-pending-send
+            %{} 'TestEntry (:name |closed-clears-pending-send)
               :code $ quote $ assert=
-                {} (:status :idle) (:in-flight? false)
-                  :last-send-outcome :closed
+                {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                 next-sync-send-state
                   {} (:status :active) (:in-flight? true) (:sent-rev 7)
                     :sent-store $ {} $ :value 1
@@ -1943,11 +1782,9 @@
                     {} $ :value 1
                     %:: wss.core/WssSendOutcome :closed
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |backpressure-preserves-latest-dirty-revision
+            %{} 'TestEntry (:name |backpressure-preserves-latest-dirty-revision)
               :code $ quote $ assert=
-                {} (:status :active) (:acked-rev 5) (:dirty-rev 7) (:slow-client? true)
-                  :last-send-outcome :backpressured
+                {} (:status :active) (:acked-rev 5) (:dirty-rev 7) (:slow-client? true) (:last-send-outcome :backpressured)
                 next-sync-send-state
                   {} (:status :active) (:acked-rev 5) (:dirty-rev 6)
                   , 7
@@ -1974,9 +1811,7 @@
                 file-content $ format-cirru-edn $ assoc (reel-db @*reel) :sessions ({})
                 storage-path storage-file
                 backup-path $ get-backup-path!
-              do
-                check-write-file! storage-path file-content
-                check-write-file! backup-path file-content
+              do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -1990,12 +1825,9 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'String
             :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
-          :tests $ [] $ %{} 'TestEntry
-            :name |rejects-malformed-cirru-edn
-            :code $ quote $ match
-              read-persisted-database "|{} (:sessions"
-              (:ok _)
-                raise |Expected-malformed-storage-error
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-cirru-edn)
+            :code $ quote $ match (read-persisted-database "|{} (:sessions")
+              (:ok _) (raise |Expected-malformed-storage-error)
               (:err _) &unit
             :tags $ #{} :schema :server
         'read-sync-metrics $ %{} 'CodeEntry
@@ -2011,8 +1843,7 @@
                     option:unwrap-or (get state :slow-client?) false
               merge @*sync-metrics $ {} (:pending-clients pending-clients) (:slow-clients slow-clients)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.server/SyncMetrics
+          :schema $ :: 'Fn $ {} (:return 'app.server/SyncMetrics)
             :args $ []
         'record-resync! $ %{} 'CodeEntry
           :doc "|Count one explicit client request for a full synchronization snapshot."
@@ -2023,8 +1854,7 @@
         'record-sync-send! $ %{} 'CodeEntry
           :doc "|Record metrics for one synchronization send attempt before transport admission."
           :code $ quote $ defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
-            swap! *sync-metrics $ fn (metrics)
-              next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
+            swap! *sync-metrics $ fn (metrics) (next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
@@ -2035,8 +1865,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'cumulo-reel.core/ReelState
-          :tests $ [] $ %{} 'TestEntry
-            :name |decodes-generic-reel-slot
+          :tests $ [] $ %{} 'TestEntry (:name |decodes-generic-reel-slot)
             :code $ quote $ let
                 reel $ struct-with reel-schema (:db schema/database) (:base schema/database)
                   :records $ []
@@ -2052,8 +1881,7 @@
             :args $ [] 'cumulo-reel.core/ReelState
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
-            if (not config/dev?)
-              raise "|reloading only happens in dev mode"
+            if (not config/dev?) (raise "|reloading only happens in dev mode")
             clear-twig-caches!
             invalidate-sync-caches!
             reset! *reel $ refresh-reel @*reel @*initial-db updater
@@ -2096,10 +1924,8 @@
         'request-sync-retry! $ %{} 'CodeEntry
           :doc "|Request one slower retry without blocking new fast sync requests."
           :code $ quote $ defn request-sync-retry! ()
-            if @*sync-retry-scheduled? &unit $ do
-              reset! *sync-retry-scheduled? true
-              set-timeout sync-retry-delay $ fn ()
-                reset! *sync-retry-scheduled? false
+            if @*sync-retry-scheduled? &unit $ do (reset! *sync-retry-scheduled? true)
+              set-timeout sync-retry-delay $ fn () (reset! *sync-retry-scheduled? false)
                 when
                   not $ empty? @*dirty-clients
                   request-sync!
@@ -2143,15 +1969,11 @@
                   (:message sid msg)
                     match
                       schema/decode-client-message $ parse-cirru-edn msg
-                      (:ok message)
-                        handle-client-message! message sid
-                      (:err error)
-                        eprintln "|Invalid client message:" sid error
+                      (:ok message) (handle-client-message! message sid)
+                      (:err error) (eprintln "|Invalid client message:" sid error)
                   (:disconnect sid)
                     do (println "|Client closed!")
-                      dispatch!
-                        %:: schema/Op :session/disconnect
-                        , sid
+                      dispatch! (%:: schema/Op :session/disconnect) sid
                       swap! *client-caches remove-client-cache sid
                       swap! *client-states dissoc sid
                       swap! *dirty-clients remove-dirty-client sid
@@ -2174,12 +1996,10 @@
                     %:: SyncDiffPlan :snapshot stats $ %none
                   true $ %:: SyncDiffPlan :patch changes stats
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.server/SyncDiffPlan
+          :schema $ :: 'Fn $ {} (:return 'app.server/SyncDiffPlan)
             :args $ [] 'recollect.diff/DiffOutcome
           :tests $ []
-            %{} 'TestEntry
-              :name |budget-exceeded-discards-partial-path
+            %{} 'TestEntry (:name |budget-exceeded-discards-partial-path)
               :code $ quote $ let
                   stats $ %{} DiffStats (:visited-nodes 3) (:emitted-ops 1)
                   reason $ %:: recollect.diff/DiffBudgetReason :visited-nodes
@@ -2205,8 +2025,7 @@
                     %:: SyncDiffPlan :snapshot stats $ %none
                     select-sync-diff large-outcome
               :tags $ #{} :server
-            %{} 'TestEntry
-              :name |real-budget-overflow-is-atomic
+            %{} 'TestEntry (:name |real-budget-overflow-is-atomic)
               :code $ quote $ let
                   budget $ %{} DiffBudget
                     :max-visited $ %some 3
@@ -2259,8 +2078,7 @@
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
         'sync-client! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn sync-client! (sid reel revision)
-            swap! *dirty-clients remove-dirty-client sid
+          :code $ quote $ defn sync-client! (sid reel revision) (swap! *dirty-clients remove-dirty-client sid)
             let
                 state $ option:unwrap $ get @*client-states sid
               when
@@ -2299,9 +2117,7 @@
                             record-sync-send! :patch revision diff-latency payload stats false
                             handle-sync-send! sid revision new-store $ wss-send! sid payload
                         (:idle _stats) &unit
-                    do
-                      eprintln |Missing-typed-session-during-sync: sid
-                      , &unit
+                    do (eprintln |Missing-typed-session-during-sync: sid) &unit
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -2426,12 +2242,10 @@
                 :count $ if logged-in? (:session-count shared) 0
                 :color $ if logged-in? |#aaa |transparent
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.schema/Store
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
             :args $ [] 'app.schema/Db 'app.schema/Session 'app.schema/SharedTwig
           :tests $ []
-            %{} 'TestEntry
-              :name |typed-store-roundtrip
+            %{} 'TestEntry (:name |typed-store-roundtrip)
               :code $ quote $ let
                   message $ %{} app.schema/Message (:id |m1) (:text |hello)
                   session-data $ %{} app.schema/Session
@@ -2455,8 +2269,7 @@
                 assert= 0 $ :count store
                 assert= |hello $ :text typed-message
               :tags $ #{} :twig :type
-            %{} 'TestEntry
-              :name |session-none-fields
+            %{} 'TestEntry (:name |session-none-fields)
               :code $ quote $ let
                   db app.schema/database
                   session-data app.schema/session
@@ -2468,8 +2281,7 @@
                 assert= (%none) (:nickname view)
                 assert= view $ parse-cirru-edn $ format-cirru-edn view
               :tags $ #{} :client :server :twig :type
-            %{} 'TestEntry
-              :name |session-some-fields
+            %{} 'TestEntry (:name |session-some-fields)
               :code $ quote $ let
                   user-data $ %{} app.schema/User (:id |u1) (:name |demo)
                     :nickname $ %none
@@ -2510,9 +2322,7 @@
               pairs-map
           :examples $ []
           :schema $ :: 'Fn $ {}
-            :args $ []
-              :: 'Map 'Number 'app.schema/Session
-              :: 'Map 'String 'app.schema/User
+            :args $ [] (:: 'Map 'Number 'app.schema/Session) (:: 'Map 'String 'app.schema/User)
             :return $ :: 'Map 'Number $ :: 'Option 'String
         'twig-shared $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-shared (db record-count)
@@ -2522,8 +2332,7 @@
               :members $ twig-members (:sessions db) (:users db)
               :session-count $ count $ :sessions db
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.schema/SharedTwig
+          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
             :args $ [] 'app.schema/Db 'Number
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.twig.container
@@ -2541,8 +2350,7 @@
               :nickname $ :nickname user-data
               :avatar $ :avatar user-data
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'app.schema/UserView
+          :schema $ :: 'Fn $ {} (:return 'app.schema/UserView)
             :args $ [] 'app.schema/User
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.twig.user
@@ -2553,10 +2361,8 @@
           :code $ quote $ defn updater (db op sid op-id op-time)
             match op
               (:session/connect) (session/connect db sid op-id op-time)
-              (:session/disconnect)
-                session/disconnect db sid op-id op-time
-              (:session/remove-message data)
-                session/remove-message db data sid op-id op-time
+              (:session/disconnect) (session/disconnect db sid op-id op-time)
+              (:session/remove-message data) (session/remove-message db data sid op-id op-time)
               (:user/log-in username password) (user/log-in db username password sid op-id op-time)
               (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
               (:user/log-out) (user/log-out db sid op-id op-time)
@@ -2566,11 +2372,7 @@
             :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.updater
-          :require
-            app.updater.session :as session
-            app.updater.user :as user
-            app.updater.router :as router
-            app.schema :as schema
+          :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
             app.schema :refer $ Op
             respo-message.updater :refer $ update-messages
     'app.updater.router $ %{} 'FileEntry
@@ -2619,8 +2421,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'app.schema/RemoveMessage 'Number 'String 'Number
-          :tests $ [] $ %{} 'TestEntry
-            :name |existing-message-map-callback
+          :tests $ [] $ %{} 'TestEntry (:name |existing-message-map-callback)
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
@@ -2679,8 +2480,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
-          :tests $ [] $ %{} 'TestEntry
-            :name |existing-session-callbacks
+          :tests $ [] $ %{} 'TestEntry (:name |existing-session-callbacks)
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
@@ -2757,8 +2557,7 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
-          :tests $ [] $ %{} 'TestEntry
-            :name |duplicate-user-message-callback
+          :tests $ [] $ %{} 'TestEntry (:name |duplicate-user-message-callback)
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
@@ -2859,8 +2658,7 @@
           :schema $ :: 'Fn $ {} (:return 'WorkloadState)
             :args $ [] 'WorkloadState 'DomainOp
           :tags $ #{} :scaffold
-        'entities-by-id $ %{} 'CodeEntry
-          :doc "|Index an entity list by its stable identifier."
+        'entities-by-id $ %{} 'CodeEntry (:doc "|Index an entity list by its stable identifier.")
           :code $ quote $ defn entities-by-id (entities)
             -> entities
               map $ fn (raw-entity)
@@ -2892,8 +2690,7 @@
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
           :tags $ #{} :scaffold
-        'make-entity $ %{} 'CodeEntry
-          :doc "|Construct one deterministic typed entity."
+        'make-entity $ %{} 'CodeEntry (:doc "|Construct one deterministic typed entity.")
           :code $ quote $ defn make-entity (seed index)
             %{} Entity
               :id $ entity-id seed index
@@ -2936,8 +2733,7 @@
           :schema $ :: 'Fn $ {} (:return 'WorkloadInput)
             :args $ [] 'Number 'Number
           :tags $ #{} :scaffold
-          :tests $ [] $ %{} 'TestEntry
-            :name |deterministic-shape
+          :tests $ [] $ %{} 'TestEntry (:name |deterministic-shape)
             :code $ quote $ let
                 input-data $ make-workload-input 4 794
                 base-state $ :base input-data
@@ -2970,8 +2766,7 @@
           :schema $ :: 'Fn $ {} (:return 'WorkloadState)
             :args $ [] 'WorkloadState $ :: 'List 'DomainOp
           :tags $ #{} :scaffold
-          :tests $ [] $ %{} 'TestEntry
-            :name |deterministic-replay
+          :tests $ [] $ %{} 'TestEntry (:name |deterministic-replay)
             :code $ quote $ let
                 input-data $ make-workload-input 4 794
                 final-state $ replay-domain-ops (:base input-data) (:ops input-data)
@@ -2995,10 +2790,7 @@
           :code $ quote $ defn workload-view (store)
             div
               {} $ :class-name |workload-root
-              input $ {}
-                :id |workload-focus-probe
-                :value |focus-probe
-                :ref workload-ref!
+              input $ {} (:id |workload-focus-probe) (:value |focus-probe) (:ref workload-ref!)
                 :on-input $ fn (_event _dispatch!) &unit
               list->
                 {} $ :class-name |workload-rows
@@ -3011,8 +2803,7 @@
                           :data-name $ :id entity
                           :inner-text $ str (:rank entity) |: $ :label entity
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :return 'respo.schema/Element
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Element)
             :args $ [] 'WorkloadStore
           :tags $ #{} :scaffold
       :ns $ %{} 'NsEntry (:doc |)
