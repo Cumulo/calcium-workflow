@@ -244,7 +244,8 @@
           :code $ quote $ defn on-states-change! (states prev) (render-app!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] (:: 'Map 'Dynamic 'Dynamic) (:: 'Map 'Dynamic 'Dynamic)
+            :args $ [] 'Current 'Previous
+            :generics $ [] 'Current 'Previous
         'on-store-change! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-store-change! (store prev) (render-app!)
           :examples $ []
@@ -2459,12 +2460,55 @@
                   do (reel-record-count corrupt) false
                   fn (detail) (includes? detail |list)
               :tags $ #{} :server
+        'refresh-domain-reel $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn refresh-domain-reel (reel base replay-updater)
+            let
+                next-base $ if (:merged? reel)
+                  match
+                    schema/decode-database $ :base reel
+                    (:ok validated) validated
+                    (:err error)
+                      raise $ str |Invalid-reel-base: error
+                  , base
+                next-db $ cumulo-reel.core/play-records next-base (:records reel) replay-updater
+              struct-with reel (:base next-base) (:db next-db)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'cumulo-reel.core/ReelState)
+            :args $ [] 'cumulo-reel.core/ReelState 'app.schema/Db $ :: 'Fn
+              {} (:return 'app.schema/Db)
+                :args $ [] 'app.schema/Db 'Operation 'Sid 'OpId 'Number
+            :generics $ [] 'Operation 'Sid 'OpId
+          :tests $ []
+            %{} 'TestEntry (:name |rejects-invalid-merged-base)
+              :code $ quote $ assert= true
+                try
+                  do
+                    refresh-domain-reel
+                      %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                        :records $ []
+                        :merged? true
+                      , schema/database updater-from-reel
+                    , false
+                  fn (error) (starts-with? error |Invalid-reel-base:)
+              :tags $ #{} :server
+            %{} 'TestEntry (:name |fresh-base-ignores-unmerged-old-base)
+              :code $ quote $ let
+                  base schema/database
+                  reel $ %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                    :records $ []
+                    :merged? false
+                  refreshed $ refresh-domain-reel reel base updater-from-reel
+                assert= base $ :base refreshed
+                assert= base $ :db refreshed
+                assert= ([]) (:records refreshed)
+                assert= false $ :merged? refreshed
+              :tags $ #{} :server
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
             if (not config/dev?) (raise "|reloading only happens in dev mode")
             clear-twig-caches!
             invalidate-sync-caches!
-            reset! *reel $ refresh-reel @*reel @*initial-db updater-from-reel
+            reset! *reel $ refresh-domain-reel @*reel @*initial-db updater-from-reel
             render-loop!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -2804,7 +2848,7 @@
                     []
                       :: :router/change $ {} $ :name :profile
                       , 1 |op-2 20
-                  replayed $ refresh-reel (assoc reel :records records) base updater-from-reel
+                  replayed $ refresh-domain-reel (assoc reel :records records) base updater-from-reel
                 assert= expected $ :db replayed
                 assert= records $ :records replayed
               :tags $ #{} :server
@@ -2825,7 +2869,7 @@
                     raise |Updater-must-not-run
                   reset $ reel-reducer updated control-updater (schema/Op :reel/reset) 1 |reset 20 true
                   merged $ reel-reducer updated control-updater (schema/Op :reel/merge) 1 |merge 30 true
-                  refreshed $ refresh-reel merged base updater-from-reel
+                  refreshed $ refresh-domain-reel merged base updater-from-reel
                 assert= base $ :db reset
                 assert= ([]) (:records reset)
                 assert= (:db updated) (:base merged)
@@ -2844,7 +2888,7 @@
                   records $ [] $ [] (:: :effect/persist) 1 |op-1 10
                 assert= true $ try
                   do
-                    refresh-reel (assoc reel :records records) base updater-from-reel
+                    refresh-domain-reel (assoc reel :records records) base updater-from-reel
                     , false
                   fn (detail) (includes? detail |Invalid-reel-operation:)
               :tags $ #{} :server
@@ -2859,7 +2903,7 @@
                   records $ [] $ [] (:: :session/connect) |not-a-number |op-1 10
                 assert= true $ try
                   do
-                    refresh-reel (assoc reel :records records) base updater-from-reel
+                    refresh-domain-reel (assoc reel :records records) base updater-from-reel
                     , false
                   fn (detail) (includes? detail "|expected number, got string")
               :tags $ #{} :server
