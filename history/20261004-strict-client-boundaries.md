@@ -23,9 +23,12 @@ Node 测试入口只为 bottom-tip 0.1.5 的 `virtual-dom/create-element` 导入
 | 候选 0.29.0-alpha.1 全部原生附属测试 | 72/72 |
 | 正式编译器新生成 JS 的五组客户端回归 | 通过 |
 | Node 24 + Vite 8 生产构建 | 通过 |
+| 确定性 diff/patch workload smoke | 通过，包含 EDN 往返与错误基线收敛反例 |
 | 项目废弃调用 | 0 |
 | 项目 unsafe-coerce | 2，原预算 15 |
 | 原质量基线 | 失败：45 项逐定义回归，未放宽预算 |
+
+workload 原先调用旧 `patch-twig`，在 Struct 更新时失败。现在使用生产客户端同一验证 API `try-patch-twig`，显式断言成功结果，并为 EDN 解析传入类型映射。0.28 parser 的 Struct 映射要求代表值，因此取实际 workload 初始 store 和 Entity；保留编码、解码、收敛及错误基线反例检查。
 
 严格入口与 JS 回归依赖本地迁移模块覆盖。它们证明当前源码组合的行为，不证明 `caps --strict --ci` 能从现有发布版本重建该组合。
 

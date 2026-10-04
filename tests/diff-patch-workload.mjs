@@ -7,7 +7,7 @@ import { performance } from "node:perf_hooks";
 
 import * as calcit from "../js-out/calcit.core.mjs";
 import { DiffBudget, diff_twig_budgeted } from "../js-out/recollect.diff.mjs";
-import { patch_twig, try_patch_twig } from "../js-out/recollect.patch.mjs";
+import { try_patch_twig } from "../js-out/recollect.patch.mjs";
 import { change_op } from "../js-out/recollect.schema.mjs";
 import {
   apply_domain_op,
@@ -38,6 +38,7 @@ const diffBudget = calcit._$n__PCT__$M_(
   calcit._PCT_some(80_000),
 );
 const patchTags = calcit.init_tags(["pick", "missing"]);
+const wireTags = calcit.init_tags(["Entity", "WorkloadStore", "Option", "change-op"]);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const elapsed = (started) => (performance.now() - started) * 1_000;
 const equal = (left, right) => calcit._$n__$e_(left, right);
@@ -74,6 +75,14 @@ function runSequence(size, measured, captureEvidence = false) {
   const operations = listValues(field(input, "ops"));
   let state = field(input, "base");
   let clientStore = project_state(state);
+  // The 0.28 parser restores Struct identity from a representative value.
+  // Use actual workload values with the same field shape as the wire payload.
+  const classMapper = calcit._$n__$M_(
+    wireTags.Entity, listValues(field(clientStore, "rows"))[0],
+    wireTags.WorkloadStore, clientStore,
+    wireTags.Option, calcit.Option,
+    wireTags["change-op"], change_op,
+  );
   const cases = [];
 
   for (const operation of operations) {
@@ -87,8 +96,12 @@ function runSequence(size, measured, captureEvidence = false) {
     const changes = outcome.extra[0];
     const diffWork = outcome.extra[1];
     const encoded = timeStage(samples, "encode", () => calcit.format_cirru_edn(changes));
-    const decoded = timeStage(samples, "decode", () => calcit.parse_cirru_edn(encoded));
-    const patchedStore = timeStage(samples, "apply", () => patch_twig(clientStore, decoded));
+    const decoded = timeStage(samples, "decode", () => calcit.parse_cirru_edn(encoded, classMapper));
+    const patchedStore = timeStage(samples, "apply", () => {
+      const result = try_patch_twig(clientStore, decoded);
+      assert.equal(enumTag(result), "ok", `${caseName}: validated patch rejected`);
+      return result.extra[0];
+    });
     assertConverged(patchedStore, freshStore, caseName);
     if (caseName === "noop") {
       assert.equal(listValues(changes).length, 0, "no-op must emit no data patch");
@@ -216,7 +229,9 @@ function verifyProtocolFailures(size) {
 
   const foreign = make_workload_input(size, seed + 99);
   const foreignStore = project_state(field(foreign, "base"));
-  const corruptCandidate = patch_twig(foreignStore, envelopes[1].changes);
+  const corruptResult = try_patch_twig(foreignStore, envelopes[1].changes);
+  assert.equal(enumTag(corruptResult), "ok", "corrupt baseline probe should produce a comparable store");
+  const corruptCandidate = corruptResult.extra[0];
   assert.throws(
     () => assertConverged(corruptCandidate, envelopes[1].expected, "corrupt patch oracle"),
     /diverged/,
