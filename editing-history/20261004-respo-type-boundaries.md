@@ -172,3 +172,24 @@ snapshot 接收路径已改用 decode-store；移除其中一处 unsafe-coerce�
 - 正式完整客户端严格检查与 JS 生成通过。配套正式 procs 的 client-patch Node 回归验证实际 JS decoder 拒绝损坏的标量、嵌套 Option、非法 Option tag 与 snapshot；原来的 patch 原子拒绝和 revision 回归继续通过。
 
 日志：`/private/tmp/calcium-194-store-decoder-{native,candidate-native}.log`、`/private/tmp/calcium-194-decode-store-{formal,candidate}.log`、`/private/tmp/calcium-194-store-client-{check,js}.log`、`/private/tmp/calcium-194-store-js-replay.log`。下一步需在真正的 patch 结果边界使用已验证 Store，迁移 Recollect 的开放 PatchResult 合同，继续保持原子拒绝与 revision 行为。
+
+## 第八阶段：开放 patch 结果与状态发布
+
+Recollect 声明升级到 0.0.53；当前工作区的忽略链接指向匹配 tag 的缓存 b7da3695110d65a30a4d7f69f150cf7fbc1c3d54，未编辑缓存。PatchBatch .apply-to 的成功 payload 为 Dynamic，不再借用旧版本不成立的泛型承诺。
+
+validate-server-patch 保留 T 基线与 Result<T,ClientPatchError>，新增必填 decoder 参数，合同为 Dynamic → Result<T,String>。T 的返回证据来自 decoder；生产调用传入 schema/decode-store。旧的 Map 测试传入 Map<Tag,Number> 的 checked decoder，新增 Number 基线被 String 替换时拒绝的测试，因此没有将 helper 缩成只支持 Store，也没有把调用方结果扩大为 Dynamic。此内部函数现在必须提供第五个参数，唯一生产调用及测试均已迁移。
+
+ClientPatchError 增加 invalid-result String，和 patch 执行错误分别保留诊断。apply-server-patch! 只有在 decoder 成功后才重置 ClientState、更新 sync-revision 并 ack；失败继续 request-snapshot!，不发布中间值。revision mismatch 仍在执行 batch/decoder 前返回。
+
+新增类型改变、非法第二条操作结果、嵌套 session.id 损坏和泛型 Number decoder 回归。Store 与 snapshot 的拒绝测试也改为显式 assert= true，保证匹配失败或字段路径错误会导致测试失败；修正了 Number decoder 测试中原先猜错的错误文本。
+
+实际生成 JS 的 client-patch 回归现在使用 nominal Store，并通过可控 socket factory 调用真正的 apply-server-patch!。验证 root 被 String 替换、先改 count 再损坏 color、嵌套 Option 损坏时状态对象身份与 revision 均不变，只发送一次 sync/resume；合法 patch 更新 count/revision，发送一次 sync/ack；随后旧 base revision 的 patch 仍拒绝，resume 使用当前 revision。没有网络连接。
+
+验证范围：
+
+- 正式 0.28.0 与候选 0.29.0-alpha.1 的完整客户端 main!/reload! 严格检查均通过；两者实际完整 JS 生成通过。
+- 正式全部 51/51 附带测试通过；候选 patch helper 8/8 和 Store decoder 8/8 通过。
+- 两份 JS 分别配套正式 procs 0.28.0 与候选源码 runtime，patch 发布、decoder 拒绝、旧 dispatch、生命周期 cleanup 和三页 SSR 回归均通过。产物保留在 /private/tmp，未入库。
+- 候选完整附带测试为 48 passed / 3 failed：decode-database 的 fold Result 类型、next-sync-send-state/next-sync-ack-state 的泛型返回、reel-record-count 的 Countable 证据仍待迁移。这些服务端问题没有被兼容参数或强转绕过，不能称为完整候选下游通过。
+
+日志：`/private/tmp/calcium-194-open-patch-{formal,candidate,native,candidate-tests,candidate-decoder,candidate-all,js,candidate-js,replay,candidate-replay,ssr,candidate-ssr}.log`。依赖发布对齐、真实浏览器交互与 issue/PR 交付仍未完成，milestone 保持进行中。

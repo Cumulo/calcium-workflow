@@ -44,7 +44,7 @@
           :schema $ :: 'Ref $ :: 'Option 'ws-edn.client/WsClient
         'ClientPatchError $ %{} 'CodeEntry
           :doc "|Client-side reason for rejecting a revisioned patch before requesting a full snapshot."
-          :code $ quote $ defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError)
+          :code $ quote $ defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError) (:invalid-result 'String)
           :examples $ []
           :schema $ :: 'EnumDef
         'ClientState $ %{} 'CodeEntry (:doc |)
@@ -74,7 +74,7 @@
           :code $ quote $ defn apply-server-patch! (base-revision revision changes)
             match @*store
               (:ready store)
-                match (validate-server-patch store @*sync-revision base-revision changes)
+                match (validate-server-patch store @*sync-revision base-revision changes schema/decode-store)
                   (:ok next-store)
                     do
                       reset! *store $ ClientState :ready next-store
@@ -86,6 +86,7 @@
                         (:revision-mismatch expected actual) (js/console.warn |Sync-revision-mismatch expected actual)
                         (:invalid-patch patch-error)
                           js/console.error |Failed-to-apply-server-patch $ patch-error-message patch-error
+                        (:invalid-result detail) (js/console.error |Invalid-patched-store detail)
                       request-snapshot!
               (:loading) (request-snapshot!)
               (:offline) (request-snapshot!)
@@ -326,44 +327,66 @@
             :return $ :: 'Option $ :: 'List 'String
         'validate-server-patch $ %{} 'CodeEntry
           :doc "|Validate base revision and apply one patch batch without mutating client state."
-          :code $ quote $ defn validate-server-patch (store local-revision base-revision changes)
+          :code $ quote $ defn validate-server-patch (store local-revision base-revision changes decode-result)
             if (= base-revision local-revision)
               match
                 .apply-to (patch-batch changes) store
-                (:ok next-store) (%ok next-store)
+                (:ok next-store)
+                  match (decode-result next-store)
+                    (:ok validated) (%ok validated)
+                    (:err detail)
+                      %err $ ClientPatchError :invalid-result detail
                 (:err error)
-                  %err $ %:: ClientPatchError :invalid-patch error
-              %err $ %:: ClientPatchError :revision-mismatch base-revision local-revision
+                  %err $ ClientPatchError :invalid-patch error
+              %err $ ClientPatchError :revision-mismatch base-revision local-revision
           :examples $ []
           :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'Number 'Number $ :: 'List 'recollect.schema/change-op
+            :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
+              :: 'Fn $ {}
+                :args $ [] 'Dynamic
+                :return $ :: 'Result 'T 'String
             :generics $ [] 'T
             :return $ :: 'Result 'T 'app.client/ClientPatchError
           :tests $ []
             %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
               :code $ quote $ let
+                  decode-result $ fn (value)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :value 1
                   changes $ [] $ %:: patch-schema/change-op :assoc :value 2
                 assert=
                   %ok $ {} $ :value 2
-                  validate-server-patch store 7 7 changes
+                  validate-server-patch store 7 7 changes decode-result
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-revision-mismatch)
               :code $ quote $ let
+                  decode-result $ fn (value)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :value 1
                   changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
                 assert=
-                  %err $ %:: ClientPatchError :revision-mismatch 8 7
-                  validate-server-patch store 7 8 changes
+                  %err $ ClientPatchError :revision-mismatch 8 7
+                  validate-server-patch store 7 8 changes decode-result
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-patch-atomically)
               :code $ quote $ let
+                  decode-result $ fn (value)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :stable 1
                   changes $ [] (%:: patch-schema/change-op :assoc :temporary 2)
                     %:: patch-schema/change-op :update :missing $ %:: patch-schema/change-op :replace 3
-                  expected $ %err $ %:: ClientPatchError :invalid-patch
-                    %:: PatchError :missing-node $ [] $ %:: PatchPathSegment :field :missing
-                assert= expected $ validate-server-patch store 9 9 changes
+                  expected $ %err $ ClientPatchError :invalid-patch
+                    PatchError :missing-node $ [] $ PatchPathSegment :field :missing
+                assert= expected $ validate-server-patch store 9 9 changes decode-result
                 assert=
                   {} $ :stable 1
                   , store
@@ -373,14 +396,72 @@
                   db app.schema/database
                   shared $ app.twig.container/twig-shared db 0
                   store $ app.twig.container/twig-container db app.schema/session shared
-                  state $ match
-                    validate-server-patch store 7 7 $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
+                  changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
+                  state $ match (validate-server-patch store 7 7 changes app.schema/decode-store)
                     (:ok next-store) (ClientState :ready next-store)
                     (:err error) (raise |Unexpected-patch-error)
                 assert= (ClientState :ready store) state
                 match state
                   (:ready next-store) (assert= store next-store)
                   _ $ raise |Expected-ready-state
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-type-changing-replacement)
+              :code $ quote $ assert= true
+                let
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                    changes $ [] $ patch-schema/change-op :replace |not-a-store
+                  match (validate-server-patch store 9 9 changes app.schema/decode-store)
+                    (:err error)
+                      match error
+                        (:invalid-result detail) (= detail |Expected-nominal-Store)
+                        _ false
+                    _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-result-atomically)
+              :code $ quote $ let
+                  db app.schema/database
+                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  original-count $ :count store
+                  original-color $ :color store
+                  changes $ [] (patch-schema/change-op :assoc :count 2) (patch-schema/change-op :assoc :color 42)
+                assert= true $ match (validate-server-patch store 9 9 changes app.schema/decode-store)
+                  (:err error)
+                    match error
+                      (:invalid-result detail) (includes? detail |$.color)
+                      _ false
+                  _ false
+                assert= original-count $ :count store
+                assert= original-color $ :color store
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-nested-patch)
+              :code $ quote $ assert= true
+                let
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                    changes $ [] $ patch-schema/change-op :update :session
+                      patch-schema/change-op :assoc :id $ %some |not-a-number
+                  match (validate-server-patch store 9 9 changes app.schema/decode-store)
+                    (:err error)
+                      match error
+                        (:invalid-result detail) (includes? detail |$.session.id)
+                        _ false
+                    _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |checks-generic-scalar-result)
+              :code $ quote $ let
+                  decode-number $ fn (value)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return $ :: 'Result 'Number 'String
+                    try-decode-map-as value 'Number
+                  changes $ [] $ patch-schema/change-op :replace |different-type
+                assert= true $ match (validate-server-patch 1 9 9 changes decode-number)
+                  (:err error)
+                    match error
+                      (:invalid-result detail) (includes? detail "|expected number, got string")
+                      _ false
+                  _ false
               :tags $ #{} :client
         'workload-entry! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn workload-entry! () (workload/main!)
@@ -1276,20 +1357,21 @@
                   decode-server-message $ :: :snapshot 7 store
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-nominal-store-snapshot)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+              :code $ quote $ assert= true
                 let
-                    bad-session $ &struct:assoc (:session store) :id $ %some
-                      parse-cirru-edn $ format-cirru-edn |not-a-number
-                    corrupt $ &struct:assoc store :session bad-session
-                  match
-                    decode-server-message $ :: :snapshot 7 corrupt
-                    (:err error)
-                      match error $
-                        :invalid detail
-                        includes? detail |$.session.id
-                    _ false
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  let
+                      bad-session $ &struct:assoc (:session store) :id $ %some
+                        parse-cirru-edn $ format-cirru-edn |not-a-number
+                      corrupt $ &struct:assoc store :session bad-session
+                    match
+                      decode-server-message $ :: :snapshot 7 corrupt
+                      (:err error)
+                        match error $
+                          :invalid detail
+                          includes? detail |$.session.id
+                      _ false
               :tags $ #{} :client
         'decode-session $ %{} 'CodeEntry (:doc "|Decode and deeply validate one stored session.")
           :code $ quote $ defn decode-session (data path)
@@ -1384,34 +1466,37 @@
               :code $ quote $ assert= (%err |Expected-nominal-Store) (decode-store |wrong-root)
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-scalar-field)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                match
-                  decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
-                  (:err detail) (includes? detail |$.count)
-                  _ false
-              :tags $ #{} :client
-            %{} 'TestEntry (:name |rejects-invalid-nested-field)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+              :code $ quote $ assert= true
                 let
-                    bad-session $ &struct:assoc (:session store) :id $ %some
-                      parse-cirru-edn $ format-cirru-edn |not-a-number
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                   match
-                    decode-store $ &struct:assoc store :session bad-session
-                    (:err detail) (includes? detail |$.session.id)
+                    decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
+                    (:err detail) (includes? detail |$.count)
                     _ false
               :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-invalid-nested-field)
+              :code $ quote $ assert= true
+                let
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  let
+                      bad-session $ &struct:assoc (:session store) :id $ %some
+                        parse-cirru-edn $ format-cirru-edn |not-a-number
+                    match
+                      decode-store $ &struct:assoc store :session bad-session
+                      (:err detail) (includes? detail |$.session.id)
+                      _ false
+              :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-optional-user)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                match
-                  decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
-                  (:err detail) (includes? detail |$.user)
-                  _ false
+              :code $ quote $ assert= true
+                let
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  match
+                    decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
+                    (:err detail) (includes? detail |$.user)
+                    _ false
               :tags $ #{} :client
             %{} 'TestEntry (:name |preserves-open-router-payload)
               :code $ quote $ let
@@ -1428,31 +1513,33 @@
                   assert= (%ok updated) (decode-store updated)
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-message-field)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+              :code $ quote $ assert= true
                 let
-                    message $ %{} MessageView (:id |m1) (:text |valid)
-                    bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
-                    bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
-                  match
-                    decode-store $ &struct:assoc store :session bad-session
-                    (:err detail) (includes? detail |$.session.messages)
-                    _ false
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  let
+                      message $ %{} MessageView (:id |m1) (:text |valid)
+                      bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
+                      bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
+                    match
+                      decode-store $ &struct:assoc store :session bad-session
+                      (:err detail) (includes? detail |$.session.messages)
+                      _ false
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-present-user)
-              :code $ quote $ let
-                  db app.schema/database
-                  store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+              :code $ quote $ assert= true
                 let
-                    user $ %{} UserView (:name |name) (:id |id)
-                      :nickname $ %none
-                      :avatar $ %none
-                    bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
-                  match
-                    decode-store $ &struct:assoc store :user $ %some bad-user
-                    (:err detail) (includes? detail |$.user.id)
-                    _ false
+                    db app.schema/database
+                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                  let
+                      user $ %{} UserView (:name |name) (:id |id)
+                        :nickname $ %none
+                        :avatar $ %none
+                      bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
+                    match
+                      decode-store $ &struct:assoc store :user $ %some bad-user
+                      (:err detail) (includes? detail |$.user.id)
+                      _ false
               :tags $ #{} :client
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
