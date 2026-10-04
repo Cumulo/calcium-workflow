@@ -41,22 +41,28 @@ jobs:
           caps verify --toolchain
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
-          calcit --compat-types calcit.cirru --check-only
-          calcit --compat-types calcit.cirru analyze dynamic-methods --max 1
-          calcit --compat-types calcit.cirru --entry server --check-only
-          calcit --compat-types calcit.cirru --entry server analyze dynamic-methods --max 1
-          calcit --compat-types calcit.cirru analyze deprecated --summary-only --format json \
+          calcit calcit.cirru --check-only
+          calcit calcit.cirru analyze dynamic-methods --max 1
+          calcit calcit.cirru --entry server --check-only
+          calcit calcit.cirru --entry server analyze dynamic-methods --max 1
+          calcit calcit.cirru analyze deprecated --summary-only --format json \
             | jq -e '.data.summary.calls == 0' > /dev/null
-          calcit --compat-types calcit.cirru --entry server analyze deprecated --summary-only --format json \
+          calcit calcit.cirru --entry server analyze deprecated --summary-only --format json \
             | jq -e '.data.summary.calls == 0' > /dev/null
-          calcit --compat-types calcit.cirru test --tag client --require-match --summary-only --format json
-          calcit --compat-types calcit.cirru --entry server test --tag server --require-match --summary-only --format json
-          calcit --compat-types calcit.cirru analyze quality --baseline config/calcit-quality.cirru
+          calcit calcit.cirru test --tag client --require-match --summary-only --format json
+          calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
+          calcit calcit.cirru analyze quality --baseline config/calcit-quality.cirru
 
       - run: yarn compile-page && yarn release-page
 
       - name: Verify Session and User Option projections in generated JS
         run: yarn node tests/session-option.mjs
+
+      - name: Verify client publication, dispatch and browser boundaries
+        run: |
+          for test_file in client-patch respo-client-boundaries mount-boundary stored-login connection-url; do
+            yarn node --import ./tests/register-node-resolution.mjs "tests/$test_file.mjs"
+          done
 
       - name: Verify deterministic diff and patch workload
         run: yarn node tests/diff-patch-workload.mjs --mode smoke

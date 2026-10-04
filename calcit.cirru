@@ -16,7 +16,7 @@
       :defs $ {}
         '*activity-cleanup $ %{} 'CodeEntry
           :doc "|Cleanup capability for Calcium application-level browser activity signals."
-          :code $ quote $ defatom *activity-cleanup (%none)
+          :code $ quote $ defatom *activity-cleanup (Option :none)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Option 'Fn
         '*connected? $ %{} 'CodeEntry (:doc |)
@@ -39,7 +39,7 @@
           :schema $ :: 'Dynamic
         '*ws-client $ %{} 'CodeEntry
           :doc "|Current nominal ws-edn client, retained across browser recovery events."
-          :code $ quote $ defatom *ws-client (%none)
+          :code $ quote $ defatom *ws-client (Option :none)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Option 'ws-edn.client/WsClient
         'ClientPatchError $ %{} 'CodeEntry
@@ -101,7 +101,7 @@
               match @*activity-cleanup
                 (:some cleanup) (cleanup)
                 (:none) &unit
-              reset! *activity-cleanup $ %none
+              reset! *activity-cleanup $ Option :none
               , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -111,7 +111,7 @@
             let
                 url $ connection-url
               reset! *store $ ClientState :loading
-              reset! *ws-client $ %some $ ws-connect! url
+              reset! *ws-client $ Option :some $ ws-connect! url
                 {}
                   :on-open $ fn (event)
                     do (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
@@ -156,7 +156,7 @@
                 match
                   schema/decode-operation $ :: op op-data
                   (:ok normalized-op)
-                    recur normalized-op $ %none
+                    recur normalized-op $ Option :none
                   (:err error)
                     raise $ str |Invalid-legacy-operation: error
                 match op
@@ -193,8 +193,8 @@
                           when @*connected? $ ws-send! $ schema/ClientMessage :sync/heartbeat @*sync-revision
                         true &unit
                       , &unit
-                    %some 30000
-                reset! *activity-cleanup $ %some cleanup
+                    Option :some 30000
+                reset! *activity-cleanup $ Option :some cleanup
                 , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -317,9 +317,9 @@
                   , String
               match
                 js-nullish->option $ storage .get-item key
-                (:none) (%none)
+                (:none) (Option :none)
                 (:some raw)
-                  %some $ parse-cirru-edn-as raw $ :: 'List 'String
+                  Option :some $ parse-cirru-edn-as raw $ :: 'List 'String
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ []
@@ -333,12 +333,12 @@
                 .apply-to (patch-batch changes) store
                 (:ok next-store)
                   match (decode-result next-store)
-                    (:ok validated) (%ok validated)
+                    (:ok validated) (Result :ok validated)
                     (:err detail)
-                      %err $ ClientPatchError :invalid-result detail
+                      Result :err $ ClientPatchError :invalid-result detail
                 (:err error)
-                  %err $ ClientPatchError :invalid-patch error
-              %err $ ClientPatchError :revision-mismatch base-revision local-revision
+                  Result :err $ ClientPatchError :invalid-patch error
+              Result :err $ ClientPatchError :revision-mismatch base-revision local-revision
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
@@ -358,7 +358,7 @@
                   store $ {} $ :value 1
                   changes $ [] $ %:: patch-schema/change-op :assoc :value 2
                 assert=
-                  %ok $ {} $ :value 2
+                  Result :ok $ {} $ :value 2
                   validate-server-patch store 7 7 changes decode-result
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-revision-mismatch)
@@ -371,7 +371,7 @@
                   store $ {} $ :value 1
                   changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
                 assert=
-                  %err $ ClientPatchError :revision-mismatch 8 7
+                  Result :err $ ClientPatchError :revision-mismatch 8 7
                   validate-server-patch store 7 8 changes decode-result
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-patch-atomically)
@@ -384,7 +384,7 @@
                   store $ {} $ :stable 1
                   changes $ [] (%:: patch-schema/change-op :assoc :temporary 2)
                     %:: patch-schema/change-op :update :missing $ %:: patch-schema/change-op :replace 3
-                  expected $ %err $ ClientPatchError :invalid-patch
+                  expected $ Result :err $ ClientPatchError :invalid-patch
                     PatchError :missing-node $ [] $ PatchPathSegment :field :missing
                 assert= expected $ validate-server-patch store 9 9 changes decode-result
                 assert=
@@ -440,7 +440,7 @@
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                     changes $ [] $ patch-schema/change-op :update :session
-                      patch-schema/change-op :assoc :id $ %some |not-a-number
+                      patch-schema/change-op :assoc :id $ Option :some |not-a-number
                   match (validate-server-patch store 9 9 changes app.schema/decode-store)
                     (:err error)
                       match error
@@ -481,7 +481,7 @@
             recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment
             |url-parse :default url-parse
             |bottom-tip :default hud!
-            |./calcit.build-errors :default client-errors
+            |./calcit.build-errors.mjs :default client-errors
             recollect.schema :as patch-schema
             cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
             app.workload.diff-patch :as workload
@@ -1024,13 +1024,13 @@
                     sessions-data $ option:unwrap-or (get source :sessions) ({})
                     users-data $ option:unwrap-or (get source :users) ({})
                   match (decode-sessions sessions-data |db.sessions)
-                    (:err error) (%err error)
+                    (:err error) (Result :err error)
                     (:ok sessions)
                       match (decode-users users-data |db.users)
-                        (:err error) (%err error)
+                        (:err error) (Result :err error)
                         (:ok users)
-                          %ok $ %{} Db (:sessions sessions) (:users users)
-                %err $ %:: DatabaseDecodeError :invalid |db "|Expected database map or struct"
+                          Result :ok $ %{} Db (:sessions sessions) (:users users)
+                Result :err $ %:: DatabaseDecodeError :invalid |db "|Expected database map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T
@@ -1070,7 +1070,7 @@
                           {} (:id |m1) (:text 42)
                     :users $ {}
                 assert=
-                  %err $ %:: DatabaseDecodeError :invalid |db.sessions.1.messages.m1.text "|Expected String"
+                  Result :err $ %:: DatabaseDecodeError :invalid |db.sessions.1.messages.m1.text "|Expected String"
                   decode-database corrupt
               :tags $ #{} :schema :server
             %{} 'TestEntry (:name |rejects-corrupt-nested-user)
@@ -1080,35 +1080,35 @@
                     :users $ {} $ |u1
                       {} (:id |u1) (:name |demo) (:password 42)
                 assert=
-                  %err $ %:: DatabaseDecodeError :invalid |db.users.u1.password "|Expected String"
+                  Result :err $ %:: DatabaseDecodeError :invalid |db.users.u1.password "|Expected String"
                   decode-database corrupt
               :tags $ #{} :schema :server
             %{} 'TestEntry (:name |rejects-non-database-value)
               :code $ quote $ assert=
-                %err $ DatabaseDecodeError :invalid |db "|Expected database map or struct"
+                Result :err $ DatabaseDecodeError :invalid |db "|Expected database map or struct"
                 decode-database 42
               :tags $ #{} :server
         'decode-domain-operation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-domain-operation (data)
             if (enum? data)
               match (decode-operation data)
-                (:err error) (%err error)
+                (:err error) (Result :err error)
                 (:ok op)
                   match op
                     (:session/connect)
-                      %ok $ DomainOp :session/connect
+                      Result :ok $ DomainOp :session/connect
                     (:session/disconnect)
-                      %ok $ DomainOp :session/disconnect
+                      Result :ok $ DomainOp :session/disconnect
                     (:session/remove-message message)
-                      %ok $ DomainOp :session/remove-message message
+                      Result :ok $ DomainOp :session/remove-message message
                     (:user/log-in username password)
-                      %ok $ DomainOp :user/log-in username password
+                      Result :ok $ DomainOp :user/log-in username password
                     (:user/sign-up username password)
-                      %ok $ DomainOp :user/sign-up username password
+                      Result :ok $ DomainOp :user/sign-up username password
                     (:user/log-out)
-                      %ok $ DomainOp :user/log-out
+                      Result :ok $ DomainOp :user/log-out
                     (:router/change router)
-                      %ok $ DomainOp :router/change router
+                      Result :ok $ DomainOp :router/change router
                     _ $ invalid-message |Expected-domain-operation
               invalid-message |Expected-domain-operation
           :examples $ []
@@ -1118,16 +1118,16 @@
           :tests $ []
             %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
               :code $ quote $ assert=
-                %ok $ DomainOp :router/change $ %{} Router (:name :profile)
+                Result :ok $ DomainOp :router/change $ %{} Router (:name :profile)
                 decode-domain-operation $ :: :router/change $ {} (:name :profile)
               :tags $ #{} :server
             %{} 'TestEntry (:name |rejects-effects-and-scalars)
               :code $ quote $ do
                 assert=
-                  %err $ MessageDecodeError :invalid |Expected-domain-operation
+                  Result :err $ MessageDecodeError :invalid |Expected-domain-operation
                   decode-domain-operation $ :: :effect/persist
                 assert=
-                  %err $ MessageDecodeError :invalid |Expected-domain-operation
+                  Result :err $ MessageDecodeError :invalid |Expected-domain-operation
                   decode-domain-operation 42
               :tags $ #{} :server
         'decode-message $ %{} 'CodeEntry (:doc "|Decode and validate one stored message.")
@@ -1141,18 +1141,18 @@
                 = (type-of source) :map
                 match (get source :id)
                   (:none)
-                    %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                    Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
                   (:some id)
                     if-not (string? id)
-                      %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                      Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
                       match (get source :text)
                         (:none)
-                          %err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
+                          Result :err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
                         (:some text)
                           if (string? text)
-                            %ok $ %{} Message (:id id) (:text text)
-                            %err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
-                %err $ %:: DatabaseDecodeError :invalid path "|Expected Message map or struct"
+                            Result :ok $ %{} Message (:id id) (:text text)
+                            Result :err $ %:: DatabaseDecodeError :invalid (str path |.text) "|Expected String"
+                Result :err $ %:: DatabaseDecodeError :invalid path "|Expected Message map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1164,26 +1164,26 @@
           :code $ quote $ defn decode-messages (data path)
             if-not
               = (type-of data) :map
-              %err $ %:: DatabaseDecodeError :invalid path "|Expected message Map"
+              Result :err $ %:: DatabaseDecodeError :invalid path "|Expected message Map"
               foldl (&map:to-list data)
                 assert-type
-                  %ok $ {}
+                  Result :ok $ {}
                   :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
-                    (:err error) (%err error)
+                    (:err error) (Result :err error)
                     (:ok messages)
                       let[] (id value) pair $ if-not (string? id)
-                        %err $ %:: DatabaseDecodeError :invalid path "|Expected String message key"
+                        Result :err $ %:: DatabaseDecodeError :invalid path "|Expected String message key"
                         let
                             decoded $ decode-message value $ str path |. id
                           match decoded
-                            (:err error) (%err error)
+                            (:err error) (Result :err error)
                             (:ok message)
                               if
                                 = id $ :id message
-                                %ok $ assoc messages id message
-                                %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
+                                Result :ok $ assoc messages id message
+                                Result :err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1192,7 +1192,7 @@
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-message-key)
             :code $ quote $ assert=
-              %err $ %:: DatabaseDecodeError :invalid |messages.m1.id "|Message id must match map key"
+              Result :err $ %:: DatabaseDecodeError :invalid |messages.m1.id "|Message id must match map key"
               decode-messages
                 {} $ |m1 $ {} (:id |m2) (:text |hello)
                 , |messages
@@ -1206,9 +1206,9 @@
                   , data
               match op
                 (:session/connect)
-                  %ok $ %:: Op :session/connect
+                  Result :ok $ %:: Op :session/connect
                 (:session/disconnect)
-                  %ok $ %:: Op :session/disconnect
+                  Result :ok $ %:: Op :session/disconnect
                 (:session/remove-message message)
                   if
                     or
@@ -1223,43 +1223,43 @@
                         (:none) (invalid-message "|Invalid remove-message id")
                         (:some id)
                           if (string? id)
-                            %ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id id)
+                            Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id id)
                             invalid-message $ str "|Invalid remove-message id: " id
                     invalid-message $ str "|Invalid remove-message payload: " message
                 (:user/log-in username password)
                   if
                     and (string? username) (string? password)
-                    %ok $ %:: Op :user/log-in username password
+                    Result :ok $ %:: Op :user/log-in username password
                     invalid-message $ str "|Invalid log-in operation: " op
                 (:user/sign-up username password)
                   if
                     and (string? username) (string? password)
-                    %ok $ %:: Op :user/sign-up username password
+                    Result :ok $ %:: Op :user/sign-up username password
                     invalid-message $ str "|Invalid sign-up operation: " op
                 (:user/log-out)
-                  %ok $ %:: Op :user/log-out
+                  Result :ok $ %:: Op :user/log-out
                 (:router/change router-data)
                   let
                       decoded-router $ decode-router router-data |operation.router
                     match decoded-router
                       (:ok typed-router)
-                        %ok $ %:: Op :router/change typed-router
+                        Result :ok $ %:: Op :router/change typed-router
                       (:err error)
                         invalid-message $ str "|Invalid router operation: " error
                 (:effect/persist)
-                  %ok $ %:: Op :effect/persist
+                  Result :ok $ %:: Op :effect/persist
                 (:effect/ping)
-                  %ok $ %:: Op :effect/ping
+                  Result :ok $ %:: Op :effect/ping
                 (:effect/pong)
-                  %ok $ %:: Op :effect/pong
+                  Result :ok $ %:: Op :effect/pong
                 (:effect/connect)
-                  %ok $ %:: Op :effect/connect
+                  Result :ok $ %:: Op :effect/connect
                 (:reel/reset)
-                  %ok $ %:: Op :reel/reset
+                  Result :ok $ %:: Op :reel/reset
                 (:reel/merge)
-                  %ok $ %:: Op :reel/merge
+                  Result :ok $ %:: Op :reel/merge
                 (:states cursor state)
-                  %ok $ %:: Op :states cursor state
+                  Result :ok $ %:: Op :states cursor state
                 _ $ invalid-message $ str "|Unknown application operation: " op
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -1268,10 +1268,10 @@
           :tests $ [] $ %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
             :code $ quote $ do
               assert=
-                %ok $ %:: Op :router/change $ %{} Router (:name :profile)
+                Result :ok $ %:: Op :router/change $ %{} Router (:name :profile)
                 decode-operation $ :: :router/change $ {} (:name :profile)
               assert=
-                %ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id |m1)
+                Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id |m1)
                 decode-operation $ :: :session/remove-message $ {} (:id |m1)
               match
                 decode-operation $ :: :router/change |profile
@@ -1291,23 +1291,23 @@
               :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
             match data
               (:none)
-                %ok $ %none
+                Result :ok $ Option :none
               (:some value)
                 if (nil? value)
-                  %ok $ %none
+                  Result :ok $ Option :none
                   if (string? value)
-                    %ok $ %some value
+                    Result :ok $ Option :some value
                     if
                       = (type-of value) :enum
                       match value
                         (:none)
-                          %ok $ %none
+                          Result :ok $ Option :none
                         (:some item)
                           if (string? item)
-                            %ok $ %some item
-                            %err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
-                        _ $ %err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
-                      %err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
+                            Result :ok $ Option :some item
+                            Result :err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
+                        _ $ Result :err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
+                      Result :err $ %:: DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1325,12 +1325,12 @@
                 = (type-of source) :map
                 match (get source :name)
                   (:none)
-                    %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
+                    Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
                   (:some name)
                     if (tag? name)
-                      %ok $ %{} Router $ :name name
-                      %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
-                %err $ %:: DatabaseDecodeError :invalid path "|Expected Router map or struct"
+                      Result :ok $ %{} Router $ :name name
+                      Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
+                Result :err $ %:: DatabaseDecodeError :invalid path "|Expected Router map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1344,29 +1344,35 @@
                 message $ if (enum? data)
                   assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
                   , data
-              match message
-                (:snapshot revision store)
-                  if (number? revision)
-                    match (decode-store store)
-                      (:ok validated)
-                        %:: Result :ok $ %:: ServerMessage :snapshot revision validated
-                      (:err detail)
-                        invalid-message $ str "|Invalid snapshot envelope: " detail
-                    invalid-message $ str "|Invalid snapshot envelope: " message
-                (:patch base-revision revision changes)
-                  let
-                      valid-changes? $ if (list? changes)
-                        every? (unsafe-coerce changes 'List)
-                          fn (change)
-                            = (enum-definition change) (%some recollect.schema/change-op)
-                        , false
-                    if
-                      and (number? base-revision) (number? revision) valid-changes?
-                      %:: Result :ok $ %:: ServerMessage :patch base-revision revision $ unsafe-coerce changes (:: 'List 'recollect.schema/change-op)
-                      invalid-message $ str "|Invalid patch envelope: " message
-                (:effect/pong)
-                  %:: Result :ok $ %:: ServerMessage :effect/pong
-                _ $ invalid-message $ str "|Unknown server message: " message
+              if (enum? message)
+                match message
+                  (:snapshot revision store)
+                    if (number? revision)
+                      match (decode-store store)
+                        (:ok validated)
+                          %:: Result :ok $ %:: ServerMessage :snapshot revision validated
+                        (:err detail)
+                          invalid-message $ str "|Invalid snapshot envelope: " detail
+                      invalid-message $ str "|Invalid snapshot envelope: " message
+                  (:patch base-revision revision changes)
+                    let
+                        valid-changes? $ if (list? changes)
+                          every? changes $ fn (change)
+                            and (enum? change) (enum-definition-matches? change recollect.schema/change-op)
+                          , false
+                      if
+                        and (number? base-revision) (number? revision) valid-changes?
+                        match
+                          try-decode-map-as changes $ :: 'List 'recollect.schema/change-op
+                          (:ok validated)
+                            Result :ok $ ServerMessage :patch base-revision revision validated
+                          (:err detail)
+                            invalid-message $ str "|Invalid patch envelope: " detail
+                        invalid-message $ str "|Invalid patch envelope: " message
+                  (:effect/pong)
+                    %:: Result :ok $ %:: ServerMessage :effect/pong
+                  _ $ invalid-message $ str "|Unknown server message: " message
+                invalid-message $ str "|Unknown server message: " message
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
@@ -1402,7 +1408,7 @@
                   db app.schema/database
                   store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                 assert=
-                  %ok $ ServerMessage :snapshot 7 store
+                  Result :ok $ ServerMessage :snapshot 7 store
                   decode-server-message $ :: :snapshot 7 store
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-nominal-store-snapshot)
@@ -1411,7 +1417,7 @@
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                   let
-                      bad-session $ &struct:assoc (:session store) :id $ %some
+                      bad-session $ &struct:assoc (:session store) :id $ Option :some
                         parse-cirru-edn $ format-cirru-edn |not-a-number
                       corrupt $ &struct:assoc store :session bad-session
                     match
@@ -1421,6 +1427,27 @@
                           :invalid detail
                           includes? detail |$.session.id
                       _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-non-enum-envelope)
+              :code $ quote $ assert= true
+                match (decode-server-message 42)
+                  (:err error) true
+                  _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-non-enum-patch-entry)
+              :code $ quote $ assert= true
+                match
+                  decode-server-message $ :: :patch 1 2 $ [] 42
+                  (:err error) true
+                  _ false
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-corrupt-nominal-patch-payload)
+              :code $ quote $ assert= true
+                match
+                  decode-server-message $ :: :patch 1 2 $ []
+                    &enum:assoc (%:: recollect.schema/change-op :vec-drop 1) 1 $ parse-cirru-edn $ format-cirru-edn |bad-count
+                  (:err error) true
+                  _ false
               :tags $ #{} :client
         'decode-session $ %{} 'CodeEntry (:doc "|Decode and deeply validate one stored session.")
           :code $ quote $ defn decode-session (data path)
@@ -1433,10 +1460,10 @@
                 = (type-of source) :map
                 match (get source :id)
                   (:none)
-                    %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
+                    Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
                   (:some id)
                     if-not (number? id)
-                      %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
+                      Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected Number"
                       let
                           user-id-result $ decode-optional-string (get source :user-id) (str path |.user-id)
                           nickname-result $ decode-optional-string (get source :nickname) (str path |.nickname)
@@ -1446,19 +1473,19 @@
                           router-result $ decode-router router-data $ str path |.router
                           messages-result $ decode-messages messages-data $ str path |.messages
                         match user-id-result
-                          (:err error) (%err error)
+                          (:err error) (Result :err error)
                           (:ok user-id)
                             match nickname-result
-                              (:err error) (%err error)
+                              (:err error) (Result :err error)
                               (:ok nickname)
                                 match router-result
-                                  (:err error) (%err error)
+                                  (:err error) (Result :err error)
                                   (:ok typed-router)
                                     match messages-result
-                                      (:err error) (%err error)
+                                      (:err error) (Result :err error)
                                       (:ok typed-messages)
-                                        %ok $ %{} Session (:user-id user-id) (:id id) (:nickname nickname) (:router typed-router) (:messages typed-messages)
-                %err $ %:: DatabaseDecodeError :invalid path "|Expected Session map or struct"
+                                        Result :ok $ %{} Session (:user-id user-id) (:id id) (:nickname nickname) (:router typed-router) (:messages typed-messages)
+                Result :err $ %:: DatabaseDecodeError :invalid path "|Expected Session map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1470,26 +1497,26 @@
           :code $ quote $ defn decode-sessions (data path)
             if-not
               = (type-of data) :map
-              %err $ %:: DatabaseDecodeError :invalid path "|Expected session Map"
+              Result :err $ %:: DatabaseDecodeError :invalid path "|Expected session Map"
               foldl (&map:to-list data)
                 assert-type
-                  %ok $ {}
+                  Result :ok $ {}
                   :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
-                    (:err error) (%err error)
+                    (:err error) (Result :err error)
                     (:ok sessions)
                       let[] (id value) pair $ if-not (number? id)
-                        %err $ %:: DatabaseDecodeError :invalid path "|Expected Number session key"
+                        Result :err $ %:: DatabaseDecodeError :invalid path "|Expected Number session key"
                         let
                             decoded $ decode-session value $ str path |. id
                           match decoded
-                            (:err error) (%err error)
+                            (:err error) (Result :err error)
                             (:ok session)
                               if
                                 = id $ :id session
-                                %ok $ assoc sessions id session
-                                %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
+                                Result :ok $ assoc sessions id session
+                                Result :err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1498,7 +1525,7 @@
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-session-key)
             :code $ quote $ assert=
-              %err $ DatabaseDecodeError :invalid |sessions.1.id "|Session id must match map key"
+              Result :err $ DatabaseDecodeError :invalid |sessions.1.id "|Session id must match map key"
               decode-sessions
                 {} $ 1 $ {} (:id 2) (:user-id nil) (:nickname nil)
                   :router $ {} $ :name :home
@@ -1510,7 +1537,7 @@
             if
               and (struct? value) (&struct:matches? value Store)
               try-decode-map-as (store-struct-input value) 'app.schema/Store
-              %err |Expected-nominal-Store
+              Result :err |Expected-nominal-Store
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
@@ -1520,10 +1547,10 @@
               :code $ quote $ let
                   db app.schema/database
                   store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                assert= (%ok store) (decode-store store)
+                assert= (Result :ok store) (decode-store store)
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-root)
-              :code $ quote $ assert= (%err |Expected-nominal-Store) (decode-store |wrong-root)
+              :code $ quote $ assert= (Result :err |Expected-nominal-Store) (decode-store |wrong-root)
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-scalar-field)
               :code $ quote $ assert= true
@@ -1541,7 +1568,7 @@
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                   let
-                      bad-session $ &struct:assoc (:session store) :id $ %some
+                      bad-session $ &struct:assoc (:session store) :id $ Option :some
                         parse-cirru-edn $ format-cirru-edn |not-a-number
                     match
                       decode-store $ &struct:assoc store :session bad-session
@@ -1567,10 +1594,10 @@
                       :heterogeneous $ [] 1 |text
                       :nominal $ :attached store
                     router $ %{} RouterView (:name :profile)
-                      :data $ %some payload
-                      :router $ %none
+                      :data $ Option :some payload
+                      :router $ Option :none
                     updated $ &struct:assoc store :router router
-                  assert= (%ok updated) (decode-store updated)
+                  assert= (Result :ok updated) (decode-store updated)
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-message-field)
               :code $ quote $ assert= true
@@ -1593,11 +1620,11 @@
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
                   let
                       user $ %{} UserView (:name |name) (:id |id)
-                        :nickname $ %none
-                        :avatar $ %none
+                        :nickname $ Option :none
+                        :avatar $ Option :none
                       bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
                     match
-                      decode-store $ &struct:assoc store :user $ %some bad-user
+                      decode-store $ &struct:assoc store :user $ Option :some bad-user
                       (:err detail) (includes? detail |$.user.id)
                       _ false
               :tags $ #{} :client
@@ -1612,33 +1639,33 @@
                 = (type-of source) :map
                 match (get source :name)
                   (:none)
-                    %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
+                    Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
                   (:some name)
                     if-not (string? name)
-                      %err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
+                      Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected String"
                       match (get source :id)
                         (:none)
-                          %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                          Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
                         (:some id)
                           if-not (string? id)
-                            %err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
+                            Result :err $ %:: DatabaseDecodeError :invalid (str path |.id) "|Expected String"
                             let
                                 nickname-result $ decode-optional-string (get source :nickname) (str path |.nickname)
                                 avatar-result $ decode-optional-string (get source :avatar) (str path |.avatar)
                               match nickname-result
-                                (:err error) (%err error)
+                                (:err error) (Result :err error)
                                 (:ok nickname)
                                   match avatar-result
-                                    (:err error) (%err error)
+                                    (:err error) (Result :err error)
                                     (:ok avatar)
                                       match (get source :password)
                                         (:none)
-                                          %err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
+                                          Result :err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
                                         (:some password)
                                           if (string? password)
-                                            %ok $ %{} User (:name name) (:id id) (:nickname nickname) (:avatar avatar) (:password password)
-                                            %err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
-                %err $ %:: DatabaseDecodeError :invalid path "|Expected User map or struct"
+                                            Result :ok $ %{} User (:name name) (:id id) (:nickname nickname) (:avatar avatar) (:password password)
+                                            Result :err $ %:: DatabaseDecodeError :invalid (str path |.password) "|Expected String"
+                Result :err $ %:: DatabaseDecodeError :invalid path "|Expected User map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1650,26 +1677,26 @@
           :code $ quote $ defn decode-users (data path)
             if-not
               = (type-of data) :map
-              %err $ %:: DatabaseDecodeError :invalid path "|Expected user Map"
+              Result :err $ %:: DatabaseDecodeError :invalid path "|Expected user Map"
               foldl (&map:to-list data)
                 assert-type
-                  %ok $ {}
+                  Result :ok $ {}
                   :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
                   match acc
-                    (:err error) (%err error)
+                    (:err error) (Result :err error)
                     (:ok users)
                       let[] (id value) pair $ if-not (string? id)
-                        %err $ %:: DatabaseDecodeError :invalid path "|Expected String user key"
+                        Result :err $ %:: DatabaseDecodeError :invalid path "|Expected String user key"
                         let
                             decoded $ decode-user value $ str path |. id
                           match decoded
-                            (:err error) (%err error)
+                            (:err error) (Result :err error)
                             (:ok user)
                               if
                                 = id $ :id user
-                                %ok $ assoc users id user
-                                %err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
+                                Result :ok $ assoc users id user
+                                Result :err $ %:: DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -1678,11 +1705,31 @@
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-user-key)
             :code $ quote $ assert=
-              %err $ DatabaseDecodeError :invalid |users.u1.id "|User id must match map key"
+              Result :err $ DatabaseDecodeError :invalid |users.u1.id "|User id must match map key"
               decode-users
                 {} $ |u1 $ {} (:id |u2) (:name |demo) (:nickname nil) (:avatar nil) (:password |hash)
                 , |users
             :tags $ #{} :server
+        'enum-definition-matches? $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn enum-definition-matches? (value target)
+            match (enum-definition value)
+              (:none) false
+              (:some found) (= found target)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Bool)
+            :args $ [] 'Enum 'EnumDef
+          :tests $ []
+            %{} 'TestEntry (:name |matches-definition-across-option-variants)
+              :code $ quote $ do
+                assert= true $ enum-definition-matches? (Option :none) Option
+                assert= true $ enum-definition-matches? (Option :some 1) Option
+              :tags $ #{} :client
+            %{} 'TestEntry (:name |rejects-anonymous-and-foreign-same-tag)
+              :code $ quote $ let
+                  Foreign $ defenum Foreign (:none) (:some 'Dynamic)
+                assert= false $ enum-definition-matches? (:: :none) Option
+                assert= false $ enum-definition-matches? (%:: Foreign :none) Option
+              :tags $ #{} :client
         'invalid-message $ %{} 'CodeEntry
           :doc "|Build a typed decode failure while preserving the expected success type."
           :code $ quote $ defn invalid-message (detail)
@@ -1700,9 +1747,9 @@
         'session $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def session
             %{} Session
-              :user-id $ %none
+              :user-id $ Option :none
               :id 0
-              :nickname $ %none
+              :nickname $ Option :none
               :router router
               :messages $ {}
           :examples $ []
@@ -1739,11 +1786,10 @@
         'store-user-input $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn store-user-input (value)
             if
-              and (enum? value)
-                = (enum-definition value) (%some Option)
+              and (enum? value) (enum-definition-matches? value Option)
               match value
                 (:some user)
-                  %some $ store-struct-input user
+                  Option :some $ store-struct-input user
                 (:none) value
                 _ value
               , value
@@ -1753,8 +1799,8 @@
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def user
             %{} User (:name ||) (:id ||)
-              :nickname $ %none
-              :avatar $ %none
+              :nickname $ Option :none
+              :avatar $ Option :none
               :password ||
           :examples $ []
           :schema $ :: 'app.schema/User
@@ -1882,7 +1928,7 @@
                       :dirty-rev 7
                     2 other
                   assoc-client-state-field states 1 :dirty-rev 7
-                assert= (%some state) (get states 1)
+                assert= (Option :some state) (get states 1)
               :tags $ #{} :server
             %{} 'TestEntry (:name |creates-missing-client-state-map)
               :code $ quote $ assert=
@@ -2260,7 +2306,7 @@
             try
               schema/decode-database $ parse-cirru-edn content
               fn (error)
-                %err $ %:: schema/DatabaseDecodeError :invalid |db $ str "|Malformed persisted Cirru EDN: " error
+                Result :err $ %:: schema/DatabaseDecodeError :invalid |db $ str "|Malformed persisted Cirru EDN: " error
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'String
@@ -2454,13 +2500,13 @@
           :code $ quote $ defn select-sync-diff (outcome)
             match outcome
               (:budget-exceeded reason stats)
-                %:: SyncDiffPlan :snapshot stats $ %some reason
+                %:: SyncDiffPlan :snapshot stats $ Option :some reason
               (:complete changes stats)
                 cond
                     empty? changes
                     %:: SyncDiffPlan :idle stats
                   (> (count changes) patch-operation-limit)
-                    %:: SyncDiffPlan :snapshot stats $ %none
+                    %:: SyncDiffPlan :snapshot stats $ Option :none
                   true $ %:: SyncDiffPlan :patch changes stats
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.server/SyncDiffPlan)
@@ -2472,7 +2518,7 @@
                   reason $ %:: recollect.diff/DiffBudgetReason :visited-nodes
                   outcome $ %:: recollect.diff/DiffOutcome :budget-exceeded reason stats
                 assert=
-                  %:: SyncDiffPlan :snapshot stats $ %some reason
+                  %:: SyncDiffPlan :snapshot stats $ Option :some reason
                   select-sync-diff outcome
               :tags $ #{} :server
             %{} 'TestEntry
@@ -2489,14 +2535,14 @@
                     %:: SyncDiffPlan :patch ([] change) stats
                     select-sync-diff patch-outcome
                   assert=
-                    %:: SyncDiffPlan :snapshot stats $ %none
+                    %:: SyncDiffPlan :snapshot stats $ Option :none
                     select-sync-diff large-outcome
               :tags $ #{} :server
             %{} 'TestEntry (:name |real-budget-overflow-is-atomic)
               :code $ quote $ let
                   budget $ %{} DiffBudget
-                    :max-visited $ %some 3
-                    :max-emitted $ %none
+                    :max-visited $ Option :some 3
+                    :max-emitted $ Option :none
                   outcome $ diff-twig-budgeted ([] 1 2 3) ([] 1 2 4) ({}) budget
                   plan $ select-sync-diff outcome
                 match plan
@@ -2504,7 +2550,7 @@
                     do
                       assert= 3 $ :visited-nodes stats
                       assert=
-                        %some $ %:: recollect.diff/DiffBudgetReason :visited-nodes
+                        Option :some $ %:: recollect.diff/DiffBudgetReason :visited-nodes
                         , reason
                   _ $ assert |overflow-must-select-snapshot false
               :tags $ #{} :server
@@ -2566,7 +2612,7 @@
                           option:none? old-store-option
                         diff-start $ now-ms
                         diff-plan $ if needs-snapshot?
-                          %:: SyncDiffPlan :snapshot empty-diff-stats $ %none
+                          %:: SyncDiffPlan :snapshot empty-diff-stats $ Option :none
                           select-sync-diff $ diff-twig-budgeted (option:unwrap old-store-option) new-store
                             {} $ :key :id
                             , sync-diff-budget
@@ -2615,8 +2661,8 @@
           :doc "|Deterministic per-client diff budget; snapshot size and transport admission remain independent limits."
           :code $ quote $ def sync-diff-budget
             %{} DiffBudget
-              :max-visited $ %some sync-diff-visited-limit
-              :max-emitted $ %some sync-diff-emitted-limit
+              :max-visited $ Option :some sync-diff-visited-limit
+              :max-emitted $ Option :some sync-diff-emitted-limit
           :examples $ []
           :schema $ :: 'recollect.diff/DiffBudget
         'sync-diff-emitted-limit $ %{} 'CodeEntry
@@ -2777,12 +2823,12 @@
                 router-data $ :router session-data
                 router-name $ :name router-data
                 router-view-data $ if logged-in?
-                  case-default router-name (%none)
+                  case-default router-name (Option :none)
                     :home $ :pages shared
-                    :profile $ %some $ :members shared
-                  %none
+                    :profile $ Option :some $ :members shared
+                  Option :none
                 router-view $ %{} RouterView (:name router-name) (:data router-view-data)
-                  :router $ %none
+                  :router $ Option :none
                 messages-view $ .filter-map-kv (:messages session-data)
                   fn (id message)
                     hint-fn $ {}
@@ -2792,20 +2838,20 @@
                       :id $ :id message
                       :text $ :text message
                 session-view $ %{} SessionView (:user-id user-id-option)
-                  :id $ %some $ :id session-data
+                  :id $ Option :some $ :id session-data
                   :nickname $ :nickname session-data
                   :router $ %{} RouterView (:name router-name)
-                    :data $ %none
-                    :router $ %none
+                    :data $ Option :none
+                    :router $ Option :none
                   :messages messages-view
                 user-option $ match user-id-option
-                  (:none) (%none)
+                  (:none) (Option :none)
                   (:some user-id)
                     match
                       get (:users db) user-id
                       (:some user-data)
-                        %some $ twig-user user-data
-                      (:none) (%none)
+                        Option :some $ twig-user user-data
+                      (:none) (Option :none)
               %{} Store (:logged-in? logged-in?) (:session session-view)
                 :reel-length $ :reel-length shared
                 :attached $ :attached shared
@@ -2821,9 +2867,9 @@
               :code $ quote $ let
                   message $ %{} app.schema/Message (:id |m1) (:text |hello)
                   session-data $ %{} app.schema/Session
-                    :user-id $ %none
+                    :user-id $ Option :none
                     :id 1
-                    :nickname $ %none
+                    :nickname $ Option :none
                     :router $ %{} app.schema/Router $ :name :home
                     :messages $ {} $ |m1 message
                   db $ %{} app.schema/Db
@@ -2848,9 +2894,9 @@
                   shared $ twig-shared db 0
                   projected $ twig-container db session-data shared
                   view $ :session projected
-                assert= (%some 0) (:id view)
-                assert= (%none) (:user-id view)
-                assert= (%none) (:nickname view)
+                assert= (Option :some 0) (:id view)
+                assert= (Option :none) (:user-id view)
+                assert= (Option :none) (:nickname view)
                 assert= view $ parse-cirru-edn (format-cirru-edn view)
                   {} (:Option Option) (:SessionView view)
                     :RouterView $ :router view
@@ -2858,12 +2904,12 @@
             %{} 'TestEntry (:name |session-some-fields)
               :code $ quote $ let
                   user-data $ %{} app.schema/User (:id |u1) (:name |demo)
-                    :nickname $ %none
-                    :avatar $ %none
+                    :nickname $ Option :none
+                    :avatar $ Option :none
                     :password |hash
                   session-data $ %{} app.schema/Session (:id 0)
-                    :user-id $ %some |u1
-                    :nickname $ %some ||
+                    :user-id $ Option :some |u1
+                    :nickname $ Option :some ||
                     :router $ %{} app.schema/Router $ :name :home
                     :messages $ {}
                   db $ %{} app.schema/Db
@@ -2872,9 +2918,9 @@
                   shared $ twig-shared db 0
                   projected $ twig-container db session-data shared
                   view $ :session projected
-                assert= (%some 0) (:id view)
-                assert= (%some |u1) (:user-id view)
-                assert= (%some ||) (:nickname view)
+                assert= (Option :some 0) (:id view)
+                assert= (Option :some |u1) (:user-id view)
+                assert= (Option :some ||) (:nickname view)
                 assert= true $ :logged-in? projected
                 assert= view $ parse-cirru-edn (format-cirru-edn view)
                   {} (:Option Option) (:SessionView view)
@@ -2883,8 +2929,8 @@
             %{} 'TestEntry (:name |missing-user-retains-session)
               :code $ quote $ let
                   session-data $ %{} app.schema/Session (:id 0)
-                    :user-id $ %some |u1
-                    :nickname $ %some ||
+                    :user-id $ Option :some |u1
+                    :nickname $ Option :some ||
                     :router $ %{} app.schema/Router $ :name :home
                     :messages $ {}
                   db $ %{} app.schema/Db
@@ -2893,14 +2939,14 @@
                   shared $ twig-shared db 0
                   projected $ twig-container db session-data shared
                   view $ :session projected
-                assert= (%some 0) (:id view)
-                assert= (%some |u1) (:user-id view)
-                assert= (%some ||) (:nickname view)
+                assert= (Option :some 0) (:id view)
+                assert= (Option :some |u1) (:user-id view)
+                assert= (Option :some ||) (:nickname view)
                 assert= true $ :logged-in? projected
                 assert= view $ parse-cirru-edn (format-cirru-edn view)
                   {} (:Option Option) (:SessionView view)
                     :RouterView $ :router view
-                assert= (%none) (:user projected)
+                assert= (Option :none) (:user projected)
               :tags $ #{} :client :server :twig :type
         'twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-members (sessions users)
@@ -2909,14 +2955,14 @@
                 let[] (sid raw-session) pair $ let
                     session-data $ assert-type raw-session app.schema/Session
                   [] sid $ match (:user-id session-data)
-                    (:none) (%none)
+                    (:none) (Option :none)
                     (:some user-id)
                       if-let
                         raw-user $ get users user-id
                         let
                             user-data $ assert-type raw-user app.schema/User
-                          %some $ :name user-data
-                        %none
+                          Option :some $ :name user-data
+                        Option :none
               pairs-map
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -2926,7 +2972,7 @@
           :code $ quote $ defn twig-shared (db record-count)
             %{} SharedTwig (:reel-length record-count)
               :attached $ %{} AttachedView (:type :msg) (:content "|SOME data")
-              :pages $ %none
+              :pages $ Option :none
               :members $ twig-members (:sessions db) (:users db)
               :session-count $ count $ :sessions db
           :examples $ []
@@ -2993,9 +3039,9 @@
         'connect $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connect (db sid op-id op-time)
             assoc db :sessions $ assoc (:sessions db) sid $ %{} schema/Session
-              :user-id $ %none
+              :user-id $ Option :none
               :id sid
-              :nickname $ %none
+              :nickname $ Option :none
               :router schema/router
               :messages $ {}
           :examples $ []
@@ -3023,8 +3069,8 @@
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
-                  :user-id $ %none
-                  :nickname $ %none
+                  :user-id $ Option :none
+                  :nickname $ Option :none
                   :router $ %{} app.schema/Router $ :name :home
                   :messages $ {}
                     |m1 $ %{} app.schema/Message (:id |m1) (:text |remove)
@@ -3040,7 +3086,7 @@
                 next-message $ assert-type
                   option:unwrap $ get (:messages next-session) |m2
                   , app.schema/Message
-              assert= (%none)
+              assert= (Option :none)
                 get (:messages next-session) |m1
               assert= |keep $ :text next-message
             :tags $ #{} :protocol :server
@@ -3067,7 +3113,7 @@
                         user-data $ assert-type raw-user app.schema/User
                       if
                         = (md5 password) (:password user-data)
-                        struct-with session-data $ :user-id $ %some (:id user-data)
+                        struct-with session-data $ :user-id $ Option :some (:id user-data)
                         struct-with session-data $ :messages $ assoc (:messages session-data) op-id
                           %{} app.schema/Message (:id op-id)
                             :text $ str "|Wrong password for " username
@@ -3082,13 +3128,13 @@
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
-                  :user-id $ %none
-                  :nickname $ %none
+                  :user-id $ Option :none
+                  :nickname $ Option :none
                   :router app.schema/router
                   :messages $ {}
                 user-data $ %{} app.schema/User (:id |user-1) (:name |demo)
-                  :nickname $ %none
-                  :avatar $ %none
+                  :nickname $ Option :none
+                  :avatar $ Option :none
                   :password $ md5 |secret
                 db $ %{} app.schema/Db
                   :sessions $ {} $ sid session-data
@@ -3113,7 +3159,7 @@
                   , app.schema/Message
               assert= "|No user named: missing" $ :text missing-message
               assert= "|Wrong password for demo" $ :text wrong-message
-              assert= (%some |user-1) (:user-id success-session)
+              assert= (Option :some |user-1) (:user-id success-session)
             :tags $ #{} :protocol :server
         'log-out $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn log-out (db sid op-id op-time)
@@ -3122,7 +3168,7 @@
               let
                   session-data $ assert-type raw-session app.schema/Session
                 assoc db :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                  :user-id $ %none
+                  :user-id $ Option :none
               , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3146,11 +3192,11 @@
                         :text $ str "|Name is taken: " username
                     -> db
                       assoc :sessions $ assoc (:sessions db) sid $ struct-with session-data
-                        :user-id $ %some op-id
+                        :user-id $ Option :some op-id
                       assoc :users $ assoc (:users db) op-id $ %{} app.schema/User (:id op-id) (:name username)
-                        :nickname $ %some username
+                        :nickname $ Option :some username
                         :password $ md5 password
-                        :avatar $ %none
+                        :avatar $ Option :none
                 , db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
@@ -3159,13 +3205,13 @@
             :code $ quote $ let
                 sid 1
                 session-data $ %{} app.schema/Session (:id sid)
-                  :user-id $ %none
-                  :nickname $ %none
+                  :user-id $ Option :none
+                  :nickname $ Option :none
                   :router app.schema/router
                   :messages $ {}
                 user-data $ %{} app.schema/User (:id |user-1) (:name |demo)
-                  :nickname $ %none
-                  :avatar $ %none
+                  :nickname $ Option :none
+                  :avatar $ Option :none
                   :password $ md5 |secret
                 db $ %{} app.schema/Db
                   :sessions $ {} $ sid session-data
