@@ -51,6 +51,21 @@ unsafeCoerce仍2。原预算、CI、依赖和锁文件完全未改，没有新�
 
 ## 验证范围
 
+### Respo 入站适配器的量化输入
+
+基于并行 e66dcd3 的实际发布 UI/Struct 修复，`dispatch-from-respo!` 输入
+使用 `Fn<Input>(Input) → Unit`；整个运行代码不变，仍先调用原
+`decode-operation`，只允许具体 `Op` 进入业务 dispatch。损坏值继续拒绝，
+不会发布状态；没有再次尝试已报告 #1779 的 Enum decoder 泛型改写。
+
+两入口严格检查、原client41/41、server53/53、freshJS、原Session/Option、
+patch、Respo cursor/Tag/错误值拒绝/SSR/members、mount、storedlogin、URL、
+workload smoke及Node24/Vite8.0.5构建通过；canonical/diff检查通过。
+原质量34→31，schemaDynamic43→42、typeNotFull32→31、unresolved58→57，
+unsafeCoerce仍2。baseline/预算/workflow/deps/package/lock/tests均未改；
+没有新脚本/helper或额外测试。五组严格依赖冲突仍待上游发布，不宣称
+完整CI或浏览器UI/COS上传通过，不合并或发版。
+
 - client/server 严格入口与 `--warn-dyn-method` 检查通过。
 - 原 client 标签 41/41、server 标签 52/52 全部通过。
 - 重新生成 JS 的 Session/User Option、client patch、Respo cursor/dispatch、
