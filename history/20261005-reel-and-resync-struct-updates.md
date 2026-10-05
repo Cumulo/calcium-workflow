@@ -1,0 +1,33 @@
+# Reel reset/merge 与 resync 指标的 Struct 更新
+
+## 修改
+
+保留远端 `2fb25b2`、`7886712` 的受检 Op 与状态键收敛。
+本次把服务端 dispatch 的 Reel reset/merge 改为 `struct-with`：
+reset 恢复 base、清空记录并保留 merged 标志；merge 将当前 Db 设为 base、
+清空记录并标记 merged。所有外层 dispatch、通知同步和业务操作分支不变。
+
+`record-resync!` 使用明确的 SyncMetrics callback 更新计数，替代通用 Map update。
+没有改变原 Struct 字段、记录格式、存储或网络协议，没有放宽外部输入。
+Snapshot 只由 Calcit dry-run 与 revision 保护事务更新。
+
+## 回归
+
+新增两项真实函数回归，保留原测试：
+
+- 构造不同 base/current Db 和非空记录，调用真实 dispatch reset/merge，
+  检查 Db、base、记录清空与 merged 标志。测试预先占用同步调度标志，
+  避免创建后台同步 timer，并在断言前恢复全局状态。
+- 调用两次 `record-resync!`，确认仅 resync 增加 2，其他指标保持不变。
+
+客户端 41/41、服务端 55/55 原生测试通过，两个默认严格入口通过；
+重新生成 JS 后，既有 Respo/cursor/Tag/生命周期/SSR/成员 Option 回归通过。
+record-resync 定向 `--warn-dyn-method` 回归没有动态调用告警。
+reset/merge 的定向回归也通过；其他旧 Reel reducer/refresher 路径仍有告警，
+不宣称整个应用已消除动态调用。
+
+## 剩余门禁
+
+原质量门禁仍为 27 项逐定义回归，没有提高预算或删除检查。
+严格 Caps 的上游发布依赖冲突尚未解除，完整 Actions 仍不能通过。
+本次是已有 nominal Struct 更新路径的运行时修复，不以测试通过替代 milestone 验收。

@@ -46,6 +46,7 @@ calcit calcit.cirru --entry server
 完整 CI 尚未通过，不能据入口检查通过声称发布完成。详见
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
+[Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
 [旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围。
 
 ### Realtime sync lifecycle

@@ -2014,16 +2014,16 @@
                   wss-send! sid $ format-cirru-edn $ %:: schema/ServerMessage :effect/pong
                 (:reel/reset)
                   do
-                    reset! *reel $ -> @*reel
-                      assoc :db $ :base @*reel
-                      assoc :records $ []
+                    reset! *reel $ struct-with @*reel
+                      :db $ :base @*reel
+                      :records $ []
                     request-sync!
                 (:reel/merge)
                   do
-                    reset! *reel $ -> @*reel
-                      assoc :base $ :db @*reel
-                      assoc :records $ []
-                      assoc :merged? true
+                    reset! *reel $ struct-with @*reel
+                      :base $ :db @*reel
+                      :records $ []
+                      :merged? true
                     request-sync!
                 (:session/connect)
                   dispatch-domain! (%:: schema/DomainOp :session/connect) sid op-id op-time
@@ -2043,6 +2043,36 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'app.schema/Op 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |reset-and-merge-preserve-reel-boundaries)
+            :code $ quote $ let
+                saved-reel @*reel
+                saved-scheduled? @*sync-scheduled?
+                base $ %{} schema/Db
+                  :sessions $ {}
+                  :users $ {}
+                current $ struct-with base $ :users
+                  {} $ |one schema/user
+                fixture $ %{} cumulo-reel.core/ReelState (:base base) (:db current)
+                  :records $ [] $ [] |record
+                  :merged? false
+              do (reset! *sync-scheduled? true) (reset! *reel fixture)
+                dispatch! (%:: schema/Op :reel/reset) 0
+                let
+                    reset-result @*reel
+                  do (reset! *reel fixture)
+                    dispatch! (%:: schema/Op :reel/merge) 0
+                    let
+                        merge-result @*reel
+                      do (reset! *reel saved-reel) (reset! *sync-scheduled? saved-scheduled?)
+                        assert= base $ :db reset-result
+                        assert= base $ :base reset-result
+                        assert= ([]) (:records reset-result)
+                        assert= false $ :merged? reset-result
+                        assert= current $ :db merge-result
+                        assert= current $ :base merge-result
+                        assert= ([]) (:records merge-result)
+                        assert= true $ :merged? merge-result
+            :tags $ #{} :server
         'dispatch-domain! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-domain! (op sid op-id op-time)
             do
@@ -2422,10 +2452,25 @@
             :tags $ #{} :server
         'record-resync! $ %{} 'CodeEntry
           :doc "|Count one explicit client request for a full synchronization snapshot."
-          :code $ quote $ defn record-resync! () (swap! *sync-metrics update :resync-count inc)
+          :code $ quote $ defn record-resync! ()
+            swap! *sync-metrics $ fn (metrics)
+              hint-fn $ {} (:return 'app.server/SyncMetrics)
+                :args $ [] 'app.server/SyncMetrics
+              struct-with metrics $ :resync-count $ inc (:resync-count metrics)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
+          :tests $ [] $ %{} 'TestEntry
+            :name |increments-resync-without-changing-other-counters
+            :code $ quote $ let
+                saved @*sync-metrics
+              do (record-resync!) (record-resync!)
+                let
+                    result @*sync-metrics
+                  do (reset! *sync-metrics saved)
+                    assert= result $ struct-with saved $ :resync-count
+                      + 2 $ :resync-count saved
+            :tags $ #{} :server
         'record-sync-send! $ %{} 'CodeEntry
           :doc "|Record metrics for one synchronization send attempt before transport admission."
           :code $ quote $ defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
