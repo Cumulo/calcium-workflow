@@ -144,29 +144,21 @@
             :args $ []
             :features $ #{} :js-ffi
         'dispatch! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn dispatch! (op maybe-op-data)
-            let
-                op-data $ option:unwrap-or maybe-op-data nil
-              when
-                and config/dev? $ match op
-                  (:states _ _) false
-                  _ true
-                println |Dispatch op op-data
-              if (tag? op)
-                match
-                  schema/decode-operation $ :: op op-data
-                  (:ok normalized-op)
-                    recur normalized-op $ Option :none
-                  (:err error)
-                    raise $ str |Invalid-legacy-operation: error
-                match op
-                  (:states cursor s)
-                    reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Dynamic 'Dynamic)
-                  (:effect/connect) (connect!)
-                  _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
+          :code $ quote $ defn dispatch! (op)
+            when
+              and config/dev? $ match op
+                (:states _ _) false
+                _ true
+              println |Dispatch op
+            match op
+              (:states cursor s)
+                reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Dynamic 'Dynamic)
+              (:effect/connect) (connect!)
+              _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
+            , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'app.schema/Op $ :: 'Option 'Dynamic
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Op
         'dispatch-from-respo! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-from-respo! (raw-op)
             match (schema/decode-operation raw-op)

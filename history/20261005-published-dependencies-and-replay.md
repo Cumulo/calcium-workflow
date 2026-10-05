@@ -49,6 +49,20 @@ reset/merge 语义或 callback 参数。
 | JS-FFI | 0.2.1-alpha.11 | Reel、message、ui、recollect 请求 0.1.36 |
 | ws-edn | 0.0.33 | Reel 请求 0.0.32 |
 
-逐定义质量门禁仍有 42 项回归，原为 45 项。预算未提高，unsafeCoerce
+逐定义质量门禁仍有 40 项回归，原为 45 项。预算未提高，unsafeCoerce
 保持 2。开放 decoder、异构状态和宿主边界尚需继续逐项处理；不以总量降低
 替代逐定义验收。CI 保留原严格依赖解析与质量门禁，本轮不宣称完整 CI 已通过。
+
+## 客户端 dispatch 收敛
+
+查询实际调用点后，客户端 `dispatch!` 收敛为单参数 `Op → Unit`。
+旧 Tag、未受信任 enum 与 Respo callback 仍由原有 `dispatch-from-respo!`
+和 `decode-operation` 处理；内部入口删除已无调用者的第二参数、nil 默认值
+与重复 legacy decoder。保留 states 更新、connect 与 WebSocket 消息分支，
+日志直接输出完整 nominal Op，不再从废弃参数取 payload。
+
+没有增加 helper、验证脚本、测试或放宽 baseline。客户端严格入口、原 client
+41 项测试、原 Respo cursor/Tag dispatch 与 SSR 回归、stored-login、mount、
+connection URL 回归及 Node 24 Vite 构建通过。质量回归由 42 降为 40；
+`schemaDynamic` 47→45、`typeNotFull` 35→34、`codeNil` 16→15、
+`unresolved` 63→60。严格依赖图的四组冲突仍待上游发布版本对齐，PR 保持 draft。
