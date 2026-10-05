@@ -2360,7 +2360,8 @@
         'persist-db! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-db! ()
             let
-                file-content $ format-cirru-edn $ assoc (reel-db @*reel) :sessions ({})
+                file-content $ format-cirru-edn $ struct-with (reel-db @*reel)
+                  :sessions $ {}
                 storage-path storage-file
                 backup-path $ get-backup-path!
               do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
@@ -2393,10 +2394,31 @@
                 slow-clients $ count $ filter states
                   fn (state)
                     option:unwrap-or (get state :slow-client?) false
-              merge @*sync-metrics $ {} (:pending-clients pending-clients) (:slow-clients slow-clients)
+              struct-with @*sync-metrics (:pending-clients pending-clients) (:slow-clients slow-clients)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.server/SyncMetrics)
             :args $ []
+          :tests $ [] $ %{} 'TestEntry
+            :name |preserves-counters-and-derives-connection-gauges
+            :code $ quote $ let
+                saved-states @*client-states
+                saved-metrics @*sync-metrics
+              do
+                reset! *client-states $ {}
+                  1 $ {} (:in-flight? true) (:slow-client? false)
+                  2 $ {} (:in-flight? false) (:slow-client? true)
+                  3 $ {} (:in-flight? true) (:slow-client? true)
+                reset! *sync-metrics $ struct-with saved-metrics (:resync-count 7) (:patch-attempts 11)
+                let
+                    result $ read-sync-metrics
+                    unchanged? $ = @*sync-metrics $ struct-with saved-metrics (:resync-count 7) (:patch-attempts 11)
+                  do (reset! *client-states saved-states) (reset! *sync-metrics saved-metrics)
+                    assert= 2 $ :pending-clients result
+                    assert= 2 $ :slow-clients result
+                    assert= 7 $ :resync-count result
+                    assert= 11 $ :patch-attempts result
+                    assert= true unchanged?
+            :tags $ #{} :server
         'record-resync! $ %{} 'CodeEntry
           :doc "|Count one explicit client request for a full synchronization snapshot."
           :code $ quote $ defn record-resync! () (swap! *sync-metrics update :resync-count inc)

@@ -4,7 +4,7 @@
   :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.47)
     |Cumulo/cumulo-util.calcit |0.0.24
     |Respo/respo-message.calcit |0.0.28
-    |Respo/respo-ui.calcit |0.7.32-alpha.3
+    |Respo/respo-ui.calcit |0.7.32-alpha.4
     |Respo/respo.calcit |0.16.114-alpha.7
     |calcit-lang/calcit-wss |0.2.27
     |calcit-lang/calcit.std |0.2.31
