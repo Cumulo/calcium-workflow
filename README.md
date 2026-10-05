@@ -42,7 +42,7 @@ calcit calcit.cirru --entry server
 默认严格检查；客户端和服务端入口及原有回归已在真实发布依赖上通过本地验证。
 开放输入仍由既有边界验证，未使用本地开发模块覆盖。
 
-当前严格 Caps 仍有五组传递版本冲突，质量门禁仍有 31 项逐定义回归（原40项）。
+当前严格 Caps 仍有五组传递版本冲突，质量门禁仍有 27 项逐定义回归（原40项）。
 完整 CI 尚未通过，不能据入口检查通过声称发布完成。详见
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；

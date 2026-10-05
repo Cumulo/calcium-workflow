@@ -51,6 +51,21 @@ unsafeCoerce仍2。原预算、CI、依赖和锁文件完全未改，没有新�
 
 ## 验证范围
 
+### 状态容器顶层键
+
+根据实际初始化、update-states与已发布Respo `>>` 返回合同，状态容器的
+顶层键是Tag，不是任意Dynamic。`*states`、原dispatch结果声明及两个组件
+参数同步改为Map<Tag,Dynamic>。嵌套state数据仍开放，游标仍允许原有
+Tag/String/Number混合路径，未收窄成仅Tag的cursor。
+
+两入口严格、原client41/41/server53/53、freshJS及原Session/Option、patch、
+Respo混合cursor/拒绝坏值/SSR/members、mount、storedlogin、URL、workload
+smoke、Node24/Vite8.0.5构建和canonical/diff通过。原质量31→27，
+schemaDynamic42→39/unresolved57→54/typeNotFull仍31/unsafeCoerce仍2。
+运行校验、原测试、baseline/预算/workflow/依赖全部保留，没有新检查脚本。
+初次tree路径误指向op叶子，事务原子拒绝且未写入；重查真实类型节点
+后使用路径与旧subtree守卫提交。完整CI、全UI与实际上传仍未完成。
+
 ### Respo 入站适配器的量化输入
 
 基于并行 e66dcd3 的实际发布 UI/Struct 修复，`dispatch-from-respo!` 输入

@@ -28,7 +28,7 @@
             {} $ :states $ {}
               :cursor $ []
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Dynamic 'Dynamic
+          :schema $ :: 'Ref $ :: 'Map 'Tag 'Dynamic
         '*store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *store (ClientState :loading)
           :examples $ []
@@ -152,7 +152,7 @@
               println |Dispatch op
             match op
               (:states cursor s)
-                reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Dynamic 'Dynamic)
+                reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Tag 'Dynamic)
               (:effect/connect) (connect!)
               _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
             , &unit
@@ -524,7 +524,7 @@
                   div $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Dynamic 'Dynamic) 'app.schema/Store
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -660,7 +660,7 @@
                         , false
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] $ :: 'Map 'Dynamic 'Dynamic
+            :args $ [] $ :: 'Map 'Tag 'Dynamic
         'initial-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
