@@ -1605,7 +1605,8 @@
               Result :err |Expected-nominal-Store
           :examples $ []
           :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
+            :args $ [] 'Input
+            :generics $ [] 'Input
             :return $ :: 'Result 'app.schema/Store 'String
           :tests $ []
             %{} 'TestEntry (:name |accepts-complete-nominal-store)
@@ -2811,8 +2812,8 @@
                 (:ok typed-op) (updater db typed-op typed-sid typed-op-id typed-op-time)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'Dynamic 'Sid 'OpId 'Time
-            :generics $ [] 'Sid 'OpId 'Time
+            :args $ [] 'app.schema/Db 'Input 'Sid 'OpId 'Time
+            :generics $ [] 'Sid 'OpId 'Time 'Input
           :tests $ []
             %{} 'TestEntry (:name |live-reducer-matches-business-updater)
               :code $ quote $ let

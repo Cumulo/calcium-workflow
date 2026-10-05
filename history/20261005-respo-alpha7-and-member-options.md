@@ -29,6 +29,26 @@ schema、tests、examples、doc 与其他 metadata 保持不变。
 场景。组件依赖浏览器样式，回归在原有 JS 测试入口执行；未修改原生测试
 断言或删除既有测试。
 
+## 保留门禁继续收敛 decoder 合同
+
+后续基于 dca4d55，只把 `decode-store` 的受检输入和 `updater-from-reel`
+的操作输入声明为独立量化 Input。具体 Store/Db 返回、嵌套字段解码、历史
+记录的 sid/id/time 验证全部保持，运行代码和所有原 tests 不变。
+
+六处初稿在类型检查通过后，被原client测试否定（33/41）：四个 Enum
+decoder 的泛型输入导致非Enum值进入 match。已恢复这四处原schema，未改
+断言或加入绕过。单定义 decode-operation 复现3/6，恢复原schema后6/6；
+已报告 [Calcit #1779](https://github.com/calcit-lang/calcit/issues/1779)。根因尚未
+定位，不声称已证明是某个内部优化。
+
+最终两处修改：两入口严格检查、原client41/41、server52/52、重新生成JS的
+原Session/Option、client patch、Respo/SSR/members、mount、stored-login、
+connection URL、workload smoke及Node24/Vite8.0.5构建通过。canonical无修改。
+原质量门禁40→34，schemaDynamic45→43、typeNotFull34→32、unresolved60→58；
+unsafeCoerce仍2。原预算、CI、依赖和锁文件完全未改，没有新测试文件、脚本
+或helper。严格Caps五组发布版本差异仍阻塞CI。未重跑完整浏览器UI、生产
+服务或实际COS上传；旧浏览器记录仅对应dca4d55，不替代新head的全量验收。
+
 ## 验证范围
 
 - client/server 严格入口与 `--warn-dyn-method` 检查通过。
