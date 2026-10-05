@@ -199,8 +199,8 @@
               if config/dev? $ load-console-formatter!
               render-app!
               connect!
-              add-watch *store :changes on-store-change!
-              add-watch *states :changes on-states-change!
+              add-watch! *store :changes on-store-change!
+              add-watch! *states :changes on-states-change!
               install-activity-lifecycle!
               workload-entry!
               println "|App started!"
@@ -254,8 +254,8 @@
             :return $ :: 'JsNullish 'respo.dom/DomElement
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
-            if (some? client-errors) (hud! |error client-errors)
-              do (hud! |inactive nil) (remove-watch *store :changes) (remove-watch *states :changes) (clear-cache!) (render-app!) (add-watch *store :changes on-store-change!) (add-watch *states :changes on-states-change!) (install-activity-lifecycle!) (ws-set-on-data! on-server-data) (println "|Code updated.")
+            if (non-nil? client-errors) (hud! |error client-errors)
+              do (hud! |inactive nil) (remove-watch! *store :changes) (remove-watch! *states :changes) (clear-cache!) (render-app!) (add-watch! *store :changes on-store-change!) (add-watch! *states :changes on-states-change!) (install-activity-lifecycle!) (ws-set-on-data! on-server-data) (println "|Code updated.")
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -496,8 +496,7 @@
                 {} $ :class-name $ str-spaced css/preset css/global css/fullscreen css/column
                 comp-navigation logged-in? $ :count store
                 if logged-in?
-                  case-default (:name router)
-                    <> $ str router
+                  match (:name router)
                     :home $ div
                       {} (:class-name css/expand)
                         :style $ {} $ :padding |8px
@@ -512,6 +511,7 @@
                     :profile $ comp-profile
                       option:unwrap $ :user store
                       , router-data
+                    _ $ <> $ str router
                   comp-login $ >> states :login
                 comp-status-color $ :color store
                 if dev?
@@ -756,7 +756,12 @@
                     map $ fn (pair)
                       let[] (k username) pair $ [] k $ div
                         {} $ :class-name css-member-label
-                        <> username
+                        match
+                          app.schema/decode-optional-string (Option :some username) |profile.members
+                          (:ok name-option)
+                            <> $ option:unwrap-or name-option |
+                          (:err detail)
+                            raise $ str |Invalid-profile-member: detail
               =< nil 48
               div ({})
                 button
@@ -2380,7 +2385,7 @@
           :doc "|Read counters plus pending and slow-client gauges computed from current connection state."
           :code $ quote $ defn read-sync-metrics ()
             let
-                states $ vals @*client-states
+                states $ distinct-values @*client-states
                 pending-clients $ count $ filter states
                   fn (state)
                     option:unwrap-or (get state :in-flight?) false
@@ -2926,9 +2931,10 @@
                 router-data $ :router session-data
                 router-name $ :name router-data
                 router-view-data $ if logged-in?
-                  case-default router-name (Option :none)
+                  match router-name
                     :home $ :pages shared
                     :profile $ Option :some $ :members shared
+                    _ $ Option :none
                   Option :none
                 router-view $ %{} RouterView (:name router-name) (:data router-view-data)
                   :router $ Option :none

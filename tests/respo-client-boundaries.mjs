@@ -38,7 +38,9 @@ const schema = await load("app.schema.mjs");
 const ws = await load("ws-edn.client.mjs");
 const { wrap_dispatch } = await load("respo.controller.client.mjs");
 const { comp_container, comp_offline } = await load("app.comp.container.mjs");
+const { comp_profile } = await load("app.comp.profile.mjs");
 const { twig_container, twig_shared } = await load("app.twig.container.mjs");
+const { twig_user } = await load("app.twig.user.mjs");
 const { make_string } = await load("respo.render.html.mjs");
 
 const wrapped = wrap_dispatch(c.atom(client.dispatch_from_respo_$x_));
@@ -95,4 +97,22 @@ const store = twig_container(schema.database, schema.session, twig_shared(schema
 const html = make_string(comp_container(c.parse_cirru_edn("{} (:cursor ([]))"), store));
 for (const text of ["Username", "Password", "Sign up", "Log in"]) assert.ok(html.includes(text), text);
 assert.ok(html.includes('data-comp="comp-login"'));
-console.log("Respo client: legacy cursor/Tag dispatch, decoder rejection, lifecycle replacement/cleanup and three SSR views passed without a network connection");
+
+const profileResult = schema.decode_database(c.parse_cirru_edn(
+  "{} (:sessions ({})) (:users ({} (|u1 $ {} (:id |u1) (:name |Ada) (:password |hash))))",
+));
+assert.equal(profileResult.tag.value, "ok");
+const profileUser = twig_user(profileResult.get(1).get("users").get("u1"));
+const renderMembers = source => make_string(comp_profile(profileUser, c.parse_cirru_edn(source)));
+const presentMember = renderMembers("{} (7 $ %:: 'Option :some |Grace)");
+assert.ok(presentMember.includes("Grace"));
+assert.ok(!presentMember.includes("Option"));
+const absentMember = renderMembers("{} (7 $ %:: 'Option :none)");
+assert.ok(absentMember.includes("Members:"));
+assert.ok(!absentMember.includes("Option"));
+assert.ok(renderMembers("{} (7 |Lin)").includes("Lin"));
+assert.ok(!renderMembers("{} (7 nil)").includes("nil"));
+for (const source of ["{} (7 42)", "{} (7 $ %:: 'Option :some 42)"]) {
+  assert.throws(() => renderMembers(source));
+}
+console.log("Respo client: legacy cursor/Tag dispatch, decoder rejection, lifecycle replacement/cleanup, three SSR views and member Option rendering passed without a network connection");
