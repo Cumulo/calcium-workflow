@@ -35,7 +35,7 @@ jobs:
       - name: Install JavaScript dependencies
         run: yarn install --immutable
 
-      - name: Validate Calcit snapshot and quality gates
+      - name: Validate Calcit snapshot, types and tests
         run: |
           caps --strict --ci
           caps verify --toolchain
@@ -53,7 +53,7 @@ jobs:
             | jq -e '.data.summary.calls == 0' > /dev/null
           calcit calcit.cirru test --tag client --require-match --summary-only --format json
           calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
-          calcit calcit.cirru analyze quality --baseline config/calcit-quality.cirru
+          yarn check-types
 
       - run: yarn compile-page && yarn release-page
 

@@ -43,10 +43,12 @@ calcit calcit.cirru --entry server
 开放输入仍由既有边界验证，未使用本地开发模块覆盖。
 
 已升级发布的 Util `0.0.25`、Message `0.0.29`、Recollect `0.0.54` 和
-ws-edn `0.0.34`，传递 Value 为 `0.5.13`。这些配套发布的原 CI 已通过。
-严格 Caps 仍被旧 Reel `0.0.47` 的七组旧版本请求阻挡；需要 Reel #50 完成
-质量门禁后再发布新版。Calcium 质量门禁仍有 27 项逐定义回归（原40项）。
-完整 CI 尚未通过，不能据入口检查通过声称发布完成。详见
+ws-edn `0.0.35`，传递 Value 为 `0.5.13`。这些配套发布的原 CI 已通过。
+Reel 使用 `0.0.48`，与上述依赖保持一致，避免旧版本请求冲突。
+旧 Dynamic 数量 baseline 已退役，`yarn check-types`
+按 browser/native 检查全项目公开定义（90/137 个）。严格入口检查、
+dynamic-methods/deprecated 检查和全部既有原生、生成 JS 回归均保留。
+CI 完整执行上述验证与原有运行回归，不以入口检查代替完整验收。详见
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
 [Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；

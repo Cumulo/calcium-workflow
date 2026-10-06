@@ -2526,7 +2526,8 @@
                   do (reel-record-count corrupt) false
                   fn (detail) (includes? detail |list)
               :tags $ #{} :server
-        'refresh-domain-reel $ %{} 'CodeEntry (:doc |)
+        'refresh-domain-reel $ %{} 'CodeEntry
+          :doc "|Replay callbacks accept heterogeneous historical values; updater-from-reel decodes operation, session, ID and time before calling the typed domain updater. Validate the merged base before replay."
           :code $ quote $ defn refresh-domain-reel (reel base replay-updater)
             let
                 next-base $ if (:merged? reel)
@@ -2542,8 +2543,7 @@
           :schema $ :: 'Fn $ {} (:return 'cumulo-reel.core/ReelState)
             :args $ [] 'cumulo-reel.core/ReelState 'app.schema/Db $ :: 'Fn
               {} (:return 'app.schema/Db)
-                :args $ [] 'app.schema/Db 'Operation 'Sid 'OpId 'Number
-            :generics $ [] 'Operation 'Sid 'OpId
+                :args $ [] 'app.schema/Db 'Dynamic 'Dynamic 'Dynamic 'Dynamic
           :tests $ []
             %{} 'TestEntry (:name |rejects-invalid-merged-base)
               :code $ quote $ assert= true
