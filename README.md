@@ -31,15 +31,28 @@ Run backend in calcit-rs:
 
 ```bash
 # dev mode
-mode=dev calcit --compat-types -w calcit.cirru --entry server
+mode=dev calcit -w calcit.cirru --entry server
 
 # release mode
-calcit --compat-types calcit.cirru --entry server
+calcit calcit.cirru --entry server
 ```
 
-Calcit 0.14.0 enables strict preprocessing by default. Calcium currently uses
-the documented `--compat-types` migration bridge while its remaining dynamic UI
-boundaries are migrated to fully strict schemas.
+当前 CLI 与 npm runtime 固定已发布的 Calcit `0.29.0-alpha.6`，Respo 使用
+`0.16.114-alpha.7`，JS-FFI 使用 `0.2.1-alpha.13`，UI 使用 `0.7.32-alpha.4`。开发、构建与 CI 均使用
+默认严格检查；客户端和服务端入口及原有回归已在真实发布依赖上通过本地验证。
+开放输入仍由既有边界验证，未使用本地开发模块覆盖。
+
+已升级发布的 Util `0.0.25`、Message `0.0.29`、Recollect `0.0.54` 和
+ws-edn `0.0.35`，传递 Value 为 `0.5.13`。这些配套发布的原 CI 已通过。
+Reel 使用 `0.0.48`，与上述依赖保持一致，避免旧版本请求冲突。
+旧 Dynamic 数量 baseline 已退役，`yarn check-types`
+按 browser/native 检查全项目公开定义（90/137 个）。严格入口检查、
+dynamic-methods/deprecated 检查和全部既有原生、生成 JS 回归均保留。
+CI 完整执行上述验证与原有运行回归，不以入口检查代替完整验收。详见
+[发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
+[UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
+[Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
+[旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围。
 
 ### Realtime sync lifecycle
 
