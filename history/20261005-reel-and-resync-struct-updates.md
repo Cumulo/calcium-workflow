@@ -31,3 +31,16 @@ reset/merge 的定向回归也通过；其他旧 Reel reducer/refresher 路径�
 原质量门禁仍为 27 项逐定义回归，没有提高预算或删除检查。
 严格 Caps 的上游发布依赖冲突尚未解除，完整 Actions 仍不能通过。
 本次是已有 nominal Struct 更新路径的运行时修复，不以测试通过替代 milestone 验收。
+
+## 2026-10-06 配套依赖发版
+
+获得用户授权后发布 Value 0.5.13、Message 0.0.29、Util 0.0.25、
+Recollect 0.0.54 和 ws-edn 0.0.34。Value/Message/Recollect/WS 的 PR 与
+合并主分支完整 CI 均通过；Util 使用已经合并且验证通过的 #42。
+本项目消费发布标签，不引用 hash 或工作分支，不更改原检查、预算、源码或测试。
+
+真实十二个发布模块上两入口、client 41/server 55、fresh JS、原 SessionOption、
+patch/Respo/mount/stored-login/URL、workload smoke 与 Vite 构建通过，
+canonical format 没有变化。质量门禁独立执行仍为 27 项回归。普通 Caps 的
+七组警告全部来自已发布 Reel 0.0.47 的旧请求；严格 CI 需要先完成 Reel #50
+质量门禁并发布新版，不能把上述本地测试当作完整 CI 通过。
