@@ -22,7 +22,7 @@ globalThis.document = {
   },
 };
 const load = name => import(pathToFileURL(resolve(output, name)).href);
-const { stored_login } = await load("app.client.mjs");
+const { stored_login } = await load("app.sync.client.mjs");
 const c = await load("calcit.core.mjs");
 assert.equal(stored_login().tag.value, "none");
 raw = "[] |demo |password";

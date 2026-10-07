@@ -13,7 +13,7 @@ globalThis.document = {
   },
 };
 const c = await load("calcit.core.mjs");
-const client = await load("app.client.mjs");
+const client = await load("app.sync.client.mjs");
 const { validate_server_patch } = client;
 const ws = await load("ws-edn.client.mjs");
 const { change_op } = await load("recollect.schema.mjs");

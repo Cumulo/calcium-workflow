@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-const entry = resolve(process.argv[2] ?? "js-out", "app.client.mjs");
+const entry = resolve(process.argv[2] ?? "js-out", "app.sync.client.mjs");
 const parse = createRequire(entry)("url-parse");
 globalThis.document = {
   querySelector() { return null; },
