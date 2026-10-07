@@ -24,7 +24,7 @@ for (let index = 1; index < parts.length; index += 2) files.set(parts[index], pa
 const layerOf = (ns) => {
   if (ns.startsWith("app.sync.")) return "template";
   if (ns.startsWith("app.feature.")) return "feature";
-  if (["app.schema", "app.hooks", "app.updater", "app.client", "app.server", "app.comp.container"].includes(ns) || ns.startsWith("app.hooks.")) return "wiring";
+  if (["app.schema", "app.updater", "app.client", "app.server", "app.comp.container"].includes(ns) || ns.startsWith("app.hooks.")) return "wiring";
   return "base";
 };
 

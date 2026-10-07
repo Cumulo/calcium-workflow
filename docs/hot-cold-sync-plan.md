@@ -17,7 +17,7 @@
 
 | 层 | Kanban 模板中的例子 | 同步方式 | 实现位置 |
 |----|------|------|------|
-| 公共热分区 | `(:lobby)` 看板摘要 + 在线用户；`(:board id)` 列与卡片摘要 | 每个分区每个 revision 只 diff 一次，所有订阅者复用同一个 delta 和同一份编码 payload | `app.sync.partition`、`app.feature.kanban.twig`、`app.sync.server/sync-partitions!` |
+| 公共热分区 | `(:lobby)` 看板摘要 + 在线用户；`(:board id)` 列与卡片摘要 | 每个分区每个 revision 只 diff 一次，所有订阅者复用同一个 delta 和同一份编码 payload | `cumulo-reel.partition`（引擎）、`app.feature.kanban.twig`、`app.sync.server/sync-partitions!` |
 | 私有热分区 | `(:user id)` 资料、设置、`history-rev` | 与公共分区同一机制；同一用户的多个连接复用 | 同上 |
 | 会话 Store | 路由、session 消息、登录状态 | 沿用原 revision/ACK/resync 的单连接 diff，体量很小 | `app.twig.container`、`app.sync.server/sync-client!` |
 | 冷数据 | 个人操作历史、卡片描述 | `ClientMessage :query` + request id 回调；不进入 diff；热分区只放 `detail-rev` / `history-rev` | `app.feature.kanban.updater`（读写）、`app.feature.kanban.resource`（客户端缓存） |
@@ -106,7 +106,7 @@ snapshot/delta 发送次数、reused-payloads、drops、queries 和 live-partiti
 
 | 检查 | 位置 |
 |------|------|
-| 分区引擎：未变化不升 revision、N 个订阅者复用同一个 delta、历史裁剪回退 snapshot、epoch 变化、单 pending 与过期 ACK、溢出 reset、delta 链重放收敛、客户端原子应用 | `app.sync.partition` 的测试（`--tag partition`） |
+| 分区引擎：未变化不升 revision、N 个订阅者复用同一个 delta、历史裁剪回退 snapshot、epoch 变化、单 pending 与过期 ACK、溢出 reset、delta 链重放收敛、客户端原子应用 | cumulo-reel 的 `cumulo-reel.partition` 测试；`app.schema/decode-partition-view` 的 nominal 解码测试 |
 | 授权、投影与脏分区推导 | `app.feature.kanban.twig/session-partitions` 的测试 |
 | 服务端真实路径：5 个订阅者、一次卡片新增 → 3 次 diff（每个脏分区一次）、0 次 snapshot、10 次 delta 发送、5 个订阅者拿到同一个 board delta、8 次 payload 复用 | `app.hooks.server/affected-partitions` 的测试 |
 | Kanban reducer、冷效果、历史分页、卡片详情回复、session 身份 | `app.feature.kanban.updater`、`app.feature.kanban.server/query-reply` 的测试 |

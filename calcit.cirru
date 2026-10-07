@@ -136,7 +136,9 @@
                   div $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot) 'app.feature.kanban.resource/Resources
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store
+              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
+              , 'app.feature.kanban.resource/Resources
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -499,7 +501,7 @@
                 match (get partitions key)
                   (:some raw-slot)
                     match
-                      :view $ assert-type raw-slot app.sync.partition/PartitionSlot
+                      :view $ assert-type raw-slot $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
                       (:board board)
                         each (resource/stale-details @*resources board)
                           fn (card-id)
@@ -513,7 +515,7 @@
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
+            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
         'send-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-query! (request)
             reset! *resources $ :resources request
@@ -910,11 +912,13 @@
           :code $ quote $ defn partition-view (partitions key)
             match (get partitions key)
               (:some raw-slot)
-                Option :some $ :view $ assert-type raw-slot app.sync.partition/PartitionSlot
+                Option :some $ :view $ assert-type raw-slot (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
               (:none) (Option :none)
           :examples $ []
           :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot) 'app.schema/PartitionKey
+            :args $ []
+              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
+              , 'app.schema/PartitionKey
             :return $ :: 'Option 'app.schema/PartitionView
         'route-op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn route-op (name target)
@@ -1416,7 +1420,9 @@
           :schema $ :: 'app.feature.kanban.schema/ColdStore
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.schema
-          :require $ app.schema :refer $ DatabaseDecodeError invalid-message struct-tree-input
+          :require
+            app.schema :refer $ DatabaseDecodeError invalid-message
+            cumulo-reel.partition :refer $ struct-tree-input
     'app.feature.kanban.server $ %{} 'FileEntry
       :defs $ {}
         '*cold-store $ %{} 'CodeEntry
@@ -2352,30 +2358,6 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.workload
           :require (app.schema :as schema) (app.feature.kanban.updater :as kanban) (app.feature.kanban.resource :as resource)
-    'app.hooks $ %{} 'FileEntry
-      :defs $ {} $ 'sample-partition-view
-        %{} 'CodeEntry
-          :doc "|Deterministic partition view for app.sync.partition self-tests: distinct label lists must give distinct views with keyed entries, so diffs produce small patches."
-          :code $ quote $ defn sample-partition-view (labels)
-            PartitionView :lobby $ %{} LobbyView
-              :boards $ assert-type
-                -> labels
-                  map-indexed $ fn (idx title)
-                    let
-                        id $ str |b idx
-                      [] id $ %{} BoardBrief (:id id) (:title title) (:card-count idx)
-                  pairs-map
-                :: 'Map 'String 'app.feature.kanban.schema/BoardBrief
-              :online $ {}
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
-            :args $ [] $ :: 'List 'String
-      :ns $ %{} 'NsEntry
-        :doc "|Wiring layer, shared by both entries: pure hooks the app.sync.* template needs from the current feature. Keep it free of platform dependencies."
-        :code $ quote $ ns app.hooks
-          :require
-            app.schema :refer $ PartitionView
-            app.feature.kanban.schema :refer $ LobbyView BoardBrief
     'app.hooks.client $ %{} 'FileEntry
       :defs $ {}
         'after-partition-update! $ %{} 'CodeEntry
@@ -2383,7 +2365,7 @@
           :code $ quote $ defn after-partition-update! (key partitions) (kanban-client/refresh-stale-details! key partitions)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
+            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
         'class-mapper $ %{} 'CodeEntry
           :doc "|Feature structs and enums that ws-edn must restore by name inside partition views and query replies."
           :code $ quote $ def class-mapper
@@ -2464,10 +2446,11 @@
                 db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
                 add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
                 db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
-                *sent $ atom $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
+                *sent $ atom $ assert-type ([])
+                  :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                 record! $ fn (sid action)
                   hint-fn $ {}
-                    :args $ [] 'Number 'app.sync.partition/PartitionAction
+                    :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                     :return 'Unit
                   swap! *sent conj action
                   match action
@@ -2486,7 +2469,7 @@
                     :return 'Number
                   count $ filter @*sent $ fn (action)
                     hint-fn $ {}
-                      :args $ [] 'app.sync.partition/PartitionAction
+                      :args $ [] $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                       :return 'Bool
                     = tag $ match action
                       (:snapshot _state) :snapshot
@@ -2495,16 +2478,16 @@
                 board-deltas $ fn ()
                   hint-fn $ {}
                     :args $ []
-                    :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                    :return $ :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
                   foldl @*sent
                     assert-type ([])
-                      :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                      :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
                     fn (acc action)
                       hint-fn $ {}
                         :args $ []
-                          :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
-                          , 'app.sync.partition/PartitionAction
-                        :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                          :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
+                          :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
+                        :return $ :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
                       match action
                         (:deltas state deltas)
                           if
@@ -2512,9 +2495,10 @@
                             conj acc deltas
                             , acc
                         _ acc
-              reset! app.sync.server/*partitions $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState)
+              reset! app.sync.server/*partitions $ assert-type ({})
+                :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
               reset! app.sync.server/*partition-progress $ assert-type ({})
-                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
               reset! app.sync.server/*dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
               reset! app.sync.server/*partition-metrics app.sync.server/empty-partition-metrics
               reset! app.sync.server/*partition-payloads $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
@@ -2527,7 +2511,8 @@
               let
                   initial-snapshots $ sends-of :snapshot
                   initial-partitions $ count @app.sync.server/*partitions
-                reset! *sent $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
+                reset! *sent $ assert-type ([])
+                  :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                 app.sync.server/mark-partitions-dirty! $ app.hooks.server/affected-partitions db1 add-op 1
                 app.sync.server/sync-partitions-with! db2 record!
                 let
@@ -2699,7 +2684,7 @@
             :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
             :effect/pong
             :part/snapshot 'app.schema/PartitionKey 'Number 'Number 'app.schema/PartitionView
-            :part/patch 'app.schema/PartitionKey 'Number $ :: 'List 'app.sync.partition/PartitionDelta
+            :part/patch 'app.schema/PartitionKey 'Number $ :: 'List 'cumulo-reel.partition/PartitionDelta
             :part/drop 'app.schema/PartitionKey
             :query/reply 'String 'app.schema/QueryReply
           :examples $ []
@@ -3340,6 +3325,34 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
             :return $ :: 'Result 'app.schema/PartitionKey 'app.schema/MessageDecodeError
+        'decode-partition-view $ %{} 'CodeEntry
+          :doc "|Validate a patched partition view against the nominal PartitionView; passed to cumulo-reel.partition/apply-partition-deltas."
+          :code $ quote $ defn decode-partition-view (value)
+            try-decode-map-as (struct-tree-input value) 'app.schema/PartitionView
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/PartitionView 'String
+          :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
+            :code $ quote $ let
+                mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board app.feature.kanban.schema/Board) (:Column app.feature.kanban.schema/Column) (:Card app.feature.kanban.schema/Card)
+                board $ %{} app.feature.kanban.schema/Board (:id |b1) (:title |T) (:created-at 1)
+                  :columns $ {} $ |k
+                    %{} app.feature.kanban.schema/Column (:id |k) (:title |K) (:rank 1)
+                  :cards $ {}
+                view $ PartitionView :board board
+                raw $ parse-cirru-edn (format-cirru-edn view) mapper
+                bad-title $ parse-cirru-edn $ format-cirru-edn 42
+                bad $ parse-cirru-edn
+                  format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
+                  , mapper
+              assert= (Result :ok view)
+                try-decode-map-as (struct-tree-input raw) 'app.schema/PartitionView
+              assert= true $ match
+                try-decode-map-as (struct-tree-input bad) 'app.schema/PartitionView
+                (:err detail) (includes? detail |title)
+                _ false
+            :tags $ #{} :client :schema :server
         'decode-query $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-query (data)
             let
@@ -3888,56 +3901,6 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'Dynamic
-        'struct-tree-input $ %{} 'CodeEntry
-          :doc "|Recursively turn untrusted struct trees, including struct payloads inside nominal enums, into maps so try-decode-map-as can validate them against a nominal schema."
-          :code $ quote $ defn struct-tree-input (value)
-            cond
-                struct? value
-                struct-tree-input $ &struct:to-map value
-              (map? value)
-                filter-map-kv
-                  decode-map-as value $ :: 'Map 'Dynamic 'Dynamic
-                  fn (key item)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic 'Dynamic
-                      :return $ :: 'MapEntryDecision 'Dynamic 'Dynamic
-                    MapEntryDecision :keep key $ struct-tree-input item
-              (list? value)
-                map
-                  decode-map-as value $ :: 'List 'Dynamic
-                  , struct-tree-input
-              (enum? value)
-                foldl
-                  range 1 $ count value
-                  , value $ fn (acc idx)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic 'Number
-                      :return 'Dynamic
-                    assoc acc idx $ struct-tree-input $ option:unwrap (nth value idx)
-              true value
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'Dynamic
-          :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
-            :code $ quote $ let
-                mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board app.feature.kanban.schema/Board) (:Column app.feature.kanban.schema/Column) (:Card app.feature.kanban.schema/Card)
-                board $ %{} app.feature.kanban.schema/Board (:id |b1) (:title |T) (:created-at 1)
-                  :columns $ {} $ |k
-                    %{} app.feature.kanban.schema/Column (:id |k) (:title |K) (:rank 1)
-                  :cards $ {}
-                view $ PartitionView :board board
-                raw $ parse-cirru-edn (format-cirru-edn view) mapper
-                bad-title $ parse-cirru-edn $ format-cirru-edn 42
-                bad $ parse-cirru-edn
-                  format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
-                  , mapper
-              assert= (Result :ok view)
-                try-decode-map-as (struct-tree-input raw) 'app.schema/PartitionView
-              assert= true $ match
-                try-decode-map-as (struct-tree-input bad) 'app.schema/PartitionView
-                (:err detail) (includes? detail |title)
-                _ false
-            :tags $ #{} :client :schema :server
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def user
             %{} User (:name ||) (:id ||)
@@ -3948,6 +3911,7 @@
           :schema $ :: 'app.schema/User
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
+          :require $ cumulo-reel.partition :refer $ struct-tree-input
     'app.server $ %{} 'FileEntry
       :defs $ {}
         'main! $ %{} 'CodeEntry (:doc |)
@@ -3996,7 +3960,7 @@
             calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
-            app.sync.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
+            cumulo-reel.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
             app.feature.kanban.twig :refer $ project-partition session-partitions affected-partitions
             app.feature.kanban.updater :refer $ kanban-effects apply-cold-effects history-page card-detail-reply session-user-id
             app.sync.server :refer $ *initial-db *reader-reel *reel invalidate-sync-caches! mark-all-partitions-dirty! on-exit! persist-db! refresh-domain-reel render-loop! resolve-port run-server! sweep-idle-clients! updater-from-reel
@@ -4014,9 +3978,10 @@
         '*partitions $ %{} 'CodeEntry
           :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
           :code $ quote $ defatom *partitions
-            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot)
+            assert-type ({})
+              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
+          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
         '*states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *states
             {} $ :states $ {}
@@ -4078,7 +4043,7 @@
                   (:none)
                     ws-send! $ schema/ClientMessage :part/resync key
                   (:some slot)
-                    match (apply-partition-deltas slot epoch deltas)
+                    match (apply-partition-deltas slot epoch deltas app.schema/decode-partition-view)
                       (:ok next-slot)
                         do (swap! *partitions assoc key next-slot)
                           ws-send! $ schema/ClientMessage :part/ack key epoch $ :revision next-slot
@@ -4147,7 +4112,7 @@
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
                   :class-mapper $ merge
-                    {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta app.sync.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
+                    {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta cumulo-reel.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
                     , hooks/class-mapper
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -4458,521 +4423,8 @@
             js-ffi.browser :as browser
             respo.ffi.browser :refer $ narrow-element
             js-ffi.shared :refer $ console-error!
-            app.sync.partition :refer $ PartitionSlot apply-partition-deltas
+            cumulo-reel.partition :refer $ PartitionSlot apply-partition-deltas
             app.hooks.client :as hooks
-    'app.sync.partition $ %{} 'FileEntry
-      :defs $ {}
-        'PartitionAction $ %{} 'CodeEntry
-          :doc "|One transport action for a connection: drop a revoked partition, or send its snapshot or delta chain."
-          :code $ quote $ defenum PartitionAction (:drop 'app.schema/PartitionKey) (:snapshot 'app.sync.partition/PartitionState)
-            :deltas 'app.sync.partition/PartitionState $ :: 'List 'app.sync.partition/PartitionDelta
-          :examples $ []
-          :schema $ :: 'EnumDef
-        'PartitionAdvance $ %{} 'CodeEntry
-          :doc "|Outcome of projecting a new partition view: no change, one retained delta, or a reset that forces snapshots."
-          :code $ quote $ defenum PartitionAdvance (:unchanged) (:delta 'app.sync.partition/PartitionDelta 'recollect.diff/DiffStats) (:reset 'recollect.diff/DiffStats)
-          :examples $ []
-          :schema $ :: 'EnumDef
-        'PartitionDelta $ %{} 'CodeEntry
-          :doc "|One retained diff step of a partition, computed once and reused for every subscriber at its base revision."
-          :code $ quote $ defstruct PartitionDelta (:base 'Number) (:revision 'Number)
-            :changes $ :: 'List 'recollect.schema/change-op
-          :examples $ []
-          :schema $ :: 'StructDef
-        'PartitionProgress $ %{} 'CodeEntry
-          :doc "|Per-connection progress for one subscribed partition: acknowledged revision plus at most one unacknowledged send."
-          :code $ quote $ defstruct PartitionProgress (:epoch 'Number) (:acked 'Number)
-            :in-flight $ :: 'Option 'Number
-          :examples $ []
-          :schema $ :: 'StructDef
-        'PartitionSendPlan $ %{} 'CodeEntry
-          :doc "|What one subscriber needs next: nothing, a full snapshot, or the retained contiguous delta chain from its acknowledged revision."
-          :code $ quote $ defenum PartitionSendPlan (:idle) (:snapshot)
-            :deltas $ :: 'List 'app.sync.partition/PartitionDelta
-          :examples $ []
-          :schema $ :: 'EnumDef
-        'PartitionSlot $ %{} 'CodeEntry
-          :doc "|Client cache of one subscribed partition: lineage epoch, applied revision and validated view."
-          :code $ quote $ defstruct PartitionSlot (:epoch 'Number) (:revision 'Number)
-            :view $ quote app.schema/PartitionView
-          :examples $ []
-          :schema $ :: 'StructDef
-        'PartitionState $ %{} 'CodeEntry
-          :doc "|Server-owned hot state of one partition. epoch changes whenever revisions restart, so old acknowledgements never match a new lineage."
-          :code $ quote $ defstruct PartitionState
-            :key $ quote app.schema/PartitionKey
-            :epoch 'Number
-            :revision 'Number
-            :view $ quote app.schema/PartitionView
-            :history $ :: 'List 'app.sync.partition/PartitionDelta
-          :examples $ []
-          :schema $ :: 'StructDef
-        'PartitionStep $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defstruct PartitionStep
-            :state $ quote app.sync.partition/PartitionState
-            :advance $ quote app.sync.partition/PartitionAdvance
-          :examples $ []
-          :schema $ :: 'StructDef
-        'ack-partition-progress $ %{} 'CodeEntry
-          :doc "|Advance the baseline only for the matching epoch and pending revision; stale, duplicate, and reordered ACKs are ignored."
-          :code $ quote $ defn ack-partition-progress (progress epoch revision)
-            match (:in-flight progress)
-              (:some pending)
-                if
-                  and
-                    = epoch $ :epoch progress
-                    = revision pending
-                  struct-with progress (:acked revision)
-                    :in-flight $ Option :none
-                  , progress
-              (:none) progress
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionProgress)
-            :args $ [] 'app.sync.partition/PartitionProgress 'Number 'Number
-          :tests $ [] $ %{} 'TestEntry (:name |single-pending-send-and-stale-acks)
-            :code $ quote $ let
-                s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
-                sent $ mark-partition-sent s1 $ Option :none
-                s2 $ :state $ advance-partition s1
-                  test-lobby $ [] |b
-                  , test-budget 8 64
-                wrong-epoch $ ack-partition-progress sent 6 1
-                wrong-revision $ ack-partition-progress sent 7 2
-                acked $ ack-partition-progress sent 7 1
-              assert= (Option :some 1) (:in-flight sent)
-              assert= (PartitionSendPlan :idle)
-                plan-partition-send s2 $ Option :some sent
-              assert= sent wrong-epoch
-              assert= sent wrong-revision
-              assert= 1 $ :acked acked
-              assert= (Option :none) (:in-flight acked)
-              assert= acked $ ack-partition-progress acked 7 1
-              assert=
-                PartitionSendPlan :deltas $ :history s2
-                plan-partition-send s2 $ Option :some acked
-              assert= 0 $ :acked $ release-partition-send sent
-              assert= (Option :none)
-                :in-flight $ release-partition-send sent
-            :tags $ #{} :partition :server
-        'advance-partition $ %{} 'CodeEntry
-          :doc "|Diff the retained view against a new projection exactly once. Budget or operation overflow resets history instead of emitting a partial patch."
-          :code $ quote $ defn advance-partition (state view budget history-limit operation-limit)
-            match
-              diff-twig-budgeted (:view state) view
-                {} $ :key :id
-                , budget
-              (:budget-exceeded _reason stats) (reset-step state view stats)
-              (:complete changes stats)
-                cond
-                    empty? changes
-                    %{} PartitionStep (:state state)
-                      :advance $ PartitionAdvance :unchanged
-                  (> (count changes) operation-limit)
-                    reset-step state view stats
-                  true $ let
-                      next-revision $ inc $ :revision state
-                      delta $ %{} PartitionDelta
-                        :base $ :revision state
-                        :revision next-revision
-                        :changes changes
-                    %{} PartitionStep
-                      :state $ struct-with state (:revision next-revision) (:view view)
-                        :history $ trim-history
-                          conj (:history state) delta
-                          , history-limit
-                      :advance $ PartitionAdvance :delta delta stats
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionStep)
-            :args $ [] 'app.sync.partition/PartitionState 'app.schema/PartitionView 'recollect.diff/DiffBudget 'Number 'Number
-          :tests $ []
-            %{} 'TestEntry (:name |unchanged-view-keeps-revision)
-              :code $ quote $ let
-                  state $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a |b)
-                  step $ advance-partition state
-                    test-lobby $ [] |a |b
-                    , test-budget 8 64
-                assert= (PartitionAdvance :unchanged) (:advance step)
-                assert= 1 $ :revision $ :state step
-                assert= ([])
-                  :history $ :state step
-              :tags $ #{} :partition :server
-            %{} 'TestEntry (:name |one-delta-serves-every-subscriber)
-              :code $ quote $ let
-                  state $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a |b)
-                  step $ advance-partition state
-                    test-lobby $ [] |a |c
-                    , test-budget 8 64
-                  next-state $ :state step
-                  progress $ %{} PartitionProgress (:epoch 7) (:acked 1)
-                    :in-flight $ Option :none
-                  plans $ map (range 5)
-                    fn (_idx)
-                      hint-fn $ {}
-                        :args $ [] 'Number
-                        :return 'app.sync.partition/PartitionSendPlan
-                      plan-partition-send next-state $ Option :some progress
-                match (:advance step)
-                  (:delta delta _stats)
-                    do
-                      assert= 1 $ :base delta
-                      assert= 2 $ :revision delta
-                      assert= 1 $ count $ :history next-state
-                      assert= 1 $ count $ distinct plans
-                      assert=
-                        Option :some $ PartitionSendPlan :deltas $ [] delta
-                        first plans
-                  _ $ raise |Expected-one-delta
-              :tags $ #{} :partition :server
-            %{} 'TestEntry (:name |operation-overflow-resets-history)
-              :code $ quote $ let
-                  s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
-                  s2 $ :state $ advance-partition s1
-                    test-lobby $ [] |b
-                    , test-budget 8 64
-                  step $ advance-partition s2
-                    test-lobby $ [] |x |y |z
-                    , test-budget 8 0
-                  s3 $ :state step
-                match (:advance step)
-                  (:reset _stats)
-                    do
-                      assert= 3 $ :revision s3
-                      assert= ([]) (:history s3)
-                      assert= (PartitionSendPlan :snapshot)
-                        plan-partition-send s3 $ Option :some $ %{} PartitionProgress (:epoch 7) (:acked 2)
-                          :in-flight $ Option :none
-                  _ $ raise |Expected-reset
-              :tags $ #{} :partition :server
-        'apply-partition-deltas $ %{} 'CodeEntry
-          :doc "|Apply a delta chain atomically: epoch and every base revision must match, and the final view must validate, otherwise the cached slot is left untouched."
-          :code $ quote $ defn apply-partition-deltas (slot epoch deltas)
-            if
-              not= epoch $ :epoch slot
-              Result :err $ str "|Partition epoch mismatch: " epoch "| vs " $ :epoch slot
-              let
-                  applied $ foldl deltas
-                    assert-type
-                      Result :ok $ [] (:revision slot) (:view slot)
-                      :: 'Result (:: 'List 'Dynamic) 'String
-                    fn (acc delta)
-                      hint-fn $ {}
-                        :args $ []
-                          :: 'Result (:: 'List 'Dynamic) 'String
-                          , 'app.sync.partition/PartitionDelta
-                        :return $ :: 'Result (:: 'List 'Dynamic) 'String
-                      match acc
-                        (:err _) acc
-                        (:ok pair)
-                          let[] (revision view) pair $ if
-                            not= revision $ :base delta
-                            Result :err $ str "|Partition base mismatch: " (:base delta) "| vs " revision
-                            match
-                              .apply-to
-                                patch-batch $ :changes delta
-                                , view
-                              (:ok next-view)
-                                Result :ok $ [] (:revision delta) next-view
-                              (:err error)
-                                Result :err $ patch-error-message error
-                match applied
-                  (:err detail) (Result :err detail)
-                  (:ok pair)
-                    let[] (revision view) pair $ match (decode-partition-view view)
-                      (:ok typed)
-                        Result :ok $ %{} PartitionSlot (:epoch epoch)
-                          :revision $ assert-type revision Number
-                          :view typed
-                      (:err detail) (Result :err detail)
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.sync.partition/PartitionSlot 'Number $ :: 'List 'app.sync.partition/PartitionDelta
-            :return $ :: 'Result 'app.sync.partition/PartitionSlot 'String
-          :tests $ [] $ %{} 'TestEntry (:name |atomic-chain-application)
-            :code $ quote $ let
-                v1 $ test-lobby $ [] |a |b
-                s1 $ new-partition (PartitionKey :lobby) 7 v1
-                s2 $ :state $ advance-partition s1
-                  test-lobby $ [] |a |c
-                  , test-budget 8 64
-                s3 $ :state $ advance-partition s2
-                  test-lobby $ [] |d |c |e
-                  , test-budget 8 64
-                slot $ %{} PartitionSlot (:epoch 7) (:revision 1) (:view v1)
-              assert=
-                Result :ok $ %{} PartitionSlot (:epoch 7) (:revision 3)
-                  :view $ :view s3
-                apply-partition-deltas slot 7 $ :history s3
-              assert= true $ match
-                apply-partition-deltas slot 8 $ :history s3
-                (:err detail) (includes? detail |epoch)
-                _ false
-              assert= true $ match
-                apply-partition-deltas slot 7 $ slice (:history s3) 1 2
-                (:err detail) (includes? detail |base)
-                _ false
-            :tags $ #{} :client :partition :server
-        'connection-actions $ %{} 'CodeEntry
-          :doc "|Plan one connection's transport work: drops for partitions it may no longer see, then snapshots or retained delta chains for authorized partitions."
-          :code $ quote $ defn connection-actions (partitions progress desired)
-            let
-                drops $ -> (.to-list progress)
-                  filter $ fn (pair)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return 'Bool
-                    let[] (key _progress) pair $ not $ includes? desired key
-                  map $ fn (pair)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return 'app.sync.partition/PartitionAction
-                    let[] (key _progress) pair $ PartitionAction :drop $ assert-type key app.schema/PartitionKey
-                sends $ foldl (.to-list desired) ([])
-                  fn (acc key)
-                    hint-fn $ {}
-                      :args $ [] (:: 'List 'app.sync.partition/PartitionAction) 'app.schema/PartitionKey
-                      :return $ :: 'List 'app.sync.partition/PartitionAction
-                    match (get partitions key)
-                      (:none) acc
-                      (:some raw-state)
-                        let
-                            state $ assert-type raw-state app.sync.partition/PartitionState
-                            progress-option $ match (get progress key)
-                              (:some raw)
-                                Option :some $ assert-type raw app.sync.partition/PartitionProgress
-                              (:none) (Option :none)
-                          match (plan-partition-send state progress-option)
-                            (:idle) acc
-                            (:snapshot)
-                              conj acc $ PartitionAction :snapshot state
-                            (:deltas deltas)
-                              conj acc $ PartitionAction :deltas state deltas
-              concat drops sends
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress) (:: 'Set 'app.schema/PartitionKey)
-            :return $ :: 'List 'app.sync.partition/PartitionAction
-          :tests $ [] $ %{} 'TestEntry (:name |drops-revoked-and-plans-authorized)
-            :code $ quote $ let
-                lobby $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
-                lobby2 $ :state $ advance-partition lobby
-                  test-lobby $ [] |b
-                  , test-budget 8 64
-                partitions $ assert-type
-                  {} $
-                    PartitionKey :lobby
-                    , lobby2
-                  :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState
-                acked $ %{} PartitionProgress (:epoch 7) (:acked 1)
-                  :in-flight $ Option :none
-                progress $ assert-type
-                  {}
-                      PartitionKey :lobby
-                      , acked
-                    (PartitionKey :board |gone) acked
-                  :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
-                no-progress $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress)
-                actions $ connection-actions partitions progress $ #{} (PartitionKey :lobby) (PartitionKey :user |u1)
-              assert= 2 $ count actions
-              assert= true $ includes? actions $ PartitionAction :drop (PartitionKey :board |gone)
-              assert= true $ includes? actions $ PartitionAction :deltas lobby2 (:history lobby2)
-              assert=
-                [] $ PartitionAction :snapshot lobby2
-                connection-actions partitions no-progress $ #{} $ PartitionKey :lobby
-            :tags $ #{} :partition :server
-        'decode-partition-view $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn decode-partition-view (value)
-            try-decode-map-as (app.schema/struct-tree-input value) 'app.schema/PartitionView
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/PartitionView 'String
-        'delta-chain $ %{} 'CodeEntry
-          :doc "|Return the complete retained chain from an acknowledged revision to the current revision, or none when any link was trimmed or reset."
-          :code $ quote $ defn delta-chain (history from to)
-            match
-              find-index history $ fn (delta)
-                hint-fn $ {}
-                  :args $ [] 'app.sync.partition/PartitionDelta
-                  :return 'Bool
-                = from $ :base delta
-              (:none) (Option :none)
-              (:some index)
-                let
-                    chain $ &list:slice history index
-                  match (last chain)
-                    (:some tail)
-                      if
-                        = to $ :revision tail
-                        Option :some chain
-                        Option :none
-                    (:none) (Option :none)
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'List 'app.sync.partition/PartitionDelta) 'Number 'Number
-            :return $ :: 'Option $ :: 'List 'app.sync.partition/PartitionDelta
-          :tests $ [] $ %{} 'TestEntry (:name |replayed-chain-converges)
-            :code $ quote $ let
-                v1 $ test-lobby $ [] |a |b
-                s1 $ new-partition (PartitionKey :lobby) 7 v1
-                s2 $ :state $ advance-partition s1
-                  test-lobby $ [] |a |c
-                  , test-budget 8 64
-                s3 $ :state $ advance-partition s2
-                  test-lobby $ [] |d |c |e
-                  , test-budget 8 64
-              match
-                delta-chain (:history s3) 1 3
-                (:some chain)
-                  let
-                      replayed $ foldl chain v1 $ fn (acc delta)
-                        hint-fn $ {}
-                          :args $ [] 'Dynamic 'app.sync.partition/PartitionDelta
-                          :return 'Dynamic
-                        match
-                          .apply-to
-                            recollect.patch/patch-batch $ :changes delta
-                            , acc
-                          (:ok next) next
-                          (:err error)
-                            raise $ str |Patch-failed: error
-                    assert= (:view s3) replayed
-                    assert= (Option :none)
-                      delta-chain (:history s3) 5 3
-                (:none) (raise |Expected-complete-chain)
-            :tags $ #{} :partition :server
-        'mark-partition-sent $ %{} 'CodeEntry
-          :doc "|Record one accepted send of the current revision. The acknowledged baseline only moves when the matching ACK arrives."
-          :code $ quote $ defn mark-partition-sent (state progress-option)
-            let
-                acked $ match progress-option
-                  (:some progress)
-                    if
-                      = (:epoch progress) (:epoch state)
-                      :acked progress
-                      , 0
-                  (:none) 0
-              %{} PartitionProgress
-                :epoch $ :epoch state
-                :acked acked
-                :in-flight $ Option :some $ :revision state
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionProgress)
-            :args $ [] 'app.sync.partition/PartitionState $ :: 'Option 'app.sync.partition/PartitionProgress
-        'new-partition $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn new-partition (key epoch view)
-            %{} PartitionState (:key key) (:epoch epoch) (:revision 1) (:view view)
-              :history $ []
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionState)
-            :args $ [] 'app.schema/PartitionKey 'Number 'app.schema/PartitionView
-        'plan-partition-send $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn plan-partition-send (state progress-option)
-            match progress-option
-              (:none) (PartitionSendPlan :snapshot)
-              (:some progress)
-                cond
-                    option:some? $ :in-flight progress
-                    PartitionSendPlan :idle
-                  (not= (:epoch progress) (:epoch state))
-                    PartitionSendPlan :snapshot
-                  (= (:acked progress) (:revision state))
-                    PartitionSendPlan :idle
-                  true $ match
-                    delta-chain (:history state) (:acked progress) (:revision state)
-                    (:some deltas) (PartitionSendPlan :deltas deltas)
-                    (:none) (PartitionSendPlan :snapshot)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionSendPlan)
-            :args $ [] 'app.sync.partition/PartitionState $ :: 'Option 'app.sync.partition/PartitionProgress
-          :tests $ []
-            %{} 'TestEntry (:name |trimmed-history-falls-back-to-snapshot)
-              :code $ quote $ let
-                  s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
-                  s2 $ :state $ advance-partition s1
-                    test-lobby $ [] |b
-                    , test-budget 2 64
-                  s3 $ :state $ advance-partition s2
-                    test-lobby $ [] |c
-                    , test-budget 2 64
-                  s4 $ :state $ advance-partition s3
-                    test-lobby $ [] |d
-                    , test-budget 2 64
-                  at $ fn (acked)
-                    hint-fn $ {}
-                      :args $ [] 'Number
-                      :return 'app.sync.partition/PartitionSendPlan
-                    plan-partition-send s4 $ Option :some $ %{} PartitionProgress (:epoch 7) (:acked acked)
-                      :in-flight $ Option :none
-                assert= 4 $ :revision s4
-                assert= 2 $ count $ :history s4
-                assert= (PartitionSendPlan :snapshot) (at 1)
-                assert=
-                  PartitionSendPlan :deltas $ :history s4
-                  at 2
-                assert= (PartitionSendPlan :idle) (at 4)
-                assert= (PartitionSendPlan :snapshot) (at 9)
-                assert= (PartitionSendPlan :snapshot)
-                  plan-partition-send s4 $ Option :none
-              :tags $ #{} :partition :server
-            %{} 'TestEntry (:name |epoch-change-forces-snapshot)
-              :code $ quote $ let
-                  state $ new-partition (PartitionKey :lobby) 8 $ test-lobby ([] |a)
-                  stale $ %{} PartitionProgress (:epoch 7) (:acked 1)
-                    :in-flight $ Option :none
-                assert= (PartitionSendPlan :snapshot)
-                  plan-partition-send state $ Option :some stale
-                assert= 0 $ :acked $ mark-partition-sent state (Option :some stale)
-              :tags $ #{} :partition :server
-        'release-partition-send $ %{} 'CodeEntry
-          :doc "|Forget a send that the transport did not accept, keeping the acknowledged baseline for the next attempt."
-          :code $ quote $ defn release-partition-send (progress)
-            struct-with progress $ :in-flight $ Option :none
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionProgress)
-            :args $ [] 'app.sync.partition/PartitionProgress
-        'reset-step $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn reset-step (state view stats)
-            %{} PartitionStep
-              :state $ struct-with state
-                :revision $ inc $ :revision state
-                :view view
-                :history $ []
-              :advance $ PartitionAdvance :reset stats
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.partition/PartitionStep)
-            :args $ [] 'app.sync.partition/PartitionState 'app.schema/PartitionView 'recollect.diff/DiffStats
-        'test-budget $ %{} 'CodeEntry
-          :doc "|Generous deterministic budget used by partition engine tests."
-          :code $ quote $ def test-budget
-            %{} DiffBudget
-              :max-visited $ Option :some 10000
-              :max-emitted $ Option :some 10000
-          :examples $ []
-          :schema $ :: 'recollect.diff/DiffBudget
-        'test-lobby $ %{} 'CodeEntry
-          :doc "|Engine self-test fixture; the concrete view comes from app.hooks/sample-partition-view so the template stays feature-agnostic."
-          :code $ quote $ defn test-lobby (titles) (app.hooks/sample-partition-view titles)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
-            :args $ [] $ :: 'List 'String
-        'trim-history $ %{} 'CodeEntry
-          :doc "|Keep only the newest deltas; subscribers older than the retained chain receive a snapshot."
-          :code $ quote $ defn trim-history (history limit)
-            let
-                size $ count history
-              if (> size limit)
-                slice history (- size limit) size
-                , history
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'List 'app.sync.partition/PartitionDelta) 'Number
-            :return $ :: 'List 'app.sync.partition/PartitionDelta
-      :ns $ %{} 'NsEntry (:doc |)
-        :code $ quote $ ns app.sync.partition
-          :require
-            app.schema :refer $ PartitionKey PartitionView
-            recollect.diff :refer $ diff-twig-budgeted DiffBudget DiffStats
-            recollect.patch :refer $ patch-batch patch-error-message
     'app.sync.server $ %{} 'FileEntry
       :defs $ {}
         '*client-caches $ %{} 'CodeEntry (:doc |)
@@ -5024,15 +4476,16 @@
           :doc "|Per-connection subscription progress: acknowledged revision and pending send for each partition."
           :code $ quote $ defatom *partition-progress
             assert-type ({})
-              :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+              :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress)
+          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
         '*partitions $ %{} 'CodeEntry
           :doc "|Live partitions with at least one subscribed connection; each keeps one view, revision and bounded delta history."
           :code $ quote $ defatom *partitions
-            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState)
+            assert-type ({})
+              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState
+          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView)
         '*reader-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *reader-reel @*reel
           :examples $ []
@@ -5114,7 +4567,7 @@
                 (:none) progress
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'app.sync.partition/PartitionState
+            :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn acknowledge-client! (sid revision)
             let
@@ -5180,15 +4633,15 @@
                       :args $ [] (:: 'Set 'app.schema/PartitionKey) 'Dynamic
                       :return $ :: 'Set 'app.schema/PartitionKey
                     let[] (_sid raw-progress) pair $ union acc $ keys
-                      assert-type raw-progress $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+                      assert-type raw-progress $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
               swap! *partitions $ fn (partitions)
                 hint-fn $ {}
-                  :args $ [] $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState
-                  :return $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState
+                  :args $ [] $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView)
+                  :return $ :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
                 .filter-map-kv partitions $ fn (key state)
                   hint-fn $ {}
-                    :args $ [] 'app.schema/PartitionKey 'app.sync.partition/PartitionState
-                    :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'app.sync.partition/PartitionState
+                    :args $ [] 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+                    :return $ :: 'MapEntryDecision 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
                   if (includes? live key) (%:: MapEntryDecision :keep key state) (%:: MapEntryDecision :drop)
               , &unit
           :examples $ []
@@ -5388,7 +4841,7 @@
               (:closed) &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'app.sync.partition/PartitionState 'wss.core/WssSendOutcome
+            :args $ [] 'Number (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView) 'wss.core/WssSendOutcome
         'handle-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-query! (sid request-id query) (count-partition-event! :query)
             wss-send! sid $ format-cirru-edn $ schema/ServerMessage :query/reply request-id
@@ -5698,7 +5151,7 @@
                 (:none) (encode!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] 'app.sync.partition/PartitionState $ :: 'List 'app.sync.partition/PartitionDelta
+            :args $ [] (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView) (:: 'List 'cumulo-reel.partition/PartitionDelta)
         'patch-operation-limit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def patch-operation-limit 64
           :examples $ []
@@ -5719,11 +5172,11 @@
             match (get @*partition-progress sid)
               (:some progress) progress
               (:none)
-                assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress)
+                assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'Number
-            :return $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+            :return $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
         'read-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-partition-metrics ()
             struct-with @*partition-metrics $ :live-partitions $ count @*partitions
@@ -5914,7 +5367,7 @@
                   (:none) &unit
                   (:some raw-state)
                     let
-                        state $ assert-type raw-state app.sync.partition/PartitionState
+                        state $ assert-type raw-state $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
                         step $ advance-partition state (hooks/project-partition db key) sync-diff-budget partition-history-limit patch-operation-limit
                       swap! *partitions assoc key $ :state step
                       count-partition-event! :diff
@@ -5932,8 +5385,8 @@
             update-progress! sid $ fn (progress)
               .filter-map-kv progress $ fn (key item)
                 hint-fn $ {}
-                  :args $ [] 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
-                  :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+                  :args $ [] 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+                  :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
                 %:: MapEntryDecision :keep key $ release-partition-send item
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -6118,7 +5571,7 @@
                   handle-partition-send! sid state $ wss-send! sid $ partition-patch-payload state deltas
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'app.sync.partition/PartitionAction
+            :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
         'site-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-port ()
             assert-type (&map:get config/site :port) Number
@@ -6273,7 +5726,7 @@
                             connection-actions @*partitions (progress-of sid) desired
                             fn (action)
                               hint-fn $ {}
-                                :args $ [] 'app.sync.partition/PartitionAction
+                                :args $ [] $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                                 :return 'Unit
                               send! sid action
                   , &unit
@@ -6282,7 +5735,7 @@
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'app.schema/Db $ :: 'Fn
               {} (:return 'Unit)
-                :args $ [] 'Number 'app.sync.partition/PartitionAction
+                :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200
@@ -6307,8 +5760,8 @@
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number $ :: 'Fn
               {}
-                :args $ [] $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
-                :return $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+                :args $ [] $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+                :return $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
         'updater-from-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn updater-from-reel (db op sid op-id op-time)
             let
@@ -6431,7 +5884,7 @@
             calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
-            app.sync.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
+            cumulo-reel.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
             app.hooks.server :as hooks
     'app.twig.container $ %{} 'FileEntry
       :defs $ {}
