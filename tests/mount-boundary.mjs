@@ -16,7 +16,7 @@ globalThis.document = {
     return { getContext(kind) { assert.equal(kind, "2d"); return {}; } };
   },
 };
-const client = await import(pathToFileURL(resolve(output, "app.client.mjs")).href);
+const client = await import(pathToFileURL(resolve(output, "app.sync.client.mjs")).href);
 assert.equal(client.mount_target, null);
 assert.equal(client.query_mount_target(), null);
 result = { nodeType: 1 };

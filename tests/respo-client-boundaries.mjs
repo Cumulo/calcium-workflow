@@ -33,7 +33,7 @@ globalThis.setTimeout = (callback, ms) => { const id = ++timerId; timeouts.set(i
 globalThis.clearTimeout = id => timeouts.delete(id);
 
 const c = await load("calcit.core.mjs");
-const client = await load("app.client.mjs");
+const client = await load("app.sync.client.mjs");
 const schema = await load("app.schema.mjs");
 const ws = await load("ws-edn.client.mjs");
 const { wrap_dispatch } = await load("respo.controller.client.mjs");
@@ -94,7 +94,7 @@ for (const [tag, text] of [["loading", "Loading..."], ["offline", "No connection
   assert.ok(html.includes('data-comp="comp-offline"'));
 }
 const store = twig_container(schema.database, schema.session, twig_shared(schema.database, 0));
-const resourceModule = await load("app.resource.mjs");
+const resourceModule = await load("app.feature.kanban.resource.mjs");
 const emptyPartitions = c.parse_cirru_edn("{}");
 const html = make_string(comp_container(c.parse_cirru_edn("{} (:cursor ([]))"), store, emptyPartitions, resourceModule.empty_resources));
 for (const text of ["Username", "Password", "Sign up", "Log in"]) assert.ok(html.includes(text), text);
@@ -117,8 +117,8 @@ assert.ok(!renderMembers("{} (7 nil)").includes("nil"));
 for (const source of ["{} (7 42)", "{} (7 $ %:: 'Option :some 42)"]) {
   assert.throws(() => renderMembers(source));
 }
-const { comp_board, comp_history, comp_settings } = await load("app.comp.kanban.mjs");
-const { view_fixture } = await load("app.workload.kanban.mjs");
+const { comp_board, comp_history, comp_settings } = await load("app.feature.kanban.comp.mjs");
+const { view_fixture } = await load("app.feature.kanban.workload.mjs");
 const fixture = view_fixture();
 const [boardView, missingView, detailResources, userView, emptyResources] = [0, 1, 2, 3, 4].map(index => fixture.get(index));
 const viewStates = c.parse_cirru_edn("{} (:cursor ([]))");
