@@ -52,7 +52,42 @@ CI 完整执行上述验证与原有运行回归，不以入口检查代替完�
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
 [Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
-[旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围。
+[旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围；
+[冷热分区同步与 Kanban 模板](history/20261007-hot-cold-partitions.md)记录本次分区改造。
+
+### Hot/cold partitions (Kanban template)
+
+The demo is a Kanban board with personal operation history. Data is split by
+how it must stay in sync:
+
+- **Shared hot partitions** — `(:lobby)` and `(:board id)`. Each partition is
+  diffed once per revision and the same delta (and encoded payload) is sent to
+  every authorized subscriber; diff cost no longer grows with connection count.
+- **Private hot partition** — `(:user id)`: settings and a `history-rev`
+  counter, shared by all tabs of that user.
+- **Session Store** — route and session messages, still synced per connection.
+- **Cold data** — card descriptions and personal history live outside the hot
+  Db and the Reel. Browsers fetch them with `ClientMessage :query` and request
+  ids; hot partitions only carry `detail-rev`/`history-rev`, so stale replies
+  are dropped and unused content is never downloaded.
+
+The server decides subscriptions from the session (logged-out sessions see no
+partitions; logging out drops them and clears private caches). Partition
+envelopes carry an epoch plus base/revision, ACKs advance a per-connection
+baseline, and missing history falls back to one bounded snapshot. See
+[冷热分离同步：设计与实现状态](docs/hot-cold-sync-plan.md) for the protocol,
+verification and remaining work (durable publish, reconnect resume, board
+membership, scale benchmarks).
+
+```bash
+# end-to-end check against the native server (also runs in CI)
+port=5099 calcit calcit.cirru --entry server &
+yarn compile-page && yarn node tests/kanban-e2e.mjs ws://127.0.0.1:5099
+```
+
+模板 demo 改为 Kanban 与个人操作历史：公共分区（lobby、board）每个 revision 只 diff 一次并复用给
+所有订阅者；私有 user 分区保存设置与 `history-rev`；卡片描述和历史作为冷数据经 request id 回调获取，
+热分区只保留内容版本号。详见 [冷热分离同步：设计与实现状态](docs/hot-cold-sync-plan.md)。
 
 ### Realtime sync lifecycle
 

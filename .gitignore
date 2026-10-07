@@ -10,6 +10,7 @@ yarn-error.log
 
 
 storage.cirru
+cold-storage.cirru
 
 backups/
 
@@ -21,3 +22,4 @@ backups/
 .calcit-snippets
 
 .calcit/
+kanban-server.log

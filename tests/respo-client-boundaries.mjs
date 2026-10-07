@@ -94,7 +94,9 @@ for (const [tag, text] of [["loading", "Loading..."], ["offline", "No connection
   assert.ok(html.includes('data-comp="comp-offline"'));
 }
 const store = twig_container(schema.database, schema.session, twig_shared(schema.database, 0));
-const html = make_string(comp_container(c.parse_cirru_edn("{} (:cursor ([]))"), store));
+const resourceModule = await load("app.resource.mjs");
+const emptyPartitions = c.parse_cirru_edn("{}");
+const html = make_string(comp_container(c.parse_cirru_edn("{} (:cursor ([]))"), store, emptyPartitions, resourceModule.empty_resources));
 for (const text of ["Username", "Password", "Sign up", "Log in"]) assert.ok(html.includes(text), text);
 assert.ok(html.includes('data-comp="comp-login"'));
 
@@ -115,4 +117,16 @@ assert.ok(!renderMembers("{} (7 nil)").includes("nil"));
 for (const source of ["{} (7 42)", "{} (7 $ %:: 'Option :some 42)"]) {
   assert.throws(() => renderMembers(source));
 }
-console.log("Respo client: legacy cursor/Tag dispatch, decoder rejection, lifecycle replacement/cleanup, three SSR views and member Option rendering passed without a network connection");
+const { comp_board, comp_history, comp_settings } = await load("app.comp.kanban.mjs");
+const { view_fixture } = await load("app.workload.kanban.mjs");
+const fixture = view_fixture();
+const [boardView, missingView, detailResources, userView, emptyResources] = [0, 1, 2, 3, 4].map(index => fixture.get(index));
+const viewStates = c.parse_cirru_edn("{} (:cursor ([]))");
+const boardHtml = make_string(comp_board(viewStates, boardView, detailResources, false));
+for (const text of ["Roadmap", "Todo", "Doing", "Done", "Ship-partitions", "Cold-text", "cold rev 0 / hot rev 0"]) {
+  assert.ok(boardHtml.includes(text), `board view: ${text}`);
+}
+assert.ok(make_string(comp_board(viewStates, missingView, emptyResources, false)).includes("Board not found."));
+assert.ok(make_string(comp_history(emptyResources, userView)).includes(">Load<"));
+assert.ok(make_string(comp_settings(userView)).includes("Compact cards: off"));
+console.log("Respo client: legacy cursor/Tag dispatch, decoder rejection, lifecycle replacement/cleanup, three SSR views, Kanban board/history/settings SSR and member Option rendering passed without a network connection");
