@@ -356,7 +356,7 @@
                     comp-offline $ :: :loading
                   (:offline)
                     comp-offline $ :: :offline
-                  (:ready store) (comp-container states store)
+                  (:ready store) (comp-container states store @*partitions @*resources)
               render! mount-target app dispatch-from-respo!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -550,7 +550,7 @@
                   _ false
               :tags $ #{} :client
         'workload-entry! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn workload-entry! () (workload/main!)
+          :code $ quote $ defn workload-entry! () (workload/main!) (kanban-workload/main!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -576,37 +576,47 @@
             js-ffi.shared :refer $ console-error!
             app.partition :refer $ PartitionSlot apply-partition-deltas
             app.resource :as resource
+            app.workload.kanban :as kanban-workload
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
-        'comp-container $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defcomp comp-container (states store)
+        'comp-container $ %{} 'CodeEntry
+          :doc "|Root view: the session Store drives routing, hot partitions drive lobby/board/settings, and the cold cache drives history and card details."
+          :code $ quote $ defcomp comp-container (states store partitions resources)
             let
-                state $ option:unwrap-or (get states :data)
-                  {} $ :demo |
                 session $ :session store
                 router $ :router store
                 router-data $ option:unwrap-or (:data router) ({})
                 logged-in? $ :logged-in? store
+                user-view $ match (:user-id session)
+                  (:some user-id)
+                    partition-view partitions $ schema/PartitionKey :user user-id
+                  (:none) (Option :none)
+                compact? $ match (user-in user-view)
+                  (:some view)
+                    :compact? $ :settings view
+                  (:none) false
               div
                 {} $ :class-name $ str-spaced css/preset css/global css/fullscreen css/column
                 comp-navigation logged-in? $ :count store
                 if logged-in?
-                  match (:name router)
-                    :home $ div
-                      {} (:class-name css/expand)
-                        :style $ {} $ :padding |8px
-                      input $ {} (:class-name css/input)
-                        :value $ option:unwrap-or (get state :demo) |
-                      =< 8 nil
-                      <> "|demo page"
-                      pre $ {}
-                        :style $ {} (:line-height 1.4) (:padding 4)
-                          :border $ str "|1px solid #ddd"
-                        :inner-text $ str "|backend data" $ format-cirru-edn store
-                    :profile $ comp-profile
-                      option:unwrap $ :user store
-                      , router-data
-                    _ $ <> $ str router
+                  div
+                    {} $ :class-name css/expand
+                    match (:name router)
+                      :home $ comp-lobby (>> states :lobby)
+                        partition-view partitions $ schema/PartitionKey :lobby
+                      :board $ match (:target router)
+                        (:some board-id)
+                          comp-board (>> states :board)
+                            partition-view partitions $ schema/PartitionKey :board board-id
+                            , resources compact?
+                        (:none) (<> "|No board selected" nil)
+                      :history $ comp-history resources user-view
+                      :profile $ div ({})
+                        comp-profile
+                          option:unwrap $ :user store
+                          , router-data
+                        comp-settings user-view
+                      _ $ <> (str router) nil
                   comp-login $ >> states :login
                 comp-status-color $ :color store
                 if dev?
@@ -618,7 +628,7 @@
                   div $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionSlot) 'app.resource/Resources
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -712,6 +722,423 @@
             app.config :refer $ dev?
             app.schema :as schema
             app.config :as config
+            app.comp.kanban :refer $ comp-lobby comp-board comp-history comp-settings partition-view user-in
+    'app.comp.kanban $ %{} 'FileEntry
+      :defs $ {}
+        'board-in $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn board-in (view-option)
+            match view-option
+              (:some view)
+                match view
+                  (:board board) (Option :some board)
+                  _ $ Option :none
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] $ :: 'Option 'app.schema/PartitionView
+            :return $ :: 'Option 'app.schema/Board
+        'comp-board $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defcomp comp-board (states view-option resources compact?)
+            match (board-in view-option)
+              (:some board)
+                let
+                    columns $ board-columns board
+                    column-ids $ map columns $ fn (column)
+                      hint-fn $ {}
+                        :args $ [] 'app.schema/Column
+                        :return 'String
+                      :id column
+                  div
+                    {} $ :style $ {} (:padding 16)
+                    div
+                      {} $ :class-name css/row-middle
+                      span $ {} (:class-name css/link) (:inner-text "|← Boards")
+                        :on-click $ fn (e d!)
+                          d! $ route-op :home $ Option :none
+                      =< 12 nil
+                      <> (:title board)
+                        {} (:font-size 22) (:font-family "|Josefin Sans, sans-serif")
+                    =< nil 12
+                    list->
+                      {} $ :style $ {} (:display :flex) (:align-items :flex-start) (:gap 12) (:overflow-x :auto)
+                      map-indexed columns $ fn (index column)
+                        hint-fn $ {}
+                          :args $ [] 'Number 'app.schema/Column
+                          :return 'Dynamic
+                        [] (:id column)
+                          div
+                            {} $ :style $ {} (:width 240) (:flex-shrink 0) (:padding 8) (:border-radius 8)
+                              :background-color $ hsl 220 20 96
+                            div
+                              {} $ :style $ {} (:font-weight :bold) (:margin-bottom 8)
+                              <> $ str (:title column) "| · " $ count
+                                column-cards board $ :id column
+                            list-> ({})
+                              map
+                                column-cards board $ :id column
+                                fn (card)
+                                  hint-fn $ {}
+                                    :args $ [] 'app.schema/Card
+                                    :return 'Dynamic
+                                  [] (:id card)
+                                    comp-card board card
+                                      nth column-ids $ - index 1
+                                      nth column-ids $ + index 1
+                                      , compact?
+                            comp-draft-input
+                              >> states $ :id column
+                              , "|New card" $ fn (title)
+                                kanban-op $ schema/KanbanOp :card/add (:id board) (:id column) title
+                    list-> ({})
+                      ->
+                        .to-list $ :details resources
+                        map $ fn (pair)
+                          let[] (raw-card-id raw-resource) pair $ let
+                              card-id $ assert-type raw-card-id String
+                            [] card-id $ comp-card-detail
+                              >> states $ str |detail- card-id
+                              , board card-id $ assert-type raw-resource app.resource/DetailResource
+              (:none)
+                div
+                  {} $ :style $ {} (:padding 16)
+                  <>
+                    if (missing-view? view-option) "|Board not found." "|Loading board..."
+                    , nil
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'Map 'Tag 'Dynamic) (:: 'Option 'app.schema/PartitionView) 'app.resource/Resources 'Bool
+        'comp-card $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defcomp comp-card (board card prev-column next-column compact?)
+            let
+                board-id $ :id board
+                card-id $ :id card
+                tool $ fn (label op)
+                  hint-fn $ {}
+                    :args $ [] 'String 'app.schema/Op
+                    :return 'respo.schema/Element
+                  span $ {} (:inner-text label) (:class-name css/link)
+                    :style $ {} (:margin-left 6) (:font-size 12)
+                    :on-click $ fn (e d!) (d! op)
+              div
+                {} $ :style $ {} (:background-color :white) (:border-radius 6) (:margin-bottom 6)
+                  :padding $ if compact? "|4px 8px" "|8px 10px"
+                  :border $ str "|1px solid " $ hsl 0 0 86
+                div
+                  {}
+                    :style $ {} $ :cursor :pointer
+                    :on-click $ fn (e d!)
+                      d! $ schema/Op :client/open-card board-id card-id
+                  <> (:title card) nil
+                div
+                  {} $ :class-name css/row-middle
+                  match prev-column
+                    (:some column-id)
+                      tool "|←" $ kanban-op $ schema/KanbanOp :card/move board-id card-id column-id
+                    (:none)
+                      span $ {}
+                  tool "|↑" $ kanban-op $ schema/KanbanOp :card/shift board-id card-id -1
+                  tool "|↓" $ kanban-op $ schema/KanbanOp :card/shift board-id card-id 1
+                  match next-column
+                    (:some column-id)
+                      tool "|→" $ kanban-op $ schema/KanbanOp :card/move board-id card-id column-id
+                    (:none)
+                      span $ {}
+                  tool "|×" $ kanban-op $ schema/KanbanOp :card/remove board-id card-id
+                  if
+                    > (:detail-rev card) 0
+                    <>
+                      str "|rev " $ :detail-rev card
+                      {} (:margin-left 8) (:font-size 11)
+                        :color $ hsl 0 0 65
+                    span $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'app.schema/Board 'app.schema/Card (:: 'Option 'String) (:: 'Option 'String) 'Bool
+        'comp-card-detail $ %{} 'CodeEntry
+          :doc "|Card detail panel fed by the cold cache; shows cached content revision next to the hot detail-rev so staleness is visible."
+          :code $ quote $ defcomp comp-card-detail (states board card-id resource)
+            let
+                cursor $ option:unwrap-or (get states :cursor) ([])
+                draft-option $ get states :data
+                card-option $ get (:cards board) card-id
+                hot-rev $ match card-option
+                  (:some raw)
+                    :detail-rev $ assert-type raw app.schema/Card
+                  (:none) 0
+                title $ match card-option
+                  (:some raw)
+                    :title $ assert-type raw app.schema/Card
+                  (:none) card-id
+                cached-text $ match (:detail resource)
+                  (:some detail) (:description detail)
+                  (:none) |
+                text $ match draft-option
+                  (:some draft) (assert-type draft String)
+                  (:none) cached-text
+              div
+                {} $ :style $ {} (:position :fixed) (:right 16) (:top 64) (:width 320) (:padding 12) (:background-color :white) (:border-radius 8) (:z-index 10)
+                  :box-shadow $ str "|0 2px 12px " $ hsl 0 0 0 0.15
+                div
+                  {} $ :class-name css/row-parted
+                  <> title $ {} $ :font-weight :bold
+                  span $ {} (:class-name css/link) (:inner-text |Close)
+                    :on-click $ fn (e d!)
+                      d! $ schema/Op :client/close-card card-id
+                div
+                  {} $ :style $ {} (:font-size 12)
+                    :color $ hsl 0 0 55
+                    :margin "|6px 0"
+                  <> $ str "|cold rev "
+                    match (:detail resource)
+                      (:some detail) (:rev detail)
+                      (:none) |-
+                    , "| / hot rev " hot-rev $ cond
+                        :missing? resource
+                        , "| · missing"
+                      (:loading? resource) "| · loading"
+                      true |
+                textarea $ {} (:class-name css/textarea) (:value text) (:placeholder "|Description lives in cold storage")
+                  :style $ {} (:width |100%) (:min-height 120)
+                  :on-input $ fn (e d!)
+                    d! $ schema/Op :states cursor $ option:unwrap-or (get e :value) |
+                =< nil 8
+                button $ {} (:class-name css/button) (:inner-text |Save)
+                  :on-click $ fn (e d!)
+                    d! $ kanban-op $ schema/KanbanOp :card/edit-detail (:id board) card-id text
+                    d! $ schema/Op :states cursor nil
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Board 'String 'app.resource/DetailResource
+        'comp-draft-input $ %{} 'CodeEntry
+          :doc "|Small text input keeping its draft in Respo component state and submitting one domain operation."
+          :code $ quote $ defcomp comp-draft-input (states placeholder on-submit)
+            let
+                cursor $ option:unwrap-or (get states :cursor) ([])
+                draft $ option:unwrap-or (get states :data) |
+              div
+                {} $ :class-name css/row-middle
+                input $ {} (:class-name css/input) (:placeholder placeholder) (:value draft)
+                  :style $ {} (:min-width 80) (:flex 1)
+                  :on-input $ fn (e d!)
+                    d! $ schema/Op :states cursor $ option:unwrap-or (get e :value) |
+                =< 6 nil
+                button $ {} (:class-name css/button) (:inner-text |Add)
+                  :on-click $ fn (e d!)
+                    when
+                      not $ blank? draft
+                      d! $ on-submit draft
+                      d! $ schema/Op :states cursor |
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'Map 'Tag 'Dynamic) 'String $ :: 'Fn
+              {} (:return 'app.schema/Op)
+                :args $ [] 'String
+        'comp-history $ %{} 'CodeEntry
+          :doc "|Personal history from cold pages. The private hot partition only announces history-rev, so new events show as a count until the user loads them."
+          :code $ quote $ defcomp comp-history (resources user-option)
+            let
+                history $ :history resources
+                hot-rev $ match (user-in user-option)
+                  (:some view) (:history-rev view)
+                  (:none) 0
+                unseen $ - hot-rev $ :history-rev history
+              div
+                {} $ :style $ {} (:padding 16) (:max-width 640)
+                div
+                  {} $ :class-name css/row-parted
+                  <> "|My history" $ {} $ :font-size 22
+                  button $ {} (:class-name css/button)
+                    :inner-text $ cond
+                        :loading? history
+                        , |Loading...
+                      (not (:loaded? history))
+                        , |Load
+                      (> unseen 0) (str "|Load " unseen "| new")
+                      true |Refresh
+                    :on-click $ fn (e d!)
+                      d! $ schema/Op :client/load-history false
+                =< nil 12
+                list->
+                  {} $ :class-name css/column
+                  map (:items history)
+                    fn (event)
+                      hint-fn $ {}
+                        :args $ [] 'app.schema/HistoryEvent
+                        :return 'Dynamic
+                      [] (:id event)
+                        div
+                          {} $ :style $ {} (:padding "|6px 0")
+                            :border-bottom $ str "|1px solid " $ hsl 0 0 92
+                          <> (:summary event) nil
+                          =< 8 nil
+                          <>
+                            str $ :kind event
+                            {} (:font-size 11)
+                              :color $ hsl 0 0 60
+                match (:next-cursor history)
+                  (:some _cursor)
+                    div
+                      {} $ :style $ {} (:margin-top 12)
+                      button $ {} (:class-name css/button) (:inner-text "|Load older")
+                        :on-click $ fn (e d!)
+                          d! $ schema/Op :client/load-history true
+                  (:none)
+                    span $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] 'app.resource/Resources $ :: 'Option 'app.schema/PartitionView
+        'comp-lobby $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defcomp comp-lobby (states view-option)
+            div
+              {} $ :style $ {} (:padding 16)
+              match (lobby-in view-option)
+                (:some lobby)
+                  div ({})
+                    div
+                      {} (:class-name css/font-fancy)
+                        :style $ {} (:font-size 24) (:margin-bottom 12)
+                      <> |Boards
+                    list->
+                      {} $ :class-name css/column
+                      ->
+                        .to-list $ :boards lobby
+                        map $ fn (pair)
+                          let[] (raw-id raw-brief) pair $ let
+                              brief $ assert-type raw-brief app.schema/BoardBrief
+                            [] (:id brief)
+                              div
+                                {} (:class-name css/row-middle)
+                                  :style $ {} (:padding "|8px 12px") (:margin-bottom 6) (:cursor :pointer) (:border-radius 6)
+                                    :border $ str "|1px solid " $ hsl 0 0 88
+                                  :on-click $ fn (e d!)
+                                    d! $ route-op :board $ Option :some (:id brief)
+                                <> (:title brief) nil
+                                =< 8 nil
+                                <>
+                                  str (:card-count brief) "| cards"
+                                  {}
+                                    :color $ hsl 0 0 60
+                                    :font-size 12
+                    =< nil 8
+                    comp-draft-input (>> states :new-board) "|New board title" $ fn (title)
+                      kanban-op $ schema/KanbanOp :board/create title
+                    =< nil 16
+                    div
+                      {} $ :style $ {}
+                        :color $ hsl 0 0 50
+                      <> $ str "|Online: " $ join-string
+                        map
+                          .to-list $ :online lobby
+                          fn (pair)
+                            hint-fn $ {}
+                              :args $ [] 'Dynamic
+                              :return 'String
+                            let[] (_id name) pair $ assert-type name String
+                        , "|, "
+                (:none) (<> "|Loading lobby..." nil)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] (:: 'Map 'Tag 'Dynamic) (:: 'Option 'app.schema/PartitionView)
+        'comp-settings $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defcomp comp-settings (user-option)
+            match (user-in user-option)
+              (:some view)
+                let
+                    settings $ :settings view
+                  div
+                    {} $ :style $ {} (:padding "|0 16px 16px")
+                    div
+                      {} $ :class-name css/row-middle
+                      <> "|Settings (synced to all your tabs)" nil
+                    =< nil 8
+                    div
+                      {} $ :class-name css/row-middle
+                      button $ {} (:class-name css/button)
+                        :inner-text $ if (:compact? settings) "|Compact cards: on" "|Compact cards: off"
+                        :on-click $ fn (e d!)
+                          d! $ kanban-op $ schema/KanbanOp :settings/toggle-compact
+                      =< 12 nil
+                      list-> ({})
+                        map ([] |#2a8bd6 |#d6542a |#2ab36b |#8a4bd6)
+                          fn (color)
+                            [] color $ span $ {}
+                              :style $ {} (:display :inline-block) (:width 20) (:height 20) (:margin-right 6) (:border-radius 10) (:cursor :pointer) (:background-color color)
+                                :outline $ if
+                                  = color $ :accent settings
+                                  , "|2px solid #333" |none
+                              :on-click $ fn (e d!)
+                                d! $ kanban-op $ schema/KanbanOp :settings/set-accent color
+              (:none)
+                span $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
+            :args $ [] $ :: 'Option 'app.schema/PartitionView
+        'kanban-op $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn kanban-op (op) (schema/Op :kanban op)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Op)
+            :args $ [] 'app.schema/KanbanOp
+        'lobby-in $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn lobby-in (view-option)
+            match view-option
+              (:some view)
+                match view
+                  (:lobby lobby) (Option :some lobby)
+                  _ $ Option :none
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] $ :: 'Option 'app.schema/PartitionView
+            :return $ :: 'Option 'app.schema/LobbyView
+        'missing-view? $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn missing-view? (view-option)
+            match view-option
+              (:some view)
+                match view
+                  (:missing) true
+                  _ false
+              (:none) false
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Bool)
+            :args $ [] $ :: 'Option 'app.schema/PartitionView
+        'partition-view $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn partition-view (partitions key)
+            match (get partitions key)
+              (:some raw-slot)
+                Option :some $ :view $ assert-type raw-slot app.partition/PartitionSlot
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionSlot) 'app.schema/PartitionKey
+            :return $ :: 'Option 'app.schema/PartitionView
+        'route-op $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn route-op (name target)
+            schema/Op :router/change $ %{} schema/Router (:name name) (:target target)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Op)
+            :args $ [] 'Tag $ :: 'Option 'String
+        'user-in $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn user-in (view-option)
+            match view-option
+              (:some view)
+                match view
+                  (:user user) (Option :some user)
+                  _ $ Option :none
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] $ :: 'Option 'app.schema/PartitionView
+            :return $ :: 'Option 'app.schema/UserHotView
+      :ns $ %{} 'NsEntry
+        :doc "|Kanban demo views. Board and lobby render from hot partitions; card details and history render from the cold resource cache."
+        :code $ quote $ ns app.comp.kanban
+          :require
+            respo.core :refer $ defcomp <> >> div span button input textarea list->
+            respo.comp.space :refer $ =<
+            respo.util.format :refer $ hsl
+            respo-ui.css :as css
+            app.schema :as schema
+            app.updater.kanban :refer $ board-columns column-cards
     'app.comp.login $ %{} 'FileEntry
       :defs $ {}
         'comp-login $ %{} 'CodeEntry (:doc |)
@@ -803,14 +1230,24 @@
                   option:unwrap-or (get config/site :title) |Calcium
                   , nil
               div
-                {}
-                  :style $ {} $ :cursor |pointer
-                  :on-click $ fn (e d!)
-                    d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :profile)
-                      :target $ Option :none
-                <> $ if logged-in? |Me |Guest
-                =< 8 nil
-                <> $ str count-members
+                {} $ :class-name css/row-middle
+                if logged-in?
+                  span $ {} (:inner-text |History)
+                    :style $ {} (:cursor :pointer) (:margin-right 16)
+                    :on-click $ fn (e d!)
+                      d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :history)
+                        :target $ Option :none
+                      d! $ %:: app.schema/Op :client/load-history false
+                  span $ {}
+                div
+                  {}
+                    :style $ {} $ :cursor |pointer
+                    :on-click $ fn (e d!)
+                      d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :profile)
+                        :target $ Option :none
+                  <> $ if logged-in? |Me |Guest
+                  =< 8 nil
+                  <> $ str count-members
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
             :args $ [] 'Bool 'Number
@@ -6418,3 +6855,33 @@
             respo.core :refer $ div input list->
             recollect.diff :refer $ diff-twig
             recollect.patch :refer $ patch-twig
+    'app.workload.kanban $ %{} 'FileEntry
+      :defs $ {}
+        'main! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn main! () (view-fixture) &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+        'view-fixture $ %{} 'CodeEntry
+          :doc "|Board, missing-board, open-detail resources, user view and empty resources for SSR checks of the Kanban views."
+          :code $ quote $ defn view-fixture ()
+            let
+                db1 $ kanban/apply-kanban kanban/fixture-db (schema/KanbanOp :board/create |Roadmap) 1 |b1 1
+                db2 $ kanban/apply-kanban db1 (schema/KanbanOp :card/add |b1 |b1-todo |Ship-partitions) 1 |c1 2
+                board $ option:unwrap $ kanban/board-of db2 |b1
+                request $ resource/begin-detail-query resource/empty-resources |b1 |c1
+                resources $ resource/receive-reply (:resources request) (:request-id request)
+                  schema/QueryReply :card-detail $ %{} schema/CardDetail (:card-id |c1) (:board-id |b1) (:rev 0) (:description |Cold-text) (:updated-at 0)
+                user-view $ schema/PartitionView :user $ %{} schema/UserHotView (:id |u1) (:name |Ann) (:settings schema/default-settings) (:history-rev 3)
+              []
+                Option :some $ schema/PartitionView :board board
+                Option :some $ schema/PartitionView :missing
+                , resources (Option :some user-view) resource/empty-resources
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ []
+            :return $ :: 'List 'Dynamic
+      :ns $ %{} 'NsEntry
+        :doc "|Deterministic Kanban view fixture shared by generated-JavaScript SSR regressions."
+        :code $ quote $ ns app.workload.kanban
+          :require (app.schema :as schema) (app.updater.kanban :as kanban) (app.resource :as resource)
