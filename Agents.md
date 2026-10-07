@@ -26,9 +26,9 @@ calcit libs readme respo.calcit -f docs/Respo-Agent.md
 
 - **Server**: `*reel` atom → `updater` (pure fn) → `twig-container` → `diff-twig` → patches
 - **Client**: WebSocket → `patch-twig` → `*store` atom → Respo render
-- **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel), `ws-edn` (WebSocket)
+- **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel; `cumulo-reel.partition` partition engine), `ws-edn` (WebSocket)
 - **Partitions** (hot/cold split, see `docs/hot-cold-sync-plan.md`):
-  `app.hooks.server/project-partition` → `app.sync.partition/advance-partition`
+  `app.hooks.server/project-partition` → `cumulo-reel.partition/advance-partition`
   (one diff per partition revision) → per-connection `connection-actions`;
   cold data goes through `ClientMessage :query` and `app.hooks.client`
 
@@ -38,7 +38,6 @@ calcit libs readme respo.calcit -f docs/Respo-Agent.md
 app.sync.*            # TEMPLATE runtime: do not edit per app
 app.schema            # WIRING: protocol enums; lists the current Op/DomainOp,
                       #   PartitionKey/PartitionView, Query/QueryReply variants
-app.hooks             # WIRING: shared pure hooks (sample view for template tests)
 app.hooks.server      # WIRING: every call from app.sync.server into business code
 app.hooks.client      # WIRING: every call from app.sync.client into business code
 app.updater           # WIRING: routes DomainOp to reducers

@@ -8,29 +8,23 @@
 
 | 层 | 命名空间 | 复制后怎么处理 |
 |----|------|------|
-| **template** | `app.sync.server`、`app.sync.client`、`app.sync.partition` | 原样保留，不按项目修改。包括 Reel、会话 Store 同步、分区引擎与扇出、ACK/背压/resync、冷查询传输，以及热 Db 快照的持久化流程；业务冷状态及其持久化由 `app.feature.<name>.server` 负责，经 `app.hooks.server/persist!` 调用 |
-| **wiring** | `app.schema`、`app.hooks`、`app.hooks.server`、`app.hooks.client`、`app.updater`、`app.client`、`app.server`、`app.comp.container` | 唯一点名当前业务的地方，改成指向新业务 |
+| **template** | `app.sync.server`、`app.sync.client` | 原样保留，不按项目修改。包括 Reel、会话 Store 同步、分区注册表与扇出、ACK/背压/resync、冷查询传输，以及热 Db 快照的持久化流程；业务冷状态及其持久化由 `app.feature.<name>.server` 负责，经 `app.hooks.server/persist!` 调用 |
+| **wiring** | `app.schema`、`app.hooks.server`、`app.hooks.client`、`app.updater`、`app.client`、`app.server`、`app.comp.container` | 唯一点名当前业务的地方，改成指向新业务 |
 | **base** | `app.twig.*`、`app.updater.{session,user,router}`、`app.comp.{login,navigation,profile}`、`app.config`、`app.workload.diff-patch` | 账号、会话、路由脚手架，大多数项目保留，按需修改 |
 | **feature** | `app.feature.<name>.*`（当前是 `app.feature.kanban.*`） | 可以整体删除，换成自己的业务 |
 
 依赖方向：
 
 ```
-feature → base / app.schema / app.sync.*（例如 PartitionSlot 类型）
+feature → base / app.schema / cumulo-reel.partition（例如 PartitionSlot 类型）
 wiring  → feature / base / template
-template → app.schema / app.hooks* / app.config（不能引用 app.feature.*，也不能引用入口命名空间）
+template → app.schema / app.hooks* / app.config / cumulo-reel.partition（不能引用 app.feature.*，也不能引用入口命名空间）
 ```
 
 `tests/template-boundary.mjs` 断言两件事：template 的代码、测试和 imports 里不出现 `app.feature.*` 或入口命名空间；
 feature 不依赖 `app.hooks*` 和入口命名空间。
 
 ## 2. Hooks：模板调用业务的唯一入口
-
-**`app.hooks`**（两端共享，纯函数）
-
-| hook | 签名 | 作用 |
-|------|------|------|
-| `sample-partition-view` | `List String → PartitionView` | 模板自测用：不同的标签列表要产生不同的、带 key 条目的视图 |
 
 **`app.hooks.server`**
 
@@ -77,14 +71,25 @@ feature 不依赖 `app.hooks*` 和入口命名空间。
 3. 删除 `app.feature.kanban.*`，以及 wiring 里残留的 Kanban 变体，比如 `Op :kanban`、`:client/*`、`PartitionView :board`。
 4. 运行 `yarn node tests/template-boundary.mjs --list`、`yarn check-types`、两端的原生测试，以及原生服务端 e2e
    （e2e 需要替换成新业务的场景）。
-5. 模板自带的测试（`app.sync.*` 的测试）不需要改，它们通过 `app.hooks/sample-partition-view` 拿测试视图。
+5. 分区引擎的测试在 cumulo-reel 模块里，不随项目复制；`app.schema/decode-partition-view` 的测试需要换成新业务的视图。
 
-## 5. 以后可以抽到模块的部分（阶段 B）
+## 5. 从模块加载的部分（阶段 B）
 
-等阶段 A 的 hooks 接口在一两个项目里稳定之后，再考虑把下面这些抽到模块里：
-- 分区引擎（`app.sync.partition`）：需要把 `PartitionKey`/`PartitionView` 泛型化，或改成 Dynamic 载荷加调用方校验；
-- `struct-tree-input`；
-- 客户端的 revision 和 patch 校验状态机。
+纯函数的分区引擎放在 cumulo-reel（0.0.49 起）的 `cumulo-reel.partition`，不再复制到项目里：
+`advance-partition`、`connection-actions`、`plan-partition-send`、ACK 进度、`apply-partition-deltas`
+和 `struct-tree-input`，说明见 cumulo-reel 的 `docs/partition-sync.md`。key 和视图类型是泛型，
+项目用自己的类型实例化，例如：
 
-服务端运行时依赖 calcit-wss 原生传输，而且 hooks 接口还在演进，暂时不抽。每多一个模块，升级时就要多协调一次发版，
-这一点可以对照这次 Calcit alpha.16 因为上游依赖冲突而无法升级的情况。
+```cirru
+:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
+```
+
+客户端校验视图的 decoder 是业务相关的，留在 `app.schema/decode-partition-view`，由 `app.sync.client`
+传给 `apply-partition-deltas`。
+
+放进 cumulo-reel 而不是新建模块：它本来就依赖 recollect、锁定同一工具链，而且只有应用直接依赖它，
+发一个版本就能更新，不增加新的依赖冲突（对照 Calcit alpha.16 因为上游依赖冲突无法升级的情况）。
+
+服务端运行时（分区注册表、发送、ACK 消息、冷查询传输）依赖 calcit-wss 原生传输，hooks 接口也还在演进，
+仍然作为模板代码留在 `app.sync.*`。
