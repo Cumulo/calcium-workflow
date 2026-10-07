@@ -703,6 +703,7 @@
                 {}
                   :on-click $ fn (e d!)
                     d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :home)
+                      :target $ Option :none
                   :style $ {} $ :cursor :pointer
                 <>
                   option:unwrap-or (get config/site :title) |Calcium
@@ -712,6 +713,7 @@
                   :style $ {} $ :cursor |pointer
                   :on-click $ fn (e d!)
                     d! $ %:: app.schema/Op :router/change $ %{} app.schema/Router (:name :profile)
+                      :target $ Option :none
                 <> $ if logged-in? |Me |Guest
                 =< 8 nil
                 <> $ str count-members
@@ -1199,7 +1201,7 @@
           :schema $ :: 'StructDef
         'Card $ %{} 'CodeEntry
           :doc "|Hot card summary. The description lives in cold storage; detail-rev tells clients when a cached detail is stale."
-          :code $ quote $ defstruct Card (:id 'String) (:column-id 'String) (:rank 'String) (:title 'String) (:detail-rev 'Number) (:updated-at 'Number) (:updated-by 'String)
+          :code $ quote $ defstruct Card (:id 'String) (:column-id 'String) (:rank 'Number) (:title 'String) (:detail-rev 'Number) (:updated-at 'Number) (:updated-by 'String)
           :examples $ []
           :schema $ :: 'StructDef
         'CardDetail $ %{} 'CodeEntry
@@ -1212,9 +1214,23 @@
           :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op)
           :examples $ []
           :schema $ :: 'EnumDef
+        'ColdEffects $ %{} 'CodeEntry
+          :doc "|Cold writes derived purely from one committed domain operation."
+          :code $ quote $ defstruct ColdEffects
+            :history $ :: 'List 'app.schema/HistoryEvent
+            :details $ :: 'List 'app.schema/CardDetail
+          :examples $ []
+          :schema $ :: 'StructDef
+        'ColdStore $ %{} 'CodeEntry
+          :doc "|Cold data kept outside the hot Db and the Reel: append-only per-user history and versioned card details. Swap for a database-backed store without touching partition sync."
+          :code $ quote $ defstruct ColdStore
+            :history $ :: 'Map 'String $ :: 'List 'app.schema/HistoryEvent
+            :details $ :: 'Map 'String 'app.schema/CardDetail
+          :examples $ []
+          :schema $ :: 'StructDef
         'Column $ %{} 'CodeEntry
-          :doc "|One Kanban column. Order is a fractional rank string so moving a column changes one leaf."
-          :code $ quote $ defstruct Column (:id 'String) (:title 'String) (:rank 'String)
+          :doc "|One Kanban column ordered by a numeric rank field, so reordering changes leaves instead of list positions."
+          :code $ quote $ defstruct Column (:id 'String) (:title 'String) (:rank 'Number)
           :examples $ []
           :schema $ :: 'StructDef
         'DatabaseDecodeError $ %{} 'CodeEntry
@@ -1223,15 +1239,17 @@
           :examples $ []
           :schema $ :: 'EnumDef
         'Db $ %{} 'CodeEntry
-          :doc "|The nominal application database used by reducers and projections."
+          :doc "|The nominal hot application database used by reducers and partition projections. Cold history and card details live outside it."
           :code $ quote $ defstruct Db
             :sessions $ :: 'Map 'Number 'app.schema/Session
             :users $ :: 'Map 'String 'app.schema/User
+            :boards $ :: 'Map 'String 'app.schema/Board
+            :settings $ :: 'Map 'String 'app.schema/UserSettings
           :examples $ []
           :schema $ :: 'StructDef
         'DomainOp $ %{} 'CodeEntry
           :doc "|Pure business operations accepted by the database reducer; local and server effects stay outside this enum."
-          :code $ quote $ defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router)
+          :code $ quote $ defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:kanban 'app.schema/KanbanOp)
           :examples $ []
           :schema $ :: 'EnumDef
         'HistoryEvent $ %{} 'CodeEntry
@@ -1247,6 +1265,11 @@
             :history-rev 'Number
           :examples $ []
           :schema $ :: 'StructDef
+        'KanbanOp $ %{} 'CodeEntry
+          :doc "|Business operations of the Kanban demo. The acting user always comes from the session; payloads only name target ids and values."
+          :code $ quote $ defenum KanbanOp (:board/create 'String) (:board/rename 'String 'String) (:column/add 'String 'String) (:card/add 'String 'String 'String) (:card/rename 'String 'String 'String) (:card/move 'String 'String 'String) (:card/shift 'String 'String 'Number) (:card/remove 'String 'String) (:card/edit-detail 'String 'String 'String) (:settings/toggle-compact) (:settings/set-accent 'String)
+          :examples $ []
+          :schema $ :: 'EnumDef
         'LobbyView $ %{} 'CodeEntry
           :doc "|Public hot partition: board briefs and online user names keyed by user id."
           :code $ quote $ defstruct LobbyView
@@ -1268,7 +1291,7 @@
           :examples $ []
           :schema $ :: 'StructDef
         'Op $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
+          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:kanban 'app.schema/KanbanOp)
             :states (:: 'List 'Dynamic) 'Dynamic
           :examples $ []
           :schema $ :: 'EnumDef
@@ -1292,7 +1315,7 @@
           :doc "|Cold read requests. Identity always comes from the server session, never from query parameters."
           :code $ quote $ defenum Query
             :history (:: 'Option 'Number) 'Number
-            :card-detail 'String
+            :card-detail 'String 'String
           :examples $ []
           :schema $ :: 'EnumDef
         'QueryReply $ %{} 'CodeEntry
@@ -1306,12 +1329,14 @@
           :examples $ []
           :schema $ :: 'StructDef
         'Router $ %{} 'CodeEntry
-          :doc "|The domain route stored for one session. Route-specific view data is projected separately."
+          :doc "|The domain route stored for one session; target names the routed entity such as a board id."
           :code $ quote $ defstruct Router (:name 'Tag)
+            :target $ :: 'Option 'String
           :examples $ []
           :schema $ :: 'StructDef
         'RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct RouterView (:name 'Tag)
+            :target $ :: 'Option 'String
             :data $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
             :router $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
           :examples $ []
@@ -1390,6 +1415,8 @@
             %{} Db
               :sessions $ {}
               :users $ {}
+              :boards $ {}
+              :settings $ {}
           :examples $ []
           :schema $ :: 'app.schema/Db
         'decode-client-message $ %{} 'CodeEntry
@@ -1487,6 +1514,18 @@
                   (:err _) true
                   _ false
               :tags $ #{} :client :server
+        'decode-cold-store $ %{} 'CodeEntry
+          :doc "|Validate persisted cold storage before it is used for queries."
+          :code $ quote $ defn decode-cold-store (data)
+            match
+              try-decode-map-as (struct-tree-input data) 'app.schema/ColdStore
+              (:ok store) (Result :ok store)
+              (:err detail)
+                Result :err $ %:: DatabaseDecodeError :invalid |cold detail
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/ColdStore 'app.schema/DatabaseDecodeError
         'decode-database $ %{} 'CodeEntry
           :doc "|Deeply validate a wire or legacy bare-map database and reconstruct nominal Db, Session, User, Router, and Message values."
           :code $ quote $ defn decode-database (data)
@@ -1500,13 +1539,25 @@
                 let
                     sessions-data $ option:unwrap-or (get source :sessions) ({})
                     users-data $ option:unwrap-or (get source :users) ({})
+                    boards-data $ option:unwrap-or (get source :boards) ({})
+                    settings-data $ option:unwrap-or (get source :settings) ({})
                   match (decode-sessions sessions-data |db.sessions)
                     (:err error) (Result :err error)
                     (:ok sessions)
                       match (decode-users users-data |db.users)
                         (:err error) (Result :err error)
                         (:ok users)
-                          Result :ok $ %{} Db (:sessions sessions) (:users users)
+                          match
+                            try-decode-map-as (struct-tree-input boards-data) (:: 'Map 'String 'app.schema/Board)
+                            (:err detail)
+                              Result :err $ %:: DatabaseDecodeError :invalid |db.boards detail
+                            (:ok boards)
+                              match
+                                try-decode-map-as (struct-tree-input settings-data) (:: 'Map 'String 'app.schema/UserSettings)
+                                (:err detail)
+                                  Result :err $ %:: DatabaseDecodeError :invalid |db.settings detail
+                                (:ok settings)
+                                  Result :ok $ %{} Db (:sessions sessions) (:users users) (:boards boards) (:settings settings)
                 Result :err $ %:: DatabaseDecodeError :invalid |db "|Expected database map or struct"
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -1565,6 +1616,42 @@
                 Result :err $ DatabaseDecodeError :invalid |db "|Expected database map or struct"
                 decode-database 42
               :tags $ #{} :server
+            %{} 'TestEntry (:name |legacy-storage-gains-empty-kanban)
+              :code $ quote $ match
+                decode-database $ parse-cirru-edn "|{} (:users ({})) (:sessions ({}))"
+                (:ok db)
+                  do
+                    assert= ({}) (:boards db)
+                    assert= ({}) (:settings db)
+                (:err error)
+                  raise $ str |Expected-legacy-db: error
+              :tags $ #{} :schema :server
+            %{} 'TestEntry (:name |kanban-roundtrip-and-corrupt-card)
+              :code $ quote $ let
+                  card $ %{} Card (:id |c1) (:column-id |k1) (:rank 1) (:title |Ship) (:detail-rev 0) (:updated-at 10) (:updated-by |u1)
+                  board $ %{} Board (:id |b1) (:title |Demo) (:created-at 1)
+                    :columns $ {} $ |k1
+                      %{} Column (:id |k1) (:title |Todo) (:rank 1)
+                    :cards $ {} $ |c1 card
+                  db $ %{} Db
+                    :sessions $ {}
+                    :users $ {}
+                    :boards $ {} $ |b1 board
+                    :settings $ {} $ |u1 default-settings
+                  bad-rank $ parse-cirru-edn $ format-cirru-edn |high
+                  corrupt $ struct-with db $ :boards
+                    {} $ |b1 $ struct-with board
+                      :cards $ {} $ |c1 (&struct:assoc card :rank bad-rank)
+                assert= (Result :ok db)
+                  decode-database $ parse-cirru-edn $ format-cirru-edn db
+                match
+                  decode-database $ parse-cirru-edn $ format-cirru-edn corrupt
+                  (:ok _) (raise |Expected-corrupt-card-rejection)
+                  (:err error)
+                    match error $
+                      :invalid path _detail
+                      assert= |db.boards path
+              :tags $ #{} :schema :server
         'decode-domain-operation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-domain-operation (data)
             if (enum? data)
@@ -1586,6 +1673,8 @@
                       Result :ok $ DomainOp :user/log-out
                     (:router/change router)
                       Result :ok $ DomainOp :router/change router
+                    (:kanban kanban-op)
+                      Result :ok $ DomainOp :kanban kanban-op
                     _ $ invalid-message |Expected-domain-operation
               invalid-message |Expected-domain-operation
           :examples $ []
@@ -1596,6 +1685,7 @@
             %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
               :code $ quote $ assert=
                 Result :ok $ DomainOp :router/change $ %{} Router (:name :profile)
+                  :target $ Option :none
                 decode-domain-operation $ :: :router/change $ {} (:name :profile)
               :tags $ #{} :server
             %{} 'TestEntry (:name |rejects-effects-and-scalars)
@@ -1607,6 +1697,99 @@
                   Result :err $ MessageDecodeError :invalid |Expected-domain-operation
                   decode-domain-operation 42
               :tags $ #{} :server
+        'decode-kanban-op $ %{} 'CodeEntry
+          :doc "|Validate one untrusted Kanban operation payload before it reaches the reducer."
+          :code $ quote $ defn decode-kanban-op (data)
+            let
+                op $ if (enum? data)
+                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  , data
+                strings? $ fn (values)
+                  hint-fn $ {}
+                    :args $ [] $ :: 'List 'Dynamic
+                    :return 'Bool
+                  every? values string?
+              if (enum? op)
+                match op
+                  (:board/create title)
+                    if
+                      strings? $ [] title
+                      Result :ok $ KanbanOp :board/create title
+                      invalid-message $ str "|Invalid board/create: " op
+                  (:board/rename board-id title)
+                    if
+                      strings? $ [] board-id title
+                      Result :ok $ KanbanOp :board/rename board-id title
+                      invalid-message $ str "|Invalid board/rename: " op
+                  (:column/add board-id title)
+                    if
+                      strings? $ [] board-id title
+                      Result :ok $ KanbanOp :column/add board-id title
+                      invalid-message $ str "|Invalid column/add: " op
+                  (:card/add board-id column-id title)
+                    if
+                      strings? $ [] board-id column-id title
+                      Result :ok $ KanbanOp :card/add board-id column-id title
+                      invalid-message $ str "|Invalid card/add: " op
+                  (:card/rename board-id card-id title)
+                    if
+                      strings? $ [] board-id card-id title
+                      Result :ok $ KanbanOp :card/rename board-id card-id title
+                      invalid-message $ str "|Invalid card/rename: " op
+                  (:card/move board-id card-id column-id)
+                    if
+                      strings? $ [] board-id card-id column-id
+                      Result :ok $ KanbanOp :card/move board-id card-id column-id
+                      invalid-message $ str "|Invalid card/move: " op
+                  (:card/shift board-id card-id step)
+                    if
+                      and
+                        strings? $ [] board-id card-id
+                        number? step
+                      Result :ok $ KanbanOp :card/shift board-id card-id step
+                      invalid-message $ str "|Invalid card/shift: " op
+                  (:card/remove board-id card-id)
+                    if
+                      strings? $ [] board-id card-id
+                      Result :ok $ KanbanOp :card/remove board-id card-id
+                      invalid-message $ str "|Invalid card/remove: " op
+                  (:card/edit-detail board-id card-id description)
+                    if
+                      strings? $ [] board-id card-id description
+                      Result :ok $ KanbanOp :card/edit-detail board-id card-id description
+                      invalid-message $ str "|Invalid card/edit-detail: " op
+                  (:settings/toggle-compact)
+                    Result :ok $ KanbanOp :settings/toggle-compact
+                  (:settings/set-accent accent)
+                    if (string? accent)
+                      Result :ok $ KanbanOp :settings/set-accent accent
+                      invalid-message $ str "|Invalid settings/set-accent: " op
+                  _ $ invalid-message $ str "|Unknown Kanban operation: " op
+                invalid-message $ str "|Expected-enum-kanban-op: " op
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/KanbanOp 'app.schema/MessageDecodeError
+          :tests $ [] $ %{} 'TestEntry (:name |accepts-typed-and-rejects-bad-payloads)
+            :code $ quote $ do
+              assert=
+                Result :ok $ KanbanOp :card/move |b1 |c1 |k2
+                decode-kanban-op $ parse-cirru-edn "|%:: 'KanbanOp 'card/move |b1 |c1 |k2"
+              assert=
+                Result :ok $ KanbanOp :card/shift |b1 |c1 -1
+                decode-kanban-op $ :: :card/shift |b1 |c1 -1
+              assert= true $ match
+                decode-kanban-op $ :: :card/shift |b1 |c1 |up
+                (:err _) true
+                _ false
+              assert= true $ match
+                decode-kanban-op $ :: :card/add |b1 42 |t
+                (:err _) true
+                _ false
+              assert= true $ match (decode-kanban-op 42)
+                (:err _) true
+                _ false
+            :tags $ #{} :client :schema :server
         'decode-message $ %{} 'CodeEntry (:doc "|Decode and validate one stored message.")
           :code $ quote $ defn decode-message (data path)
             let
@@ -1740,6 +1923,11 @@
                     if (list? cursor)
                       Result :ok $ %:: Op :states cursor state
                       invalid-message |Expected-list-state-cursor
+                  (:kanban kanban-op)
+                    match (decode-kanban-op kanban-op)
+                      (:ok typed)
+                        Result :ok $ %:: Op :kanban typed
+                      (:err error) (Result :err error)
                   _ $ invalid-message $ str "|Unknown application operation: " op
                 invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
@@ -1751,6 +1939,7 @@
               :code $ quote $ do
                 assert=
                   Result :ok $ %:: Op :router/change $ %{} Router (:name :profile)
+                    :target $ Option :none
                   decode-operation $ :: :router/change $ {} (:name :profile)
                 assert=
                   Result :ok $ %:: Op :session/remove-message $ %{} RemoveMessage (:id |m1)
@@ -1842,7 +2031,11 @@
                     Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
                   (:some name)
                     if (tag? name)
-                      Result :ok $ %{} Router $ :name name
+                      match
+                        decode-optional-string (get source :target) (str path |.target)
+                        (:ok target)
+                          Result :ok $ %{} Router (:name name) (:target target)
+                        (:err error) (Result :err error)
                       Result :err $ %:: DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
                 Result :err $ %:: DatabaseDecodeError :invalid path "|Expected Router map or struct"
           :examples $ []
@@ -2109,6 +2302,7 @@
                       :heterogeneous $ [] 1 |text
                       :nominal $ :attached store
                     router $ %{} RouterView (:name :profile)
+                      :target $ Option :none
                       :data $ Option :some payload
                       :router $ Option :none
                     updated $ &struct:assoc store :router router
@@ -2230,6 +2424,13 @@
             %{} UserSettings (:compact? false) (:accent |#2a8bd6)
           :examples $ []
           :schema $ :: 'app.schema/UserSettings
+        'empty-cold-store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def empty-cold-store
+            %{} ColdStore
+              :history $ {}
+              :details $ {}
+          :examples $ []
+          :schema $ :: 'app.schema/ColdStore
         'enum-definition-matches? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn enum-definition-matches? (value target)
             match (enum-definition value)
@@ -2261,7 +2462,8 @@
             :return $ :: 'Result 'T 'app.schema/MessageDecodeError
         'router $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def router
-            %{} Router $ :name :home
+            %{} Router (:name :home)
+              :target $ Option :none
           :examples $ []
           :schema $ :: 'app.schema/Router
         'session $ %{} 'CodeEntry (:doc |)
@@ -2313,6 +2515,34 @@
                 (:none) value
                 _ value
               , value
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Dynamic)
+            :args $ [] 'Dynamic
+        'struct-tree-input $ %{} 'CodeEntry
+          :doc "|Recursively turn untrusted struct trees into maps so try-decode-map-as can validate them against a nominal schema."
+          :code $ quote $ defn struct-tree-input (value)
+            cond
+                struct? value
+                struct-tree-input $ &struct:to-map value
+              (map? value)
+                filter-map-kv
+                  decode-map-as value $ :: 'Map 'Dynamic 'Dynamic
+                  fn (key item)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic 'Dynamic
+                      :return $ :: 'MapEntryDecision 'Dynamic 'Dynamic
+                    MapEntryDecision :keep key $ struct-tree-input item
+              (list? value)
+                map
+                  decode-map-as value $ :: 'List 'Dynamic
+                  , struct-tree-input
+              (and (enum? value) (enum-definition-matches? value Option))
+                match value
+                  (:some item)
+                    Option :some $ struct-tree-input item
+                  (:none) value
+                  _ value
+              true value
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'Dynamic
@@ -2492,6 +2722,8 @@
                   dispatch-domain! (%:: schema/DomainOp :user/log-out) sid op-id op-time
                 (:router/change data)
                   dispatch-domain! (%:: schema/DomainOp :router/change data) sid op-id op-time
+                (:kanban kanban-op)
+                  dispatch-domain! (%:: schema/DomainOp :kanban kanban-op) sid op-id op-time
                 _ $ do (eprintln "|Ignoring client-local operation on server:" op) &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
@@ -2503,6 +2735,8 @@
                 base $ %{} schema/Db
                   :sessions $ {}
                   :users $ {}
+                  :boards $ {}
+                  :settings $ {}
                 current $ struct-with base $ :users
                   {} $ |one schema/user
                 fixture $ %{} cumulo-reel.core/ReelState (:base base) (:db current)
@@ -3360,7 +3594,8 @@
                       :records $ []
                       :merged? false
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
-                  router $ %{} schema/Router $ :name :profile
+                  router $ %{} schema/Router (:name :profile)
+                    :target $ Option :none
                   expected $ updater (updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
                   records $ []
                     [] (:: :session/connect) 1 |op-1 10
@@ -3458,7 +3693,9 @@
                     :profile $ Option :some $ :members shared
                     _ $ Option :none
                   Option :none
-                router-view $ %{} RouterView (:name router-name) (:data router-view-data)
+                router-view $ %{} RouterView (:name router-name)
+                  :target $ :target router-data
+                  :data router-view-data
                   :router $ Option :none
                 messages-view $ .filter-map-kv (:messages session-data)
                   fn (id message)
@@ -3472,6 +3709,7 @@
                   :id $ Option :some $ :id session-data
                   :nickname $ :nickname session-data
                   :router $ %{} RouterView (:name router-name)
+                    :target $ :target router-data
                     :data $ Option :none
                     :router $ Option :none
                   :messages messages-view
@@ -3501,11 +3739,14 @@
                     :user-id $ Option :none
                     :id 1
                     :nickname $ Option :none
-                    :router $ %{} app.schema/Router $ :name :home
+                    :router $ %{} app.schema/Router (:name :home)
+                      :target $ Option :none
                     :messages $ {} $ |m1 message
                   db $ %{} app.schema/Db
                     :sessions $ {} $ 1 session-data
                     :users $ {}
+                    :boards $ {}
+                    :settings $ {}
                   shared $ twig-shared db 0
                   store $ twig-container db session-data shared
                   decoded $ parse-cirru-edn $ format-cirru-edn store
@@ -3541,11 +3782,14 @@
                   session-data $ %{} app.schema/Session (:id 0)
                     :user-id $ Option :some |u1
                     :nickname $ Option :some ||
-                    :router $ %{} app.schema/Router $ :name :home
+                    :router $ %{} app.schema/Router (:name :home)
+                      :target $ Option :none
                     :messages $ {}
                   db $ %{} app.schema/Db
                     :sessions $ {} $ 0 session-data
                     :users $ {} $ |u1 user-data
+                    :boards $ {}
+                    :settings $ {}
                   shared $ twig-shared db 0
                   projected $ twig-container db session-data shared
                   view $ :session projected
@@ -3562,11 +3806,14 @@
                   session-data $ %{} app.schema/Session (:id 0)
                     :user-id $ Option :some |u1
                     :nickname $ Option :some ||
-                    :router $ %{} app.schema/Router $ :name :home
+                    :router $ %{} app.schema/Router (:name :home)
+                      :target $ Option :none
                     :messages $ {}
                   db $ %{} app.schema/Db
                     :sessions $ {} $ 0 session-data
                     :users $ {}
+                    :boards $ {}
+                    :settings $ {}
                   shared $ twig-shared db 0
                   projected $ twig-container db session-data shared
                   view $ :session projected
@@ -3642,6 +3889,7 @@
               (:user/sign-up username password) (user/sign-up db username password sid op-id op-time)
               (:user/log-out) (user/log-out db sid op-id op-time)
               (:router/change data) (router/change db data sid op-id op-time)
+              (:kanban kanban-op) (kanban/apply-kanban db kanban-op sid op-id op-time)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
@@ -3650,6 +3898,602 @@
           :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
             app.schema :refer $ Op
             respo-message.updater :refer $ update-messages
+            app.updater.kanban :as kanban
+    'app.updater.kanban $ %{} 'FileEntry
+      :defs $ {}
+        'add-card $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn add-card (board column-id title user-id op-id op-time)
+            if
+              option:some? $ get (:columns board) column-id
+              struct-with board $ :cards $ assoc (:cards board) op-id
+                %{} Card (:id op-id) (:column-id column-id)
+                  :rank $ next-rank $ column-card-ranks board column-id
+                  :title title
+                  :detail-rev 0
+                  :updated-at op-time
+                  :updated-by user-id
+              , board
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Board)
+            :args $ [] 'app.schema/Board 'String 'String 'String 'String 'Number
+        'apply-cold-effects $ %{} 'CodeEntry
+          :doc "|Append history and replace card details. Per-user history is bounded; trimming shifts cursors, so clients re-read the first page after history-rev changes."
+          :code $ quote $ defn apply-cold-effects (cold effects history-limit)
+            let
+                history $ foldl (:history effects) (:history cold)
+                  fn (acc event)
+                    hint-fn $ {}
+                      :args $ []
+                        :: 'Map 'String $ :: 'List 'app.schema/HistoryEvent
+                        , 'app.schema/HistoryEvent
+                      :return $ :: 'Map 'String $ :: 'List 'app.schema/HistoryEvent
+                    let
+                        user-id $ :user-id event
+                        events $ match (get acc user-id)
+                          (:some existing) (conj existing event)
+                          (:none) ([] event)
+                        size $ count events
+                      assoc acc user-id $ if (> size history-limit)
+                        slice events (- size history-limit) size
+                        , events
+                details $ foldl (:details effects) (:details cold)
+                  fn (acc detail)
+                    hint-fn $ {}
+                      :args $ [] (:: 'Map 'String 'app.schema/CardDetail) 'app.schema/CardDetail
+                      :return $ :: 'Map 'String 'app.schema/CardDetail
+                    assoc acc (:card-id detail) detail
+              struct-with cold (:history history) (:details details)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/ColdStore)
+            :args $ [] 'app.schema/ColdStore 'app.schema/ColdEffects 'Number
+        'apply-kanban $ %{} 'CodeEntry
+          :doc "|Pure Kanban reducer. Anonymous sessions and invalid targets leave the database unchanged."
+          :code $ quote $ defn apply-kanban (db op sid op-id op-time)
+            match (session-user-id db sid)
+              (:none) db
+              (:some user-id)
+                match op
+                  (:board/create title)
+                    if (blank? title) db $ create-board db (trim title) op-id op-time
+                  (:board/rename board-id title)
+                    if (blank? title) db $ update-board db board-id $ fn (board)
+                      struct-with board $ :title $ trim title
+                  (:column/add board-id title)
+                    if (blank? title) db $ update-board db board-id $ fn (board)
+                      struct-with board $ :columns $ assoc (:columns board) op-id
+                        %{} Column (:id op-id)
+                          :title $ trim title
+                          :rank $ next-rank $ map (board-columns board)
+                            fn (column)
+                              hint-fn $ {}
+                                :args $ [] 'app.schema/Column
+                                :return 'Number
+                              :rank column
+                  (:card/add board-id column-id title)
+                    if (blank? title) db $ update-board db board-id $ fn (board)
+                      add-card board column-id (trim title) user-id op-id op-time
+                  (:card/rename board-id card-id title)
+                    if (blank? title) db $ update-board db board-id $ fn (board)
+                      update-card board card-id $ fn (card)
+                        touch-card
+                          struct-with card $ :title $ trim title
+                          , user-id op-time
+                  (:card/move board-id card-id column-id)
+                    update-board db board-id $ fn (board) (move-card board card-id column-id user-id op-time)
+                  (:card/shift board-id card-id step)
+                    update-board db board-id $ fn (board) (shift-card board card-id step)
+                  (:card/remove board-id card-id)
+                    update-board db board-id $ fn (board)
+                      struct-with board $ :cards $ dissoc (:cards board) card-id
+                  (:card/edit-detail board-id card-id _description)
+                    update-board db board-id $ fn (board)
+                      update-card board card-id $ fn (card)
+                        touch-card
+                          struct-with card $ :detail-rev $ inc (:detail-rev card)
+                          , user-id op-time
+                  (:settings/toggle-compact)
+                    update-settings db user-id $ fn (settings)
+                      struct-with settings $ :compact? $ not (:compact? settings)
+                  (:settings/set-accent accent)
+                    update-settings db user-id $ fn (settings)
+                      struct-with settings $ :accent accent
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'app.schema/Db 'app.schema/KanbanOp 'Number 'String 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |board-card-lifecycle)
+            :code $ quote $ let
+                db0 fixture-db
+                anon $ apply-kanban db0 (KanbanOp :board/create |Nope) 2 |bx 1
+                db1 $ apply-kanban db0 (KanbanOp :board/create "| Plan ") 1 |b1 1
+                db2 $ apply-kanban db1 (KanbanOp :card/add |b1 |b1-todo |A) 1 |c1 2
+                db3 $ apply-kanban db2 (KanbanOp :card/add |b1 |b1-todo |B) 1 |c2 3
+                db4 $ apply-kanban db3 (KanbanOp :card/shift |b1 |c2 -1) 1 |o4 4
+                db5 $ apply-kanban db4 (KanbanOp :card/move |b1 |c1 |b1-done) 1 |o5 5
+                blank $ apply-kanban db5 (KanbanOp :card/add |b1 |b1-todo "|  ") 1 |o6 6
+                bad-column $ apply-kanban db5 (KanbanOp :card/move |b1 |c2 |missing) 1 |o7 7
+                card-in $ fn (db card-id)
+                  hint-fn $ {}
+                    :args $ [] 'app.schema/Db 'String
+                    :return 'app.schema/Card
+                  match (board-of db |b1)
+                    (:some board)
+                      assert-type
+                        option:unwrap $ get (:cards board) card-id
+                        , app.schema/Card
+                    (:none) (raise |Missing-board)
+              assert= db0 anon
+              assert= |Plan $ :title $ option:unwrap (board-of db1 |b1)
+              assert= 3 $ count $ :columns
+                option:unwrap $ board-of db1 |b1
+              assert= 1 $ :rank $ card-in db2 |c1
+              assert= 2 $ :rank $ card-in db3 |c2
+              assert= 2 $ :rank $ card-in db4 |c1
+              assert= 1 $ :rank $ card-in db4 |c2
+              assert= |b1-done $ :column-id $ card-in db5 |c1
+              assert= 1 $ :rank $ card-in db5 |c1
+              assert= |u1 $ :updated-by $ card-in db5 |c1
+              assert= db5 blank
+              assert= db5 bad-column
+            :tags $ #{} :kanban :server
+        'board-cards $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn board-cards (board)
+            map
+              .to-list $ :cards board
+              fn (pair)
+                let[] (_id raw-card) pair $ assert-type raw-card app.schema/Card
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Board
+            :return $ :: 'List 'app.schema/Card
+        'board-columns $ %{} 'CodeEntry (:doc "|Columns ordered by rank.")
+          :code $ quote $ defn board-columns (board)
+            ->
+              .to-list $ :columns board
+              map $ fn (pair)
+                let[] (_id raw-column) pair $ assert-type raw-column app.schema/Column
+              .sort-by $ fn (column)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/Column
+                  :return 'Number
+                :rank column
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Board
+            :return $ :: 'List 'app.schema/Column
+        'board-of $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn board-of (db board-id)
+            match
+              get (:boards db) board-id
+              (:some raw)
+                Option :some $ assert-type raw app.schema/Board
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'String
+            :return $ :: 'Option 'app.schema/Board
+        'card-column $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn card-column (board-option card-id)
+            match board-option
+              (:some board)
+                match
+                  get (:cards board) card-id
+                  (:some raw)
+                    :column-id $ assert-type raw app.schema/Card
+                  (:none) |
+              (:none) |
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ [] (:: 'Option 'app.schema/Board) 'String
+        'card-detail-reply $ %{} 'CodeEntry
+          :doc "|Read cold card content only while the hot card exists; the returned rev lets clients drop stale responses."
+          :code $ quote $ defn card-detail-reply (db cold board-id card-id)
+            match (board-of db board-id)
+              (:none) (app.schema/QueryReply :missing board-id)
+              (:some board)
+                match
+                  get (:cards board) card-id
+                  (:none) (app.schema/QueryReply :missing card-id)
+                  (:some _)
+                    app.schema/QueryReply :card-detail $ match
+                      get (:details cold) card-id
+                      (:some raw) (assert-type raw app.schema/CardDetail)
+                      (:none)
+                        %{} CardDetail (:card-id card-id) (:board-id board-id) (:rev 0) (:description |) (:updated-at 0)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
+            :args $ [] 'app.schema/Db 'app.schema/ColdStore 'String 'String
+        'card-title $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn card-title (board-option card-id)
+            match board-option
+              (:some board)
+                match
+                  get (:cards board) card-id
+                  (:some raw)
+                    :title $ assert-type raw app.schema/Card
+                  (:none) card-id
+              (:none) card-id
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ [] (:: 'Option 'app.schema/Board) 'String
+        'column-card-ranks $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn column-card-ranks (board column-id)
+            map (column-cards board column-id)
+              fn (card)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/Card
+                  :return 'Number
+                :rank card
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Board 'String
+            :return $ :: 'List 'Number
+        'column-cards $ %{} 'CodeEntry (:doc "|Cards of one column ordered by rank.")
+          :code $ quote $ defn column-cards (board column-id)
+            -> (board-cards board)
+              filter $ fn (card)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/Card
+                  :return 'Bool
+                = column-id $ :column-id card
+              .sort-by $ fn (card)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/Card
+                  :return 'Number
+                :rank card
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Board 'String
+            :return $ :: 'List 'app.schema/Card
+        'column-title $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn column-title (board-option column-id)
+            match board-option
+              (:some board)
+                match
+                  get (:columns board) column-id
+                  (:some raw)
+                    :title $ assert-type raw app.schema/Column
+                  (:none) column-id
+              (:none) column-id
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ [] (:: 'Option 'app.schema/Board) 'String
+        'create-board $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn create-board (db title op-id op-time)
+            let
+                column $ fn (suffix label rank)
+                  hint-fn $ {}
+                    :args $ [] 'String 'String 'Number
+                    :return 'Dynamic
+                  let
+                      id $ str op-id |- suffix
+                    [] id $ %{} Column (:id id) (:title label) (:rank rank)
+                columns $ assert-type
+                  pairs-map $ [] (column |todo |Todo 1) (column |doing |Doing 2) (column |done |Done 3)
+                  :: 'Map 'String 'app.schema/Column
+              struct-with db $ :boards $ assoc (:boards db) op-id
+                %{} Board (:id op-id) (:title title) (:created-at op-time) (:columns columns)
+                  :cards $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'app.schema/Db 'String 'String 'Number
+        'fixture-db $ %{} 'CodeEntry
+          :doc "|Deterministic database with one signed-in session (1) and one anonymous session (2) for reducer tests."
+          :code $ quote $ def fixture-db
+            %{} app.schema/Db
+              :sessions $ {}
+                1 $ %{} app.schema/Session (:id 1)
+                  :user-id $ Option :some |u1
+                  :nickname $ Option :none
+                  :router app.schema/router
+                  :messages $ {}
+                2 $ %{} app.schema/Session (:id 2)
+                  :user-id $ Option :none
+                  :nickname $ Option :none
+                  :router app.schema/router
+                  :messages $ {}
+              :users $ {}
+              :boards $ {}
+              :settings $ {}
+          :examples $ []
+          :schema $ :: 'app.schema/Db
+        'history-page $ %{} 'CodeEntry
+          :doc "|Newest-first page ending before an exclusive cursor into the append-only log; page size is clamped to 1..50."
+          :code $ quote $ defn history-page (cold user-id cursor limit)
+            let
+                events $ match
+                  get (:history cold) user-id
+                  (:some existing) existing
+                  (:none)
+                    assert-type ([]) (:: 'List 'app.schema/HistoryEvent)
+                total $ count events
+                page-size $ if (< limit 1) 1 $ if (> limit 50) 50 limit
+                end $ match cursor
+                  (:some position)
+                    if (< position 0) 0 $ if (> position total) total position
+                  (:none) total
+                start $ if (> end page-size) (- end page-size) 0
+              %{} app.schema/HistoryPage
+                :items $ reverse $ slice events start end
+                :next-cursor $ if (> start 0) (Option :some start) (Option :none)
+                :history-rev total
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/HistoryPage)
+            :args $ [] 'app.schema/ColdStore 'String (:: 'Option 'Number) 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |stable-cursor-paging-and-bound)
+            :code $ quote $ let
+                event $ fn (id)
+                  hint-fn $ {}
+                    :args $ [] 'String
+                    :return 'app.schema/HistoryEvent
+                  %{} HistoryEvent (:id id) (:time 0) (:user-id |u1) (:kind :card/add) (:board-id |b1) (:summary id)
+                effects $ %{} ColdEffects
+                  :history $ map ([] |e1 |e2 |e3 |e4) event
+                  :details $ []
+                cold $ apply-cold-effects app.schema/empty-cold-store effects 3
+                first-page $ history-page cold |u1 (Option :none) 2
+                second-page $ history-page cold |u1 (:next-cursor first-page) 2
+                ids $ fn (page)
+                  hint-fn $ {}
+                    :args $ [] 'app.schema/HistoryPage
+                    :return $ :: 'List 'String
+                  map (:items page)
+                    fn (item)
+                      hint-fn $ {}
+                        :args $ [] 'app.schema/HistoryEvent
+                        :return 'String
+                      :id item
+              assert= 3 $ :history-rev first-page
+              assert= ([] |e4 |e3) (ids first-page)
+              assert= (Option :some 1) (:next-cursor first-page)
+              assert= ([] |e2) (ids second-page)
+              assert= (Option :none) (:next-cursor second-page)
+              assert= ([])
+                :items $ history-page cold |nobody (Option :none) 10
+            :tags $ #{} :kanban :server
+        'kanban-effects $ %{} 'CodeEntry
+          :doc "|Derive cold writes from a committed operation by comparing the touched board before and after; rejected or no-op operations produce no history."
+          :code $ quote $ defn kanban-effects (db-before db-after op sid op-id op-time)
+            let
+                none $ %{} ColdEffects
+                  :history $ []
+                  :details $ []
+                event $ fn (user-id kind board-id summary)
+                  hint-fn $ {}
+                    :args $ [] 'String 'Tag 'String 'String
+                    :return 'app.schema/HistoryEvent
+                  %{} HistoryEvent (:id op-id) (:time op-time) (:user-id user-id) (:kind kind) (:board-id board-id) (:summary summary)
+                board-change $ fn (board-id)
+                  hint-fn $ {}
+                    :args $ [] 'String
+                    :return $ :: 'Option $ :: 'List 'app.schema/Board
+                  let
+                      before $ board-of db-before board-id
+                      after $ board-of db-after board-id
+                    if (= before after) (Option :none)
+                      Option :some $ []
+                only $ fn (user-id kind board-id summary)
+                  hint-fn $ {}
+                    :args $ [] 'String 'Tag 'String 'String
+                    :return 'app.schema/ColdEffects
+                  match (board-change board-id)
+                    (:none) none
+                    (:some _)
+                      %{} ColdEffects
+                        :history $ [] $ event user-id kind board-id summary
+                        :details $ []
+              match (session-user-id db-before sid)
+                (:none) none
+                (:some user-id)
+                  let
+                      before-of $ fn (board-id)
+                        hint-fn $ {}
+                          :args $ [] 'String
+                          :return $ :: 'Option 'app.schema/Board
+                        board-of db-before board-id
+                      after-of $ fn (board-id)
+                        hint-fn $ {}
+                          :args $ [] 'String
+                          :return $ :: 'Option 'app.schema/Board
+                        board-of db-after board-id
+                    match op
+                      (:board/create title)
+                        only user-id :board/create op-id $ str "|created board " title
+                      (:board/rename board-id title)
+                        only user-id :board/rename board-id $ str "|renamed board to " title
+                      (:column/add board-id title)
+                        only user-id :column/add board-id $ str "|added column " title
+                      (:card/add board-id column-id title)
+                        only user-id :card/add board-id $ str "|added card " title "| to " $ column-title (after-of board-id) column-id
+                      (:card/rename board-id card-id title)
+                        only user-id :card/rename board-id $ str "|renamed card "
+                          card-title (before-of board-id) card-id
+                          , "| to " title
+                      (:card/move board-id card-id column-id)
+                        only user-id :card/move board-id $ str "|moved "
+                          card-title (before-of board-id) card-id
+                          , "| from "
+                            column-title (before-of board-id)
+                              card-column (before-of board-id) card-id
+                            , "| to " $ column-title (after-of board-id) column-id
+                      (:card/shift board-id card-id _step)
+                        only user-id :card/shift board-id $ str "|reordered " $ card-title (before-of board-id) card-id
+                      (:card/remove board-id card-id)
+                        only user-id :card/remove board-id $ str "|removed card " $ card-title (before-of board-id) card-id
+                      (:card/edit-detail board-id card-id description)
+                        match (after-of board-id)
+                          (:none) none
+                          (:some board)
+                            match
+                              get (:cards board) card-id
+                              (:none) none
+                              (:some raw-card)
+                                let
+                                    card $ assert-type raw-card app.schema/Card
+                                  %{} ColdEffects
+                                    :history $ [] $ event user-id :card/edit-detail board-id
+                                      str "|edited description of " $ :title card
+                                    :details $ [] $ %{} CardDetail (:card-id card-id) (:board-id board-id)
+                                      :rev $ :detail-rev card
+                                      :description description
+                                      :updated-at op-time
+                      (:settings/toggle-compact) none
+                      (:settings/set-accent _accent) none
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/ColdEffects)
+            :args $ [] 'app.schema/Db 'app.schema/Db 'app.schema/KanbanOp 'Number 'String 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |history-and-versioned-detail)
+            :code $ quote $ let
+                db1 $ apply-kanban fixture-db (KanbanOp :board/create |Plan) 1 |b1 1
+                db2 $ apply-kanban db1 (KanbanOp :card/add |b1 |b1-todo |A) 1 |c1 2
+                move-op $ KanbanOp :card/move |b1 |c1 |b1-done
+                db3 $ apply-kanban db2 move-op 1 |o3 3
+                move-effects $ kanban-effects db2 db3 move-op 1 |o3 3
+                noop-op $ KanbanOp :card/move |b1 |c1 |missing
+                noop-effects $ kanban-effects db3 (apply-kanban db3 noop-op 1 |o4 4) noop-op 1 |o4 4
+                edit-op $ KanbanOp :card/edit-detail |b1 |c1 "|Write the spec"
+                db4 $ apply-kanban db3 edit-op 1 |o5 5
+                edit-effects $ kanban-effects db3 db4 edit-op 1 |o5 5
+                cold $ apply-cold-effects (apply-cold-effects app.schema/empty-cold-store move-effects 100) edit-effects 100
+              assert= "|moved A from Todo to Done" $ :summary $ option:unwrap
+                first $ :history move-effects
+              assert= ([]) (:history noop-effects)
+              assert= 1 $ :detail-rev $ assert-type
+                option:unwrap $ get
+                  :cards $ option:unwrap $ board-of db4 |b1
+                  , |c1
+                , app.schema/Card
+              assert= 1 $ :rev $ option:unwrap
+                first $ :details edit-effects
+              assert= 2 $ count $ option:unwrap
+                get (:history cold) |u1
+              match (card-detail-reply db4 cold |b1 |c1)
+                (:card-detail detail)
+                  do
+                    assert= 1 $ :rev detail
+                    assert= "|Write the spec" $ :description detail
+                _ $ raise |Expected-card-detail
+              assert= (app.schema/QueryReply :missing |c9) (card-detail-reply db4 cold |b1 |c9)
+              match (card-detail-reply db2 app.schema/empty-cold-store |b1 |c1)
+                (:card-detail detail)
+                  assert= 0 $ :rev detail
+                _ $ raise |Expected-empty-detail
+            :tags $ #{} :kanban :server
+        'move-card $ %{} 'CodeEntry
+          :doc "|Move a card to the end of another column by changing two leaves: column-id and rank."
+          :code $ quote $ defn move-card (board card-id column-id user-id op-time)
+            if
+              option:some? $ get (:columns board) column-id
+              update-card board card-id $ fn (card)
+                if
+                  = column-id $ :column-id card
+                  , card $ struct-with card (:column-id column-id)
+                    :rank $ next-rank $ column-card-ranks board column-id
+                    :updated-at op-time
+                    :updated-by user-id
+              , board
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Board)
+            :args $ [] 'app.schema/Board 'String 'String 'String 'Number
+        'next-rank $ %{} 'CodeEntry
+          :doc "|Rank after the current maximum; appending never rewrites sibling ranks."
+          :code $ quote $ defn next-rank (ranks)
+            inc $ foldl ranks 0 $ fn (acc rank)
+              hint-fn $ {}
+                :args $ [] 'Number 'Number
+                :return 'Number
+              if (> rank acc) rank acc
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Number)
+            :args $ [] $ :: 'List 'Number
+        'session-user-id $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn session-user-id (db sid)
+            match
+              get (:sessions db) sid
+              (:some raw-session)
+                :user-id $ assert-type raw-session app.schema/Session
+              (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'Number
+            :return $ :: 'Option 'String
+        'shift-card $ %{} 'CodeEntry
+          :doc "|Swap ranks with the neighbor above or below inside the same column; only two rank leaves change."
+          :code $ quote $ defn shift-card (board card-id step)
+            match
+              get (:cards board) card-id
+              (:none) board
+              (:some raw-card)
+                let
+                    card $ assert-type raw-card app.schema/Card
+                    siblings $ column-cards board $ :column-id card
+                  match
+                    find-index siblings $ fn (item)
+                      hint-fn $ {}
+                        :args $ [] 'app.schema/Card
+                        :return 'Bool
+                      = card-id $ :id item
+                    (:none) board
+                    (:some index)
+                      match
+                        nth siblings $ + index $ if (< step 0) -1 1
+                        (:none) board
+                        (:some neighbor)
+                          struct-with board $ :cards $ -> (:cards board)
+                            assoc card-id $ struct-with card $ :rank (:rank neighbor)
+                            assoc (:id neighbor)
+                              struct-with neighbor $ :rank $ :rank card
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Board)
+            :args $ [] 'app.schema/Board 'String 'Number
+        'touch-card $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn touch-card (card user-id op-time)
+            struct-with card (:updated-at op-time) (:updated-by user-id)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Card)
+            :args $ [] 'app.schema/Card 'String 'Number
+        'update-board $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn update-board (db board-id f)
+            match
+              get (:boards db) board-id
+              (:some raw-board)
+                struct-with db $ :boards $ assoc (:boards db) board-id
+                  f $ assert-type raw-board app.schema/Board
+              (:none) db
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'app.schema/Db 'String $ :: 'Fn
+              {} (:return 'app.schema/Board)
+                :args $ [] 'app.schema/Board
+        'update-card $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn update-card (board card-id f)
+            match
+              get (:cards board) card-id
+              (:some raw-card)
+                struct-with board $ :cards $ assoc (:cards board) card-id
+                  f $ assert-type raw-card app.schema/Card
+              (:none) board
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Board)
+            :args $ [] 'app.schema/Board 'String $ :: 'Fn
+              {} (:return 'app.schema/Card)
+                :args $ [] 'app.schema/Card
+        'update-settings $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn update-settings (db user-id f)
+            let
+                current $ match
+                  get (:settings db) user-id
+                  (:some raw) (assert-type raw app.schema/UserSettings)
+                  (:none) app.schema/default-settings
+              struct-with db $ :settings $ assoc (:settings db) user-id (f current)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'app.schema/Db 'String $ :: 'Fn
+              {} (:return 'app.schema/UserSettings)
+                :args $ [] 'app.schema/UserSettings
+      :ns $ %{} 'NsEntry
+        :doc "|Pure Kanban reducer plus pure derivation of cold effects (history and card details) from one committed operation."
+        :code $ quote $ ns app.updater.kanban
+          :require $ app.schema :refer $ Board Column Card UserSettings KanbanOp HistoryEvent CardDetail ColdStore ColdEffects
     'app.updater.router $ %{} 'FileEntry
       :defs $ {} $ 'change
         %{} 'CodeEntry (:doc |)
@@ -3704,13 +4548,16 @@
                 session-data $ %{} app.schema/Session (:id sid)
                   :user-id $ Option :none
                   :nickname $ Option :none
-                  :router $ %{} app.schema/Router $ :name :home
+                  :router $ %{} app.schema/Router (:name :home)
+                    :target $ Option :none
                   :messages $ {}
                     |m1 $ %{} app.schema/Message (:id |m1) (:text |remove)
                     |m2 $ %{} app.schema/Message (:id |m2) (:text |keep)
                 db $ %{} app.schema/Db
                   :sessions $ {} $ sid session-data
                   :users $ {}
+                  :boards $ {}
+                  :settings $ {}
                 result $ remove-message db
                   %{} app.schema/RemoveMessage $ :id |m1
                   , sid |op 0
@@ -3773,6 +4620,8 @@
                 db $ %{} app.schema/Db
                   :sessions $ {} $ sid session-data
                   :users $ {} $ |user-1 user-data
+                  :boards $ {}
+                  :settings $ {}
                 missing $ log-in db |missing |secret sid |op-missing 0
                 wrong $ log-in db |demo |wrong sid |op-wrong 0
                 success $ log-in db |demo |secret sid |op-success 0
@@ -3852,6 +4701,8 @@
                 db $ %{} app.schema/Db
                   :sessions $ {} $ sid session-data
                   :users $ {} $ |user-1 user-data
+                  :boards $ {}
+                  :settings $ {}
                 result $ sign-up db |demo |secret sid |op-taken 0
                 next-session $ assert-type
                   option:unwrap $ get (:sessions result) sid
