@@ -27,6 +27,24 @@ calcit libs readme respo.calcit -f docs/Respo-Agent.md
 - **Server**: `*reel` atom → `updater` (pure fn) → `twig-container` → `diff-twig` → patches
 - **Client**: WebSocket → `patch-twig` → `*store` atom → Respo render
 - **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel), `ws-edn` (WebSocket)
+- **Partitions** (hot/cold split, see `docs/hot-cold-sync-plan.md`):
+  `app.twig.partition/project-partition` → `app.partition/advance-partition`
+  (one diff per partition revision) → per-connection `connection-actions`;
+  cold data goes through `ClientMessage :query` and `app.resource` on the client
+
+### Step 0: choose the data tier before adding a field
+
+| Question | Tier | Where |
+|---|---|---|
+| Visible to every subscriber, bounded size? | shared hot partition | add to a `PartitionView` projection in `app.twig.partition` |
+| Belongs to one user, must be live? | private `(:user id)` partition | `UserHotView` / `project-partition` |
+| Grows over time or only needed when a view opens? | cold | `ColdStore` + a `Query`/`QueryReply` variant; keep only an id/summary/`*-rev` hot |
+| Per-tab UI or route state? | session Store | `twig-container` |
+
+Rules: a partition is a visibility boundary (never ship private fields for the
+client to filter); authorization lives in `session-partitions`; when an
+operation can change a partition, list it in `affected-partitions`; cold reads
+take identity from the session, never from query parameters.
 
 **Project structure** (from template):
 

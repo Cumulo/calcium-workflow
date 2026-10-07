@@ -69,6 +69,20 @@ jobs:
       - name: Verify deterministic diff and patch workload
         run: yarn node tests/diff-patch-workload.mjs --mode smoke
 
+      - name: Verify Kanban partitions and cold queries against the native server
+        run: |
+          port=5099 calcit calcit.cirru --entry server > kanban-server.log 2>&1 &
+          server_pid=$!
+          for attempt in $(seq 1 60); do
+            grep -q "WebSocket server started" kanban-server.log && break
+            sleep 0.5
+          done
+          status=0
+          yarn node tests/kanban-e2e.mjs ws://127.0.0.1:5099 || status=$?
+          kill "$server_pid" || true
+          if [ "$status" -ne 0 ]; then cat kanban-server.log; fi
+          exit "$status"
+
       - run: mkdir -p dist-server && cp calcit.cirru dist-server && cp package.json dist-server/
         name: Copy server scripts
 
