@@ -53,7 +53,21 @@ CI 完整执行上述验证与原有运行回归，不以入口检查代替完�
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
 [Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
 [旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围；
-[冷热分区同步与 Kanban 模板](history/20261007-hot-cold-partitions.md)记录本次分区改造。
+[冷热分区同步与 Kanban 模板](history/20261007-hot-cold-partitions.md)记录本次分区改造；
+[模板分层](history/20261007-template-layers.md)记录模板与业务代码的拆分。
+
+### Template layers
+
+Copying this repository as a template? Namespaces tell you what to keep:
+`app.sync.*` is the runtime (keep unchanged), `app.feature.<name>.*` is the
+replaceable business demo, and `app.schema` / `app.hooks*` / `app.updater` /
+entry namespaces are the few wiring points that name the current feature.
+`tests/template-boundary.mjs` (run in CI) keeps `app.sync.*` from referencing
+business code directly. See [模板分层与替换业务](docs/template-layers.md) for
+the hook list and the replace-the-feature checklist.
+
+复制为新项目时：`app.sync.*` 原样保留，`app.feature.<name>.*` 是可整体替换的业务，
+`app.schema`、`app.hooks*`、`app.updater` 与入口命名空间是唯一需要改成新业务的 wiring 点。
 
 ### Hot/cold partitions (Kanban template)
 
@@ -233,7 +247,7 @@ Calcium 带 cleanup 的 lifecycle watcher 只发送应用 activity 和 revision 
 据此续租，静默失效 socket 则被主动关闭并通过 backoff 恢复。
 
 Server synchronization observability is available through
-`app.server/read-sync-metrics`. The typed `SyncMetrics` snapshot records the
+`app.sync.server/read-sync-metrics`. The typed `SyncMetrics` snapshot records the
 latest diff latency, the latest patch payload's real UTF-8 byte length, patch
 and snapshot payload byte lengths, latest visited/emitted diff work, budget
 fallback count, patch and snapshot send attempts, explicit resync requests, and
@@ -243,7 +257,7 @@ read, so ordinary dispatch/send paths do not rescan every connection. Attempt
 counts include transport retries; combine them with calcit-wss `wss-metrics`
 when transport admission and queue details are needed.
 
-服务端同步观测可通过 `app.server/read-sync-metrics` 获取。Typed
+服务端同步观测可通过 `app.sync.server/read-sync-metrics` 获取。Typed
 `SyncMetrics` snapshot 记录最近 diff 延迟、最近 patch payload 的真实 UTF-8
 字节数、最近 snapshot 字节数、visited/emitted 工作量、预算回退次数、
 patch/snapshot 发送尝试次数、显式 resync 请求数与最新 revision。

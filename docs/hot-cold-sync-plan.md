@@ -5,7 +5,7 @@
 > [#56 版本化冷内容 callback](https://github.com/Cumulo/calcium-workflow/issues/56)、
 > [#57 场景验收](https://github.com/Cumulo/calcium-workflow/issues/57)、
 > [#58 声明式 Resource](https://github.com/Cumulo/calcium-workflow/issues/58)。
-> 本文记录模板里已经实现的第一版，以及尚未覆盖的部分。
+> 本文记录模板里已经实现的第一版，以及尚未覆盖的部分。命名空间分层（模板 `app.sync.*`、wiring `app.hooks*`、业务 `app.feature.*`）见 [模板分层与替换业务](template-layers.md)。
 
 ## 1. 为什么要改
 
@@ -17,10 +17,10 @@
 
 | 层 | Kanban 模板中的例子 | 同步方式 | 实现位置 |
 |----|------|------|------|
-| 公共热分区 | `(:lobby)` 看板摘要 + 在线用户；`(:board id)` 列与卡片摘要 | 每个分区每个 revision 只 diff 一次，所有订阅者复用同一个 delta 和同一份编码 payload | `app.partition`、`app.twig.partition`、`app.server/sync-partitions!` |
+| 公共热分区 | `(:lobby)` 看板摘要 + 在线用户；`(:board id)` 列与卡片摘要 | 每个分区每个 revision 只 diff 一次，所有订阅者复用同一个 delta 和同一份编码 payload | `app.sync.partition`、`app.feature.kanban.twig`、`app.sync.server/sync-partitions!` |
 | 私有热分区 | `(:user id)` 资料、设置、`history-rev` | 与公共分区同一机制；同一用户的多个连接复用 | 同上 |
-| 会话 Store | 路由、session 消息、登录状态 | 沿用原 revision/ACK/resync 的单连接 diff，体量很小 | `app.twig.container`、`app.server/sync-client!` |
-| 冷数据 | 个人操作历史、卡片描述 | `ClientMessage :query` + request id 回调；不进入 diff；热分区只放 `detail-rev` / `history-rev` | `app.updater.kanban`（读写）、`app.resource`（客户端缓存） |
+| 会话 Store | 路由、session 消息、登录状态 | 沿用原 revision/ACK/resync 的单连接 diff，体量很小 | `app.twig.container`、`app.sync.server/sync-client!` |
+| 冷数据 | 个人操作历史、卡片描述 | `ClientMessage :query` + request id 回调；不进入 diff；热分区只放 `detail-rev` / `history-rev` | `app.feature.kanban.updater`（读写）、`app.feature.kanban.resource`（客户端缓存） |
 
 判断规则：所有订阅者都能看到、体量有界 → 公共分区；只属于一个用户、需要即时一致 → 私有分区；
 随时间增长、只在打开某个视图时才需要 → 冷数据，热分区里只留 id、摘要和内容版本号。
@@ -84,7 +84,7 @@ render-loop!
 `affected-partitions` 是纯函数：卡片和列的操作 → 该 board + lobby + 操作者的 user 分区；设置操作 →
 user 分区；路由变化只改变订阅；会话类操作 → lobby。reel reset/merge 和热更新会把所有存活分区标脏。
 
-可观测性：`app.server/read-partition-metrics` 返回 `PartitionMetrics`，包括 diffs、advances、resets、
+可观测性：`app.sync.server/read-partition-metrics` 返回 `PartitionMetrics`，包括 diffs、advances、resets、
 snapshot/delta 发送次数、reused-payloads、drops、queries 和 live-partitions。diff 次数只随脏分区数增长，
 发送次数随订阅连接数增长，两者分开计数。
 
@@ -106,11 +106,11 @@ snapshot/delta 发送次数、reused-payloads、drops、queries 和 live-partiti
 
 | 检查 | 位置 |
 |------|------|
-| 分区引擎：未变化不升 revision、N 个订阅者复用同一个 delta、历史裁剪回退 snapshot、epoch 变化、单 pending 与过期 ACK、溢出 reset、delta 链重放收敛、客户端原子应用 | `app.partition` 的测试（`--tag partition`） |
-| 授权、投影与脏分区推导 | `app.twig.partition/session-partitions` 的测试 |
-| 服务端真实路径：5 个订阅者、一次卡片新增 → 3 次 diff（每个脏分区一次）、0 次 snapshot、10 次 delta 发送、5 个订阅者拿到同一个 board delta、8 次 payload 复用 | `app.server/sync-partitions-with!` 的测试 |
-| Kanban reducer、冷效果、历史分页、卡片详情回复、session 身份 | `app.updater.kanban`、`app.server/query-reply` 的测试 |
-| 客户端冷缓存：迟到、过时、已关闭的回复 | `app.resource/receive-reply` 的测试 |
+| 分区引擎：未变化不升 revision、N 个订阅者复用同一个 delta、历史裁剪回退 snapshot、epoch 变化、单 pending 与过期 ACK、溢出 reset、delta 链重放收敛、客户端原子应用 | `app.sync.partition` 的测试（`--tag partition`） |
+| 授权、投影与脏分区推导 | `app.feature.kanban.twig/session-partitions` 的测试 |
+| 服务端真实路径：5 个订阅者、一次卡片新增 → 3 次 diff（每个脏分区一次）、0 次 snapshot、10 次 delta 发送、5 个订阅者拿到同一个 board delta、8 次 payload 复用 | `app.hooks.server/affected-partitions` 的测试 |
+| Kanban reducer、冷效果、历史分页、卡片详情回复、session 身份 | `app.feature.kanban.updater`、`app.feature.kanban.server/query-reply` 的测试 |
+| 客户端冷缓存：迟到、过时、已关闭的回复 | `app.feature.kanban.resource/receive-reply` 的测试 |
 | 生成 JS 的 SSR：看板、看板不存在、历史、设置 | `tests/respo-client-boundaries.mjs` |
 | 原生服务端端到端：两个用户共享同一份 board patch、冷描述不进入热 patch、版本化详情、私有历史、登出 drop、匿名读取被拒绝 | `tests/kanban-e2e.mjs`（已加入 CI） |
 
@@ -123,7 +123,7 @@ snapshot/delta 发送次数、reused-payloads、drops、queries 和 live-partiti
 - **跨分区一致性**：board 与 lobby 的 revision 相互独立，可能短暂不一致（例如卡片数量晚一步更新）。需要原子可见的数据应放在同一分区。
 - **查询限流**：目前只限制了每页条数，还没有并发数和字节数的限制。
 - **#57 场景与规模基准**：10k/100k 冷数据下的 RSS、diff 次数与连接数的关系、callback 延迟，需要在固定环境下测量并保留原始数据。
-- **#58 声明式 Resource**：`app.resource` 已提供 request id、过期丢弃和 rev 比较这个核心；ResourceRef、
+- **#58 声明式 Resource**：`app.feature.kanban.resource` 已提供 request id、过期丢弃和 rev 比较这个核心；ResourceRef、
   订阅生命周期、inspect 仍是后续工作。
 - **工具链**：Calcit 0.29.0-alpha.16 + 最新 respo/recollect 在 `caps --strict` 下与 cumulo-reel 0.0.48、
   respo-message 0.0.29、cumulo-util 0.0.25、ws-edn 0.0.35 的依赖请求冲突，需要等这些库发版后再升级；

@@ -54,6 +54,7 @@ jobs:
           calcit calcit.cirru test --tag client --require-match --summary-only --format json
           calcit calcit.cirru --entry server test --tag server --require-match --summary-only --format json
           yarn check-types
+          yarn node tests/template-boundary.mjs --list
 
       - run: yarn compile-page && yarn release-page
 

@@ -28,34 +28,42 @@ calcit libs readme respo.calcit -f docs/Respo-Agent.md
 - **Client**: WebSocket → `patch-twig` → `*store` atom → Respo render
 - **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel), `ws-edn` (WebSocket)
 - **Partitions** (hot/cold split, see `docs/hot-cold-sync-plan.md`):
-  `app.twig.partition/project-partition` → `app.partition/advance-partition`
+  `app.hooks.server/project-partition` → `app.sync.partition/advance-partition`
   (one diff per partition revision) → per-connection `connection-actions`;
-  cold data goes through `ClientMessage :query` and `app.resource` on the client
+  cold data goes through `ClientMessage :query` and `app.hooks.client`
+
+**Project layers** (see `docs/template-layers.md`; enforced by `tests/template-boundary.mjs`):
+
+```
+app.sync.*            # TEMPLATE runtime: do not edit per app
+app.schema            # WIRING: protocol enums; lists the current Op/DomainOp,
+                      #   PartitionKey/PartitionView, Query/QueryReply variants
+app.hooks             # WIRING: shared pure hooks (sample view for template tests)
+app.hooks.server      # WIRING: every call from app.sync.server into business code
+app.hooks.client      # WIRING: every call from app.sync.client into business code
+app.updater           # WIRING: routes DomainOp to reducers
+app.client/server     # WIRING: entry points (main!, reload!, root render)
+app.comp.container    # WIRING: routes pages to feature components
+app.twig.*, app.updater.{session,user,router}, app.comp.{login,navigation,profile}
+                      # BASE: account/session scaffold most apps keep
+app.feature.<name>.*  # FEATURE: replaceable business code (Kanban demo here)
+```
 
 ### Step 0: choose the data tier before adding a field
 
 | Question | Tier | Where |
 |---|---|---|
-| Visible to every subscriber, bounded size? | shared hot partition | add to a `PartitionView` projection in `app.twig.partition` |
-| Belongs to one user, must be live? | private `(:user id)` partition | `UserHotView` / `project-partition` |
-| Grows over time or only needed when a view opens? | cold | `ColdStore` + a `Query`/`QueryReply` variant; keep only an id/summary/`*-rev` hot |
+| Visible to every subscriber, bounded size? | shared hot partition | a `PartitionView` variant + projection in `app.feature.<name>.twig` |
+| Belongs to one user, must be live? | private `(:user id)` partition | the user view in the feature projection |
+| Grows over time or only needed when a view opens? | cold | feature cold store + a `Query`/`QueryReply` variant in `app.schema`; keep only an id/summary/`*-rev` hot |
 | Per-tab UI or route state? | session Store | `twig-container` |
 
 Rules: a partition is a visibility boundary (never ship private fields for the
 client to filter); authorization lives in `session-partitions`; when an
 operation can change a partition, list it in `affected-partitions`; cold reads
-take identity from the session, never from query parameters.
-
-**Project structure** (from template):
-
-```
-app.client          # Client entry (already configured)
-app.server          # Server entry (already configured)
-app.schema          # ← ADD your data structures here
-app.updater         # ← ADD your business logic here
-app.twig.*          # ← ADD your view projections here
-app.comp.*          # ← ADD your UI components here
-```
+take identity from the session, never from query parameters. Template code in
+`app.sync.*` never names `app.feature.*`: add or change behaviour through the
+hook bodies in `app.hooks*`.
 
 ---
 

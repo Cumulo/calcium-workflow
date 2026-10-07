@@ -32,6 +32,17 @@
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ []
             :features $ #{} :js-ffi
+        'on-states-change! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-states-change! (states prev) (render-app!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Current 'Previous
+            :generics $ [] 'Current 'Previous
+        'on-store-change! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-store-change! (store prev) (render-app!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.sync.client/ClientState 'app.sync.client/ClientState
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (non-nil? client-errors) (hud! |error client-errors)
@@ -60,30 +71,20 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
-      :ns $ %{} 'NsEntry (:doc |)
+      :ns $ %{} 'NsEntry
+        :doc "|Browser entry (wiring): main!/reload!, root render and watchers. Runtime lives in app.sync.client; business hooks in app.hooks.client."
         :code $ quote $ ns app.client
           :require
             respo.core :refer $ render! clear-cache! realize-ssr! div <>
-            respo.cursor :refer $ update-states
             app.comp.container :refer $ comp-container comp-offline
-            app.schema :as schema
-            app.schema :refer $ Op
             app.config :as config
-            ws-edn.client :refer $ ws-connect! ws-send! ws-set-on-data!
-            recollect.patch :refer $ patch-batch patch-error-message PatchError PatchPathSegment
-            |url-parse :default url-parse
+            ws-edn.client :refer $ ws-set-on-data!
             |bottom-tip :default hud!
             |./calcit.build-errors.mjs :default client-errors
-            recollect.schema :as patch-schema
-            cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
             app.workload.diff-patch :as workload
-            js-ffi.browser :as browser
-            respo.ffi.browser :refer $ narrow-element
-            js-ffi.shared :refer $ console-error!
-            app.sync.partition :refer $ PartitionSlot apply-partition-deltas
-            app.feature.kanban.resource :as resource
             app.feature.kanban.workload :as kanban-workload
-            app.sync.client :refer $ *partitions *resources *states *store connect! dispatch-from-respo! install-activity-lifecycle! mount-target on-server-data on-states-change! on-store-change!
+            app.sync.client :refer $ *partitions *states *store connect! dispatch-from-respo! install-activity-lifecycle! mount-target on-server-data
+            app.feature.kanban.client :refer $ *resources
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry
@@ -442,6 +443,90 @@
           :schema $ :: 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
+    'app.feature.kanban.client $ %{} 'FileEntry
+      :defs $ {}
+        '*resources $ %{} 'CodeEntry
+          :doc "|Cold callback cache: fetched history pages and open card details."
+          :code $ quote $ defatom *resources resource/empty-resources
+          :examples $ []
+          :schema $ :: 'Ref 'app.feature.kanban.resource/Resources
+        'dispatch-client! $ %{} 'CodeEntry
+          :doc "|Handle Kanban client-local operations; returns false for operations that should go to the server."
+          :code $ quote $ defn dispatch-client! (op)
+            match op
+              (:client/load-history append?)
+                do
+                  send-query! $ resource/begin-history-query @*resources append?
+                  , true
+              (:client/close-card card-id)
+                do
+                  reset! *resources $ resource/close-detail @*resources card-id
+                  , true
+              (:client/open-card board-id card-id)
+                do
+                  send-query! $ resource/begin-detail-query @*resources board-id card-id
+                  , true
+              _ false
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Bool)
+            :args $ [] 'app.schema/Op
+        'on-partition-drop! $ %{} 'CodeEntry
+          :doc "|Dropping the private user partition (logout, revoked access) clears cached private cold data."
+          :code $ quote $ defn on-partition-drop! (key)
+            match key
+              (:user _user-id) (reset! *resources resource/empty-resources)
+              _ &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/PartitionKey
+        'receive-reply! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn receive-reply! (request-id reply)
+            swap! *resources $ fn (resources)
+              hint-fn $ {}
+                :args $ [] 'app.feature.kanban.resource/Resources
+                :return 'app.feature.kanban.resource/Resources
+              resource/receive-reply resources request-id reply
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'String 'app.schema/QueryReply
+        'refresh-stale-details! $ %{} 'CodeEntry
+          :doc "|After a board update, refetch only open card details whose hot detail-rev moved forward."
+          :code $ quote $ defn refresh-stale-details! (key partitions)
+            match key
+              (:board _board-id)
+                match (get partitions key)
+                  (:some raw-slot)
+                    match
+                      :view $ assert-type raw-slot app.sync.partition/PartitionSlot
+                      (:board board)
+                        each (resource/stale-details @*resources board)
+                          fn (card-id)
+                            hint-fn $ {}
+                              :args $ [] 'String
+                              :return 'Unit
+                            send-query! $ resource/begin-detail-query @*resources (:id board) card-id
+                      _ &unit
+                  (:none) &unit
+              _ &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
+        'send-query! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn send-query! (request)
+            reset! *resources $ :resources request
+            ws-send! $ schema/ClientMessage :query (:request-id request) (:query request)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.feature.kanban.resource/QueryRequest
+      :ns $ %{} 'NsEntry
+        :doc "|Kanban browser-side business state: the cold resource cache and client-local operations."
+        :code $ quote $ ns app.feature.kanban.client
+          :require (app.schema :as schema)
+            ws-edn.client :refer $ ws-send!
+            app.feature.kanban.resource :as resource
     'app.feature.kanban.comp $ %{} 'FileEntry
       :defs $ {}
         'board-in $ %{} 'CodeEntry (:doc |)
@@ -879,7 +964,7 @@
           :code $ quote $ defstruct QueryRequest
             :resources $ quote app.feature.kanban.resource/Resources
             :request-id 'String
-            :query $ quote app.feature.kanban.schema/Query
+            :query $ quote app.schema/Query
           :examples $ []
           :schema $ :: 'StructDef
         'QueryTarget $ %{} 'CodeEntry
@@ -1024,7 +1109,7 @@
                               _ $ update! $ struct-with current (:loading? false)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.resource/Resources)
-            :args $ [] 'app.feature.kanban.resource/Resources 'String 'app.feature.kanban.schema/QueryReply
+            :args $ [] 'app.feature.kanban.resource/Resources 'String 'app.schema/QueryReply
           :tests $ [] $ %{} 'TestEntry (:name |stale-and-versioned-replies)
             :code $ quote $ let
                 detail $ fn (rev text)
@@ -1129,7 +1214,9 @@
             :return $ :: 'Map 'String 'app.feature.kanban.resource/QueryTarget
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.resource
-          :require $ app.feature.kanban.schema :refer $ CardDetail Query QueryReply
+          :require
+            app.feature.kanban.schema :refer $ CardDetail
+            app.schema :refer $ Query QueryReply
     'app.feature.kanban.schema $ %{} 'FileEntry
       :defs $ {}
         'Board $ %{} 'CodeEntry
@@ -1197,18 +1284,6 @@
             :online $ :: 'Map 'String 'String
           :examples $ []
           :schema $ :: 'StructDef
-        'Query $ %{} 'CodeEntry
-          :doc "|Cold read requests. Identity always comes from the server session, never from query parameters."
-          :code $ quote $ defenum Query
-            :history (:: 'Option 'Number) 'Number
-            :card-detail 'String 'String
-          :examples $ []
-          :schema $ :: 'EnumDef
-        'QueryReply $ %{} 'CodeEntry
-          :doc "|Typed cold read results, distinguishing missing content from denied access."
-          :code $ quote $ defenum QueryReply (:history 'app.feature.kanban.schema/HistoryPage) (:card-detail 'app.feature.kanban.schema/CardDetail) (:missing 'String) (:denied 'String)
-          :examples $ []
-          :schema $ :: 'EnumDef
         'UserHotView $ %{} 'CodeEntry
           :doc "|Private hot partition of one user. history-rev only announces that cold history changed; events are fetched by query."
           :code $ quote $ defstruct UserHotView (:id 'String) (:name 'String)
@@ -1326,49 +1401,6 @@
                 (:err _) true
                 _ false
             :tags $ #{} :client :schema :server
-        'decode-query $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn decode-query (data)
-            let
-                query $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
-                  , data
-              if (enum? query)
-                match query
-                  (:history cursor limit)
-                    let
-                        typed-cursor $ cond
-                            nil? cursor
-                            Option :some $ Option :none
-                          (number? cursor)
-                            Option :some $ Option :some cursor
-                          (enum? cursor)
-                            match cursor
-                              (:none)
-                                Option :some $ Option :none
-                              (:some position)
-                                if (number? position)
-                                  Option :some $ Option :some position
-                                  Option :none
-                              _ $ Option :none
-                          true $ Option :none
-                      match typed-cursor
-                        (:some valid-cursor)
-                          if (number? limit)
-                            Result :ok $ Query :history valid-cursor limit
-                            invalid-message $ str "|Invalid history limit: " query
-                        (:none)
-                          invalid-message $ str "|Invalid history cursor: " query
-                  (:card-detail board-id card-id)
-                    if
-                      and (string? board-id) (string? card-id)
-                      Result :ok $ Query :card-detail board-id card-id
-                      invalid-message $ str "|Invalid card-detail query: " query
-                  _ $ invalid-message $ str "|Unknown query: " query
-                invalid-message $ str "|Expected-enum-query: " query
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.feature.kanban.schema/Query 'app.schema/MessageDecodeError
         'default-settings $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def default-settings
             %{} UserSettings (:compact? false) (:accent |#2a8bd6)
@@ -1384,6 +1416,116 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.schema
           :require $ app.schema :refer $ DatabaseDecodeError invalid-message struct-tree-input
+    'app.feature.kanban.server $ %{} 'FileEntry
+      :defs $ {}
+        '*cold-store $ %{} 'CodeEntry
+          :doc "|Cold history and card details. They are written by committed operations and read only through queries."
+          :code $ quote $ defatom *cold-store
+            if (path-exists? cold-storage-file)
+              match
+                read-cold-store $ read-file cold-storage-file
+                (:ok store) store
+                (:err error)
+                  do (eprintln "|Invalid cold storage, starting empty:" error) app.feature.kanban.schema/empty-cold-store
+              , app.feature.kanban.schema/empty-cold-store
+          :examples $ []
+          :schema $ :: 'Ref 'app.feature.kanban.schema/ColdStore
+        'after-domain-op! $ %{} 'CodeEntry
+          :doc "|Append cold history and card details derived from one committed operation."
+          :code $ quote $ defn after-domain-op! (db-before db-after op sid op-id op-time)
+            match op
+              (:kanban kanban-op)
+                swap! *cold-store $ fn (cold)
+                  hint-fn $ {}
+                    :args $ [] 'app.feature.kanban.schema/ColdStore
+                    :return 'app.feature.kanban.schema/ColdStore
+                  apply-cold-effects cold (kanban-effects db-before db-after kanban-op sid op-id op-time) cold-history-limit
+              _ &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+        'answer-query $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn answer-query (db sid query) (query-reply db @*cold-store sid query)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
+            :args $ [] 'app.schema/Db 'Number 'app.schema/Query
+        'cold-history-limit $ %{} 'CodeEntry
+          :doc "|Per-user bound of the in-process cold history log used by this template."
+          :code $ quote $ def cold-history-limit 2000
+          :examples $ []
+          :schema $ :: 'Number
+        'cold-storage-file $ %{} 'CodeEntry
+          :doc "|File holding cold history and card details, separate from the hot database snapshot."
+          :code $ quote $ def cold-storage-file
+            if (empty? calcit-dirname) |cold-storage.cirru $ str calcit-dirname |/cold-storage.cirru
+          :examples $ []
+          :schema $ :: 'String
+        'persist-cold! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn persist-cold! ()
+            check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+        'project $ %{} 'CodeEntry
+          :doc "|Project one partition with the current cold store (only history-rev is read from it)."
+          :code $ quote $ defn project (db key) (project-partition db @*cold-store key)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
+            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
+        'query-reply $ %{} 'CodeEntry
+          :doc "|Answer one cold read using the session identity; history is always the caller's own."
+          :code $ quote $ defn query-reply (db cold sid query)
+            match (session-user-id db sid)
+              (:none) (app.schema/QueryReply :denied |login-required)
+              (:some user-id)
+                match query
+                  (:history cursor limit)
+                    app.schema/QueryReply :history $ history-page cold user-id cursor limit
+                  (:card-detail board-id card-id) (card-detail-reply db cold board-id card-id)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
+            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'Number 'app.schema/Query
+          :tests $ [] $ %{} 'TestEntry (:name |identity-comes-from-session)
+            :code $ quote $ let
+                db $ app.feature.kanban.updater/apply-kanban app.feature.kanban.updater/fixture-db (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
+                cold $ apply-cold-effects app.feature.kanban.schema/empty-cold-store
+                  kanban-effects app.feature.kanban.updater/fixture-db db (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
+                  , 100
+              assert= (app.schema/QueryReply :denied |login-required)
+                query-reply db cold 2 $ app.schema/Query :history (Option :none) 10
+              match
+                query-reply db cold 1 $ app.schema/Query :history (Option :none) 10
+                (:history page)
+                  assert= 1 $ :history-rev page
+                _ $ raise |Expected-history-page
+            :tags $ #{} :kanban :server
+        'read-cold-store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn read-cold-store (content)
+            try
+              app.feature.kanban.schema/decode-cold-store $ parse-cirru-edn content
+              fn (error)
+                Result :err $ %:: schema/DatabaseDecodeError :invalid |cold $ str "|Malformed cold Cirru EDN: " error
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'String
+            :return $ :: 'Result 'app.feature.kanban.schema/ColdStore 'app.schema/DatabaseDecodeError
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-and-roundtrips)
+            :code $ quote $ do
+              assert= true $ match (read-cold-store "|{} (:history")
+                (:err _) true
+                _ false
+              assert= (Result :ok app.feature.kanban.schema/empty-cold-store)
+                read-cold-store $ format-cirru-edn app.feature.kanban.schema/empty-cold-store
+            :tags $ #{} :kanban :server
+      :ns $ %{} 'NsEntry
+        :doc "|Kanban server-side business state: the cold store, its persistence, cold effects and query answers."
+        :code $ quote $ ns app.feature.kanban.server
+          :require (app.schema :as schema)
+            app.$meta :refer $ calcit-dirname
+            calcit.std.fs :refer $ path-exists? check-write-file!
+            app.feature.kanban.twig :refer $ project-partition
+            app.feature.kanban.updater :refer $ kanban-effects apply-cold-effects history-page card-detail-reply session-user-id
     'app.feature.kanban.twig $ %{} 'FileEntry
       :defs $ {}
         'affected-partitions $ %{} 'CodeEntry
@@ -1775,19 +1917,19 @@
           :doc "|Read cold card content only while the hot card exists; the returned rev lets clients drop stale responses."
           :code $ quote $ defn card-detail-reply (db cold board-id card-id)
             match (board-of db board-id)
-              (:none) (app.feature.kanban.schema/QueryReply :missing board-id)
+              (:none) (app.schema/QueryReply :missing board-id)
               (:some board)
                 match
                   get (:cards board) card-id
-                  (:none) (app.feature.kanban.schema/QueryReply :missing card-id)
+                  (:none) (app.schema/QueryReply :missing card-id)
                   (:some _)
-                    app.feature.kanban.schema/QueryReply :card-detail $ match
+                    app.schema/QueryReply :card-detail $ match
                       get (:details cold) card-id
                       (:some raw) (assert-type raw app.feature.kanban.schema/CardDetail)
                       (:none)
                         %{} CardDetail (:card-id card-id) (:board-id board-id) (:rev 0) (:description |) (:updated-at 0)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/QueryReply)
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
             :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'String 'String
         'card-title $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn card-title (board-option card-id)
@@ -2059,7 +2201,7 @@
                     assert= 1 $ :rev detail
                     assert= "|Write the spec" $ :description detail
                 _ $ raise |Expected-card-detail
-              assert= (app.feature.kanban.schema/QueryReply :missing |c9) (card-detail-reply db4 cold |b1 |c9)
+              assert= (app.schema/QueryReply :missing |c9) (card-detail-reply db4 cold |b1 |c9)
               match (card-detail-reply db2 app.feature.kanban.schema/empty-cold-store |b1 |c1)
                 (:card-detail detail)
                   assert= 0 $ :rev detail
@@ -2196,7 +2338,7 @@
                 board $ option:unwrap $ kanban/board-of db2 |b1
                 request $ resource/begin-detail-query resource/empty-resources |b1 |c1
                 resources $ resource/receive-reply (:resources request) (:request-id request)
-                  app.feature.kanban.schema/QueryReply :card-detail $ %{} app.feature.kanban.schema/CardDetail (:card-id |c1) (:board-id |b1) (:rev 0) (:description |Cold-text) (:updated-at 0)
+                  app.schema/QueryReply :card-detail $ %{} app.feature.kanban.schema/CardDetail (:card-id |c1) (:board-id |b1) (:rev 0) (:description |Cold-text) (:updated-at 0)
                 user-view $ schema/PartitionView :user $ %{} app.feature.kanban.schema/UserHotView (:id |u1) (:name |Ann) (:settings app.feature.kanban.schema/default-settings) (:history-rev 3)
               []
                 Option :some $ schema/PartitionView :board board
@@ -2209,6 +2351,259 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.workload
           :require (app.schema :as schema) (app.feature.kanban.updater :as kanban) (app.feature.kanban.resource :as resource)
+    'app.hooks $ %{} 'FileEntry
+      :defs $ {} $ 'sample-partition-view
+        %{} 'CodeEntry
+          :doc "|Deterministic partition view for app.sync.partition self-tests: distinct label lists must give distinct views with keyed entries, so diffs produce small patches."
+          :code $ quote $ defn sample-partition-view (labels)
+            PartitionView :lobby $ %{} LobbyView
+              :boards $ assert-type
+                -> labels
+                  map-indexed $ fn (idx title)
+                    let
+                        id $ str |b idx
+                      [] id $ %{} BoardBrief (:id id) (:title title) (:card-count idx)
+                  pairs-map
+                :: 'Map 'String 'app.feature.kanban.schema/BoardBrief
+              :online $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
+            :args $ [] $ :: 'List 'String
+      :ns $ %{} 'NsEntry
+        :doc "|Wiring layer, shared by both entries: pure hooks the app.sync.* template needs from the current feature. Keep it free of platform dependencies."
+        :code $ quote $ ns app.hooks
+          :require
+            app.schema :refer $ PartitionView
+            app.feature.kanban.schema :refer $ LobbyView BoardBrief
+    'app.hooks.client $ %{} 'FileEntry
+      :defs $ {}
+        'after-partition-update! $ %{} 'CodeEntry
+          :doc "|Called after a partition snapshot or patch is published, e.g. to refetch stale cold content."
+          :code $ quote $ defn after-partition-update! (key partitions) (kanban-client/refresh-stale-details! key partitions)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
+        'class-mapper $ %{} 'CodeEntry
+          :doc "|Feature structs and enums that ws-edn must restore by name inside partition views and query replies."
+          :code $ quote $ def class-mapper
+            {} (:LobbyView kanban-schema/LobbyView) (:BoardBrief kanban-schema/BoardBrief) (:Board kanban-schema/Board) (:Column kanban-schema/Column) (:Card kanban-schema/Card) (:UserHotView kanban-schema/UserHotView) (:UserSettings kanban-schema/UserSettings) (:QueryReply app.schema/QueryReply) (:HistoryPage kanban-schema/HistoryPage) (:HistoryEvent kanban-schema/HistoryEvent) (:CardDetail kanban-schema/CardDetail)
+          :examples $ []
+          :schema $ :: 'Map 'Tag 'Dynamic
+        'dispatch-client! $ %{} 'CodeEntry
+          :doc "|Handle feature client-local operations; return false to send the operation to the server."
+          :code $ quote $ defn dispatch-client! (op) (kanban-client/dispatch-client! op)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Bool)
+            :args $ [] 'app.schema/Op
+        'on-partition-drop! $ %{} 'CodeEntry
+          :doc "|Called when the server revokes a partition; clear private caches tied to it."
+          :code $ quote $ defn on-partition-drop! (key) (kanban-client/on-partition-drop! key)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/PartitionKey
+        'on-query-reply! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn on-query-reply! (request-id reply) (kanban-client/receive-reply! request-id reply)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'String 'app.schema/QueryReply
+      :ns $ %{} 'NsEntry
+        :doc "|Wiring layer for the browser entry: every call from app.sync.client into business code goes through these functions. Replace their bodies when swapping app.feature.*."
+        :code $ quote $ ns app.hooks.client
+          :require (app.feature.kanban.client :as kanban-client) (app.feature.kanban.schema :as kanban-schema)
+    'app.hooks.server $ %{} 'FileEntry
+      :defs $ {}
+        'affected-partitions $ %{} 'CodeEntry
+          :doc "|Partitions an operation may change, computed from the database before the operation."
+          :code $ quote $ defn affected-partitions (db op sid) (kanban-twig/affected-partitions db op sid)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number
+            :return $ :: 'Set 'app.schema/PartitionKey
+          :tests $ [] $ %{} 'TestEntry (:name |one-diff-for-many-subscribers)
+            :code $ quote $ let
+                saved-partitions @app.sync.server/*partitions
+                saved-progress @app.sync.server/*partition-progress
+                saved-dirty @app.sync.server/*dirty-partitions
+                saved-metrics @app.sync.server/*partition-metrics
+                saved-clients @app.sync.server/*client-states
+                saved-cold @app.feature.kanban.server/*cold-store
+                saved-payloads @app.sync.server/*partition-payloads
+                sids $ [] 1 2 3 4 5
+                user $ fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'app.schema/User
+                  %{} schema/User
+                    :id $ str |u sid
+                    :name $ str |user sid
+                    :nickname $ Option :none
+                    :avatar $ Option :none
+                    :password |hash
+                session $ fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'app.schema/Session
+                  %{} schema/Session (:id sid)
+                    :user-id $ Option :some $ str |u sid
+                    :nickname $ Option :none
+                    :router $ %{} schema/Router (:name :board)
+                      :target $ Option :some |b1
+                    :messages $ {}
+                base $ %{} schema/Db
+                  :sessions $ assert-type
+                    pairs-map $ map sids $ fn (sid)
+                      [] sid $ session sid
+                    :: 'Map 'Number 'app.schema/Session
+                  :users $ assert-type
+                    pairs-map $ map sids $ fn (sid)
+                      [] (str |u sid) (user sid)
+                    :: 'Map 'String 'app.schema/User
+                  :boards $ {}
+                  :settings $ {}
+                db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
+                add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
+                db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
+                *sent $ atom $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
+                record! $ fn (sid action)
+                  hint-fn $ {}
+                    :args $ [] 'Number 'app.sync.partition/PartitionAction
+                    :return 'Unit
+                  swap! *sent conj action
+                  match action
+                    (:drop _key) &unit
+                    (:snapshot state)
+                      do
+                        app.sync.server/handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
+                        app.sync.server/ack-partition-progress-for! sid state
+                    (:deltas state deltas)
+                      do (app.sync.server/partition-patch-payload state deltas)
+                        app.sync.server/handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
+                        app.sync.server/ack-partition-progress-for! sid state
+                sends-of $ fn (tag)
+                  hint-fn $ {}
+                    :args $ [] 'Tag
+                    :return 'Number
+                  count $ filter @*sent $ fn (action)
+                    hint-fn $ {}
+                      :args $ [] 'app.sync.partition/PartitionAction
+                      :return 'Bool
+                    = tag $ match action
+                      (:snapshot _state) :snapshot
+                      (:deltas _state _deltas) :deltas
+                      (:drop _key) :drop
+                board-deltas $ fn ()
+                  hint-fn $ {}
+                    :args $ []
+                    :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                  foldl @*sent
+                    assert-type ([])
+                      :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                    fn (acc action)
+                      hint-fn $ {}
+                        :args $ []
+                          :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                          , 'app.sync.partition/PartitionAction
+                        :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
+                      match action
+                        (:deltas state deltas)
+                          if
+                            = (:key state) (schema/PartitionKey :board |b1)
+                            conj acc deltas
+                            , acc
+                        _ acc
+              reset! app.sync.server/*partitions $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState)
+              reset! app.sync.server/*partition-progress $ assert-type ({})
+                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
+              reset! app.sync.server/*dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+              reset! app.sync.server/*partition-metrics app.sync.server/empty-partition-metrics
+              reset! app.sync.server/*partition-payloads $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
+              reset! app.feature.kanban.server/*cold-store app.feature.kanban.schema/empty-cold-store
+              reset! app.sync.server/*client-states $ assert-type
+                pairs-map $ map sids $ fn (sid)
+                  [] sid $ {} $ :status :active
+                :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+              app.sync.server/sync-partitions-with! db1 record!
+              let
+                  initial-snapshots $ sends-of :snapshot
+                  initial-partitions $ count @app.sync.server/*partitions
+                reset! *sent $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
+                app.sync.server/mark-partitions-dirty! $ app.hooks.server/affected-partitions db1 add-op 1
+                app.sync.server/sync-partitions-with! db2 record!
+                let
+                    metrics $ app.sync.server/read-partition-metrics
+                    deltas $ board-deltas
+                    snapshots $ sends-of :snapshot
+                    delta-sends $ sends-of :deltas
+                  reset! app.sync.server/*partitions saved-partitions
+                  reset! app.sync.server/*partition-progress saved-progress
+                  reset! app.sync.server/*dirty-partitions saved-dirty
+                  reset! app.sync.server/*partition-metrics saved-metrics
+                  reset! app.sync.server/*client-states saved-clients
+                  reset! app.feature.kanban.server/*cold-store saved-cold
+                  reset! app.sync.server/*partition-payloads saved-payloads
+                  assert= 15 initial-snapshots
+                  assert= 7 initial-partitions
+                  assert= 3 $ :diffs metrics
+                  assert= 0 snapshots
+                  assert= 10 delta-sends
+                  assert= 5 $ count deltas
+                  assert= 1 $ count $ distinct deltas
+                  assert= 8 $ :reused-payloads metrics
+            :tags $ #{} :partition :server
+        'after-domain-op! $ %{} 'CodeEntry
+          :doc "|Side effects after a committed operation, such as appending cold data, before partitions are published."
+          :code $ quote $ defn after-domain-op! (db-before db-after op sid op-id op-time) (kanban-server/after-domain-op! db-before db-after op sid op-id op-time)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+        'answer-query $ %{} 'CodeEntry
+          :doc "|Answer one cold read. Identity must come from the session, never from query parameters."
+          :code $ quote $ defn answer-query (db sid query) (kanban-server/answer-query db sid query)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
+            :args $ [] 'app.schema/Db 'Number 'app.schema/Query
+        'persist! $ %{} 'CodeEntry
+          :doc "|Persist feature-owned state next to the hot database snapshot."
+          :code $ quote $ defn persist! () (kanban-server/persist-cold!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+        'project-partition $ %{} 'CodeEntry
+          :doc "|Project one partition. A partition is a visibility boundary: include only data every subscriber may see."
+          :code $ quote $ defn project-partition (db key) (kanban-server/project db key)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
+            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
+        'session-partitions $ %{} 'CodeEntry
+          :doc "|Server-side authorization: the partitions this session may subscribe to."
+          :code $ quote $ defn session-partitions (db session) (kanban-twig/session-partitions db session)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'app.schema/Session
+            :return $ :: 'Set 'app.schema/PartitionKey
+        'session-store $ %{} 'CodeEntry
+          :doc "|Per-connection session Store (route, session messages, login state)."
+          :code $ quote $ defn session-store (db session shared) (twig-container db session shared)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
+            :args $ [] 'app.schema/Db 'app.schema/Session 'app.schema/SharedTwig
+        'shared-twig $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn shared-twig (db record-count) (twig-shared db record-count)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
+            :args $ [] 'app.schema/Db 'Number
+        'updater $ %{} 'CodeEntry (:doc "|Pure domain reducer used by the Reel.")
+          :code $ quote $ defn updater (db op sid op-id op-time) (domain/updater db op sid op-id op-time)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
+            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+      :ns $ %{} 'NsEntry
+        :doc "|Wiring layer for the server entry: every call from app.sync.server into business code goes through these functions. Replace their bodies when swapping app.feature.*."
+        :code $ quote $ ns app.hooks.server
+          :require (app.schema :as schema) (app.updater :as domain)
+            app.twig.container :refer $ twig-container twig-shared
+            app.feature.kanban.twig :as kanban-twig
+            app.feature.kanban.server :as kanban-server
     'app.schema $ %{} 'FileEntry
       :defs $ {}
         'AttachedView $ %{} 'CodeEntry (:doc |)
@@ -2217,7 +2612,7 @@
           :schema $ :: 'StructDef
         'ClientMessage $ %{} 'CodeEntry
           :doc "|Typed messages accepted from a browser connection. part/ack names partition, epoch and revision; part/resync asks for a fresh partition snapshot."
-          :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op) (:part/ack 'app.schema/PartitionKey 'Number 'Number) (:part/resync 'app.schema/PartitionKey) (:query 'String 'app.feature.kanban.schema/Query)
+          :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op) (:part/ack 'app.schema/PartitionKey 'Number 'Number) (:part/resync 'app.schema/PartitionKey) (:query 'String 'app.schema/Query)
           :examples $ []
           :schema $ :: 'EnumDef
         'DatabaseDecodeError $ %{} 'CodeEntry
@@ -2267,6 +2662,18 @@
           :code $ quote $ defenum PartitionView (:lobby 'app.feature.kanban.schema/LobbyView) (:board 'app.feature.kanban.schema/Board) (:user 'app.feature.kanban.schema/UserHotView) (:missing)
           :examples $ []
           :schema $ :: 'EnumDef
+        'Query $ %{} 'CodeEntry
+          :doc "|Cold read requests. Identity always comes from the server session, never from query parameters."
+          :code $ quote $ defenum Query
+            :history (:: 'Option 'Number) 'Number
+            :card-detail 'String 'String
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'QueryReply $ %{} 'CodeEntry
+          :doc "|Typed cold read results, distinguishing missing content from denied access."
+          :code $ quote $ defenum QueryReply (:history 'app.feature.kanban.schema/HistoryPage) (:card-detail 'app.feature.kanban.schema/CardDetail) (:missing 'String) (:denied 'String)
+          :examples $ []
+          :schema $ :: 'EnumDef
         'RemoveMessage $ %{} 'CodeEntry
           :doc "|Concrete payload for removing one session message."
           :code $ quote $ defstruct RemoveMessage (:id 'String)
@@ -2293,7 +2700,7 @@
             :part/snapshot 'app.schema/PartitionKey 'Number 'Number 'app.schema/PartitionView
             :part/patch 'app.schema/PartitionKey 'Number $ :: 'List 'app.sync.partition/PartitionDelta
             :part/drop 'app.schema/PartitionKey
-            :query/reply 'String 'app.feature.kanban.schema/QueryReply
+            :query/reply 'String 'app.schema/QueryReply
           :examples $ []
           :schema $ :: 'EnumDef
         'Session $ %{} 'CodeEntry (:doc "|A connected session in the nominal database.")
@@ -2391,7 +2798,7 @@
                       (:err error) (%:: Result :err error)
                   (:query request-id query)
                     if (string? request-id)
-                      match (app.feature.kanban.schema/decode-query query)
+                      match (app.schema/decode-query query)
                         (:ok typed-query)
                           Result :ok $ ClientMessage :query request-id typed-query
                         (:err error) (Result :err error)
@@ -2481,13 +2888,13 @@
                   decode-client-message $ parse-cirru-edn $ format-cirru-edn
                     ClientMessage :part/resync $ PartitionKey :lobby
                 assert=
-                  Result :ok $ ClientMessage :query |r1 $ app.feature.kanban.schema/Query :history (Option :some 4) 20
+                  Result :ok $ ClientMessage :query |r1 $ app.schema/Query :history (Option :some 4) 20
                   decode-client-message $ parse-cirru-edn $ format-cirru-edn
-                    ClientMessage :query |r1 $ app.feature.kanban.schema/Query :history (Option :some 4) 20
+                    ClientMessage :query |r1 $ app.schema/Query :history (Option :some 4) 20
                 assert=
-                  Result :ok $ ClientMessage :query |r2 $ app.feature.kanban.schema/Query :history (Option :none) 20
+                  Result :ok $ ClientMessage :query |r2 $ app.schema/Query :history (Option :none) 20
                   decode-client-message $ parse-cirru-edn $ format-cirru-edn
-                    ClientMessage :query |r2 $ app.feature.kanban.schema/Query :history (Option :none) 20
+                    ClientMessage :query |r2 $ app.schema/Query :history (Option :none) 20
                 assert= true $ match
                   decode-client-message $ :: :part/ack (:: :board 42) 1 1
                   (:err _) true
@@ -2932,6 +3339,49 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'Dynamic
             :return $ :: 'Result 'app.schema/PartitionKey 'app.schema/MessageDecodeError
+        'decode-query $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-query (data)
+            let
+                query $ if (enum? data)
+                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  , data
+              if (enum? query)
+                match query
+                  (:history cursor limit)
+                    let
+                        typed-cursor $ cond
+                            nil? cursor
+                            Option :some $ Option :none
+                          (number? cursor)
+                            Option :some $ Option :some cursor
+                          (enum? cursor)
+                            match cursor
+                              (:none)
+                                Option :some $ Option :none
+                              (:some position)
+                                if (number? position)
+                                  Option :some $ Option :some position
+                                  Option :none
+                              _ $ Option :none
+                          true $ Option :none
+                      match typed-cursor
+                        (:some valid-cursor)
+                          if (number? limit)
+                            Result :ok $ Query :history valid-cursor limit
+                            invalid-message $ str "|Invalid history limit: " query
+                        (:none)
+                          invalid-message $ str "|Invalid history cursor: " query
+                  (:card-detail board-id card-id)
+                    if
+                      and (string? board-id) (string? card-id)
+                      Result :ok $ Query :card-detail board-id card-id
+                      invalid-message $ str "|Invalid card-detail query: " query
+                  _ $ invalid-message $ str "|Unknown query: " query
+                invalid-message $ str "|Expected-enum-query: " query
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/Query 'app.schema/MessageDecodeError
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
@@ -3527,7 +3977,8 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
-      :ns $ %{} 'NsEntry (:doc |)
+      :ns $ %{} 'NsEntry
+        :doc "|Server entry (wiring): main!/reload!. Runtime lives in app.sync.server; business hooks in app.hooks.server."
         :code $ quote $ ns app.server
           :require (app.schema :as schema)
             app.schema :refer $ Op
@@ -3565,11 +4016,6 @@
             assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionSlot
-        '*resources $ %{} 'CodeEntry
-          :doc "|Cold callback cache: fetched history pages and open card details."
-          :code $ quote $ defatom *resources resource/empty-resources
-          :examples $ []
-          :schema $ :: 'Ref 'app.feature.kanban.resource/Resources
         '*states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *states
             {} $ :states $ {}
@@ -3625,7 +4071,7 @@
                 do
                   swap! *partitions assoc key $ %{} PartitionSlot (:epoch epoch) (:revision revision) (:view view)
                   ws-send! $ schema/ClientMessage :part/ack key epoch revision
-                  refresh-stale-details! key
+                  hooks/after-partition-update! key @*partitions
               (:part/patch key epoch deltas)
                 match (get @*partitions key)
                   (:none)
@@ -3635,17 +4081,14 @@
                       (:ok next-slot)
                         do (swap! *partitions assoc key next-slot)
                           ws-send! $ schema/ClientMessage :part/ack key epoch $ :revision next-slot
-                          refresh-stale-details! key
+                          hooks/after-partition-update! key @*partitions
                       (:err detail)
                         do
                           js/console.warn |Partition-resync (str key) detail
                           swap! *partitions dissoc key
                           ws-send! $ schema/ClientMessage :part/resync key
               (:part/drop key)
-                do (swap! *partitions dissoc key)
-                  match key
-                    (:user _user-id) (reset! *resources resource/empty-resources)
-                    _ &unit
+                do (swap! *partitions dissoc key) (hooks/on-partition-drop! key)
               _ &unit
             , &unit
           :examples $ []
@@ -3702,7 +4145,9 @@
                     console-error! "|Lost connection!"
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
-                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:CardDetail app.feature.kanban.schema/CardDetail) (:HistoryEvent app.feature.kanban.schema/HistoryEvent) (:HistoryPage app.feature.kanban.schema/HistoryPage) (:QueryReply app.feature.kanban.schema/QueryReply) (:UserSettings app.feature.kanban.schema/UserSettings) (:UserHotView app.feature.kanban.schema/UserHotView) (:Card app.feature.kanban.schema/Card) (:Column app.feature.kanban.schema/Column) (:Board app.feature.kanban.schema/Board) (:BoardBrief app.feature.kanban.schema/BoardBrief) (:LobbyView app.feature.kanban.schema/LobbyView) (:PartitionDelta app.sync.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
+                  :class-mapper $ merge
+                    {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta app.sync.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
+                    , hooks/class-mapper
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -3736,13 +4181,7 @@
               (:states cursor s)
                 reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Tag 'Dynamic)
               (:effect/connect) (connect!)
-              (:client/load-history append?)
-                send-query! $ resource/begin-history-query @*resources append?
-              (:client/close-card card-id)
-                reset! *resources $ resource/close-detail @*resources card-id
-              (:client/open-card board-id card-id)
-                send-query! $ resource/begin-detail-query @*resources board-id card-id
-              _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
+              _ $ if (hooks/dispatch-client! op) &unit $ ws-send! (%:: schema/ClientMessage :dispatch op)
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -3803,28 +4242,12 @@
                   (:part/snapshot _key _epoch _revision _view) (apply-partition-message! message)
                   (:part/patch _key _epoch _deltas) (apply-partition-message! message)
                   (:part/drop _key) (apply-partition-message! message)
-                  (:query/reply request-id reply)
-                    swap! *resources $ fn (resources)
-                      hint-fn $ {}
-                        :args $ [] 'app.feature.kanban.resource/Resources
-                        :return 'app.feature.kanban.resource/Resources
-                      resource/receive-reply resources request-id reply
+                  (:query/reply request-id reply) (hooks/on-query-reply! request-id reply)
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Dynamic
             :features $ #{} :js-ffi
-        'on-states-change! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn on-states-change! (states prev) (render-app!)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Current 'Previous
-            :generics $ [] 'Current 'Previous
-        'on-store-change! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn on-store-change! (store prev) (render-app!)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.sync.client/ClientState 'app.sync.client/ClientState
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
@@ -3834,28 +4257,6 @@
           :schema $ :: 'Fn $ {}
             :args $ []
             :return $ :: 'JsNullish 'respo.dom/DomElement
-        'refresh-stale-details! $ %{} 'CodeEntry
-          :doc "|After a board update, refetch only open card details whose hot detail-rev moved forward."
-          :code $ quote $ defn refresh-stale-details! (key)
-            match key
-              (:board _board-id)
-                match (get @*partitions key)
-                  (:some slot)
-                    match (:view slot)
-                      (:board board)
-                        each (resource/stale-details @*resources board)
-                          fn (card-id)
-                            hint-fn $ {}
-                              :args $ [] 'String
-                              :return 'Unit
-                            send-query! $ resource/begin-detail-query @*resources (:id board) card-id
-                      _ &unit
-                  (:none) &unit
-              _ &unit
-            , &unit
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey
         'request-snapshot! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn request-snapshot! ()
             ws-send! $ %:: schema/ClientMessage :sync/resume @*sync-revision
@@ -3870,13 +4271,6 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
-        'send-query! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn send-query! (request)
-            reset! *resources $ :resources request
-            ws-send! $ schema/ClientMessage :query (:request-id request) (:query request)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.feature.kanban.resource/QueryRequest
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
             match (stored-login)
@@ -4044,12 +4438,12 @@
                       _ false
                   _ false
               :tags $ #{} :client
-      :ns $ %{} 'NsEntry (:doc |)
+      :ns $ %{} 'NsEntry
+        :doc "|Template browser runtime (do not edit per app): connection lifecycle, validated Store patches, partition caches with ACK/resync, cold-query transport. Business code is reached only through app.hooks.client."
         :code $ quote $ ns app.sync.client
           :require
             respo.core :refer $ render! clear-cache! realize-ssr! div <>
             respo.cursor :refer $ update-states
-            app.comp.container :refer $ comp-container comp-offline
             app.schema :as schema
             app.schema :refer $ Op
             app.config :as config
@@ -4060,14 +4454,11 @@
             |./calcit.build-errors.mjs :default client-errors
             recollect.schema :as patch-schema
             cumulo-util.activity :refer $ watch-browser-lifecycle! page-visible?
-            app.workload.diff-patch :as workload
             js-ffi.browser :as browser
             respo.ffi.browser :refer $ narrow-element
             js-ffi.shared :refer $ console-error!
             app.sync.partition :refer $ PartitionSlot apply-partition-deltas
-            app.feature.kanban.resource :as resource
-            app.feature.kanban.workload :as kanban-workload
-            app.client :refer $ render-app!
+            app.hooks.client :as hooks
     'app.sync.partition $ %{} 'FileEntry
       :defs $ {}
         'PartitionAction $ %{} 'CodeEntry
@@ -4558,18 +4949,8 @@
           :examples $ []
           :schema $ :: 'recollect.diff/DiffBudget
         'test-lobby $ %{} 'CodeEntry
-          :doc "|Deterministic lobby projection used by partition engine tests."
-          :code $ quote $ defn test-lobby (titles)
-            PartitionView :lobby $ %{} app.feature.kanban.schema/LobbyView
-              :boards $ assert-type
-                -> titles
-                  map-indexed $ fn (idx title)
-                    let
-                        id $ str |b idx
-                      [] id $ %{} app.feature.kanban.schema/BoardBrief (:id id) (:title title) (:card-count idx)
-                  pairs-map
-                :: 'Map 'String 'app.feature.kanban.schema/BoardBrief
-              :online $ {}
+          :doc "|Engine self-test fixture; the concrete view comes from app.hooks/sample-partition-view so the template stays feature-agnostic."
+          :code $ quote $ defn test-lobby (titles) (app.hooks/sample-partition-view titles)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
             :args $ [] $ :: 'List 'String
@@ -4601,18 +4982,6 @@
           :code $ quote $ defatom *client-states ({})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'Tag 'Dynamic)
-        '*cold-store $ %{} 'CodeEntry
-          :doc "|Cold history and card details. They are written by committed operations and read only through queries."
-          :code $ quote $ defatom *cold-store
-            if (path-exists? cold-storage-file)
-              match
-                read-cold-store $ read-file cold-storage-file
-                (:ok store) store
-                (:err error)
-                  do (eprintln "|Invalid cold storage, starting empty:" error) app.feature.kanban.schema/empty-cold-store
-              , app.feature.kanban.schema/empty-cold-store
-          :examples $ []
-          :schema $ :: 'Ref 'app.feature.kanban.schema/ColdStore
         '*dirty-clients $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *dirty-clients (#{})
           :examples $ []
@@ -4799,17 +5168,6 @@
                 {} $ 9 $ {} (:last-heartbeat 123)
                 assoc-client-state-field ({}) 9 :last-heartbeat 123
               :tags $ #{} :server
-        'cold-history-limit $ %{} 'CodeEntry
-          :doc "|Per-user bound of the in-process cold history log used by this template."
-          :code $ quote $ def cold-history-limit 2000
-          :examples $ []
-          :schema $ :: 'Number
-        'cold-storage-file $ %{} 'CodeEntry
-          :doc "|File holding cold history and card details, separate from the hot database snapshot."
-          :code $ quote $ def cold-storage-file
-            if (empty? calcit-dirname) |cold-storage.cirru $ str calcit-dirname |/cold-storage.cirru
-          :examples $ []
-          :schema $ :: 'String
         'collect-partitions! $ %{} 'CodeEntry
           :doc "|Reclaim partitions no connection subscribes to, bounding live partition count and memory; a later subscriber gets a fresh epoch."
           :code $ quote $ defn collect-partitions! ()
@@ -4945,18 +5303,9 @@
           :code $ quote $ defn dispatch-domain! (op sid op-id op-time)
             let
                 db-before $ reel-db @*reel
-              reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
-              match op
-                (:kanban kanban-op)
-                  swap! *cold-store $ fn (cold)
-                    hint-fn $ {}
-                      :args $ [] 'app.feature.kanban.schema/ColdStore
-                      :return 'app.feature.kanban.schema/ColdStore
-                    apply-cold-effects cold
-                      kanban-effects db-before (reel-db @*reel) kanban-op sid op-id op-time
-                      , cold-history-limit
-                _ &unit
-              mark-partitions-dirty! $ affected-partitions db-before op sid
+              reset! *reel $ reel-reducer @*reel hooks/updater op sid op-id op-time config/dev?
+              hooks/after-domain-op! db-before (reel-db @*reel) op sid op-id op-time
+              mark-partitions-dirty! $ hooks/affected-partitions db-before op sid
               request-sync!
               , &unit
           :examples $ []
@@ -4974,14 +5323,14 @@
           :examples $ []
           :schema $ :: 'app.sync.server/PartitionMetrics
         'ensure-partition! $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn ensure-partition! (db cold key)
+          :code $ quote $ defn ensure-partition! (db key)
             when
               option:none? $ get @*partitions key
-              swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (project-partition db cold key)
+              swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (hooks/project-partition db key)
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'app.schema/PartitionKey
+            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-backup-path! ()
             join-path calcit-dirname |backups $ str (unix-time-ms) |-snapshot.cirru
@@ -4996,7 +5345,7 @@
                 = revision $ option:unwrap $ get cached :revision
                 option:unwrap $ get cached :value
                 let
-                    value $ twig-shared (reel-db reel) (reel-record-count reel)
+                    value $ hooks/shared-twig (reel-db reel) (reel-record-count reel)
                   reset! *shared-twig-cache $ {} (:revision revision) (:value value)
                   , value
           :examples $ []
@@ -5042,11 +5391,11 @@
         'handle-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-query! (sid request-id query) (count-partition-event! :query)
             wss-send! sid $ format-cirru-edn $ schema/ServerMessage :query/reply request-id
-              query-reply (reel-db @*reel) @*cold-store sid query
+              hooks/answer-query (reel-db @*reel) sid query
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'String 'app.feature.kanban.schema/Query
+            :args $ [] 'Number 'String 'app.schema/Query
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-sync-send! (sid revision new-store outcome)
             swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
@@ -5360,8 +5709,7 @@
                   :sessions $ {}
                 storage-path storage-file
                 backup-path $ get-backup-path!
-              do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
-                check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
+              do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content) (hooks/persist!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -5375,51 +5723,6 @@
           :schema $ :: 'Fn $ {}
             :args $ [] 'Number
             :return $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
-        'query-reply $ %{} 'CodeEntry
-          :doc "|Answer one cold read using the session identity; history is always the caller's own."
-          :code $ quote $ defn query-reply (db cold sid query)
-            match (session-user-id db sid)
-              (:none) (app.feature.kanban.schema/QueryReply :denied |login-required)
-              (:some user-id)
-                match query
-                  (:history cursor limit)
-                    app.feature.kanban.schema/QueryReply :history $ history-page cold user-id cursor limit
-                  (:card-detail board-id card-id) (card-detail-reply db cold board-id card-id)
-          :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/QueryReply)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'Number 'app.feature.kanban.schema/Query
-          :tests $ [] $ %{} 'TestEntry (:name |identity-comes-from-session)
-            :code $ quote $ let
-                db $ app.feature.kanban.updater/apply-kanban app.feature.kanban.updater/fixture-db (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
-                cold $ apply-cold-effects app.feature.kanban.schema/empty-cold-store
-                  kanban-effects app.feature.kanban.updater/fixture-db db (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
-                  , 100
-              assert= (app.feature.kanban.schema/QueryReply :denied |login-required)
-                query-reply db cold 2 $ app.feature.kanban.schema/Query :history (Option :none) 10
-              match
-                query-reply db cold 1 $ app.feature.kanban.schema/Query :history (Option :none) 10
-                (:history page)
-                  assert= 1 $ :history-rev page
-                _ $ raise |Expected-history-page
-            :tags $ #{} :kanban :server
-        'read-cold-store $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defn read-cold-store (content)
-            try
-              app.feature.kanban.schema/decode-cold-store $ parse-cirru-edn content
-              fn (error)
-                Result :err $ %:: schema/DatabaseDecodeError :invalid |cold $ str "|Malformed cold Cirru EDN: " error
-          :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'String
-            :return $ :: 'Result 'app.feature.kanban.schema/ColdStore 'app.schema/DatabaseDecodeError
-          :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-and-roundtrips)
-            :code $ quote $ do
-              assert= true $ match (read-cold-store "|{} (:history")
-                (:err _) true
-                _ false
-              assert= (Result :ok app.feature.kanban.schema/empty-cold-store)
-                read-cold-store $ format-cirru-edn app.feature.kanban.schema/empty-cold-store
-            :tags $ #{} :kanban :server
         'read-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-partition-metrics ()
             struct-with @*partition-metrics $ :live-partitions $ count @*partitions
@@ -5598,7 +5901,7 @@
               :tags $ #{} :server
         'refresh-partitions! $ %{} 'CodeEntry
           :doc "|Advance each dirty live partition with exactly one projection and one bounded diff, before any connection is planned."
-          :code $ quote $ defn refresh-partitions! (db cold)
+          :code $ quote $ defn refresh-partitions! (db)
             let
                 dirty @*dirty-partitions
               reset! *dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
@@ -5611,7 +5914,7 @@
                   (:some raw-state)
                     let
                         state $ assert-type raw-state app.sync.partition/PartitionState
-                        step $ advance-partition state (project-partition db cold key) sync-diff-budget partition-history-limit patch-operation-limit
+                        step $ advance-partition state (hooks/project-partition db key) sync-diff-budget partition-history-limit patch-operation-limit
                       swap! *partitions assoc key $ :state step
                       count-partition-event! :diff
                       match (:advance step)
@@ -5621,7 +5924,7 @@
               , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore
+            :args $ [] 'app.schema/Db
         'release-partition-sends! $ %{} 'CodeEntry
           :doc "|When a connection resumes after idling, forget sends whose ACK may have been lost; clients reject mismatched bases and resync."
           :code $ quote $ defn release-partition-sends! (sid)
@@ -5867,7 +6170,7 @@
                         session-data $ assert-type raw-session app.schema/Session
                         shared $ get-shared-twig reel revision
                         old-store-option $ get @*client-caches sid
-                        new-store $ twig-container db session-data shared
+                        new-store $ hooks/session-store db session-data shared
                         needs-snapshot? $ or
                           option:unwrap-or (get state :needs-snapshot?) true
                           option:none? old-store-option
@@ -5944,175 +6247,41 @@
             :args $ [] 'app.schema/Db
         'sync-partitions-with! $ %{} 'CodeEntry
           :doc "|Advance dirty partitions once, then plan each active connection from its authorized partition set through an injectable transport; diff count is independent of subscriber count."
-          :code $ quote $ defn sync-partitions-with! (db send!)
-            let
-                cold @*cold-store
-              refresh-partitions! db cold
-              each (keys @*client-states)
-                fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'Unit
-                  let
-                      state $ option:unwrap $ get @*client-states sid
-                    when
-                      = :active $ option:unwrap-or (get state :status) :idle
-                      match
-                        get (:sessions db) sid
-                        (:none) &unit
-                        (:some raw-session)
-                          let
-                              desired $ session-partitions db $ assert-type raw-session app.schema/Session
-                            each desired $ fn (key)
+          :code $ quote $ defn sync-partitions-with! (db send!) (refresh-partitions! db)
+            each (keys @*client-states)
+              fn (sid)
+                hint-fn $ {}
+                  :args $ [] 'Number
+                  :return 'Unit
+                let
+                    state $ option:unwrap $ get @*client-states sid
+                  when
+                    = :active $ option:unwrap-or (get state :status) :idle
+                    match
+                      get (:sessions db) sid
+                      (:none) &unit
+                      (:some raw-session)
+                        let
+                            desired $ hooks/session-partitions db $ assert-type raw-session app.schema/Session
+                          each desired $ fn (key)
+                            hint-fn $ {}
+                              :args $ [] 'app.schema/PartitionKey
+                              :return 'Unit
+                            ensure-partition! db key
+                          each
+                            connection-actions @*partitions (progress-of sid) desired
+                            fn (action)
                               hint-fn $ {}
-                                :args $ [] 'app.schema/PartitionKey
+                                :args $ [] 'app.sync.partition/PartitionAction
                                 :return 'Unit
-                              ensure-partition! db cold key
-                            each
-                              connection-actions @*partitions (progress-of sid) desired
-                              fn (action)
-                                hint-fn $ {}
-                                  :args $ [] 'app.sync.partition/PartitionAction
-                                  :return 'Unit
-                                send! sid action
-                    , &unit
-              collect-partitions!
+                              send! sid action
+                  , &unit
+            collect-partitions!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'app.schema/Db $ :: 'Fn
               {} (:return 'Unit)
                 :args $ [] 'Number 'app.sync.partition/PartitionAction
-          :tests $ [] $ %{} 'TestEntry (:name |one-diff-for-many-subscribers)
-            :code $ quote $ let
-                saved-partitions @*partitions
-                saved-progress @*partition-progress
-                saved-dirty @*dirty-partitions
-                saved-metrics @*partition-metrics
-                saved-clients @*client-states
-                saved-cold @*cold-store
-                saved-payloads @*partition-payloads
-                sids $ [] 1 2 3 4 5
-                user $ fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'app.schema/User
-                  %{} schema/User
-                    :id $ str |u sid
-                    :name $ str |user sid
-                    :nickname $ Option :none
-                    :avatar $ Option :none
-                    :password |hash
-                session $ fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'app.schema/Session
-                  %{} schema/Session (:id sid)
-                    :user-id $ Option :some $ str |u sid
-                    :nickname $ Option :none
-                    :router $ %{} schema/Router (:name :board)
-                      :target $ Option :some |b1
-                    :messages $ {}
-                base $ %{} schema/Db
-                  :sessions $ assert-type
-                    pairs-map $ map sids $ fn (sid)
-                      [] sid $ session sid
-                    :: 'Map 'Number 'app.schema/Session
-                  :users $ assert-type
-                    pairs-map $ map sids $ fn (sid)
-                      [] (str |u sid) (user sid)
-                    :: 'Map 'String 'app.schema/User
-                  :boards $ {}
-                  :settings $ {}
-                db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
-                add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
-                db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
-                *sent $ atom $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
-                record! $ fn (sid action)
-                  hint-fn $ {}
-                    :args $ [] 'Number 'app.sync.partition/PartitionAction
-                    :return 'Unit
-                  swap! *sent conj action
-                  match action
-                    (:drop _key) &unit
-                    (:snapshot state)
-                      do
-                        handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
-                        ack-partition-progress-for! sid state
-                    (:deltas state deltas)
-                      do (partition-patch-payload state deltas)
-                        handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
-                        ack-partition-progress-for! sid state
-                sends-of $ fn (tag)
-                  hint-fn $ {}
-                    :args $ [] 'Tag
-                    :return 'Number
-                  count $ filter @*sent $ fn (action)
-                    hint-fn $ {}
-                      :args $ [] 'app.sync.partition/PartitionAction
-                      :return 'Bool
-                    = tag $ match action
-                      (:snapshot _state) :snapshot
-                      (:deltas _state _deltas) :deltas
-                      (:drop _key) :drop
-                board-deltas $ fn ()
-                  hint-fn $ {}
-                    :args $ []
-                    :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
-                  foldl @*sent
-                    assert-type ([])
-                      :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
-                    fn (acc action)
-                      hint-fn $ {}
-                        :args $ []
-                          :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
-                          , 'app.sync.partition/PartitionAction
-                        :return $ :: 'List $ :: 'List 'app.sync.partition/PartitionDelta
-                      match action
-                        (:deltas state deltas)
-                          if
-                            = (:key state) (schema/PartitionKey :board |b1)
-                            conj acc deltas
-                            , acc
-                        _ acc
-              reset! *partitions $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionState)
-              reset! *partition-progress $ assert-type ({})
-                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.sync.partition/PartitionProgress
-              reset! *dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
-              reset! *partition-metrics empty-partition-metrics
-              reset! *partition-payloads $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
-              reset! *cold-store app.feature.kanban.schema/empty-cold-store
-              reset! *client-states $ assert-type
-                pairs-map $ map sids $ fn (sid)
-                  [] sid $ {} $ :status :active
-                :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
-              sync-partitions-with! db1 record!
-              let
-                  initial-snapshots $ sends-of :snapshot
-                  initial-partitions $ count @*partitions
-                reset! *sent $ assert-type ([]) (:: 'List 'app.sync.partition/PartitionAction)
-                mark-partitions-dirty! $ affected-partitions db1 add-op 1
-                sync-partitions-with! db2 record!
-                let
-                    metrics $ read-partition-metrics
-                    deltas $ board-deltas
-                    snapshots $ sends-of :snapshot
-                    delta-sends $ sends-of :deltas
-                  reset! *partitions saved-partitions
-                  reset! *partition-progress saved-progress
-                  reset! *dirty-partitions saved-dirty
-                  reset! *partition-metrics saved-metrics
-                  reset! *client-states saved-clients
-                  reset! *cold-store saved-cold
-                  reset! *partition-payloads saved-payloads
-                  assert= 15 initial-snapshots
-                  assert= 7 initial-partitions
-                  assert= 3 $ :diffs metrics
-                  assert= 0 snapshots
-                  assert= 10 delta-sends
-                  assert= 5 $ count deltas
-                  assert= 1 $ count $ distinct deltas
-                  assert= 8 $ :reused-payloads metrics
-            :tags $ #{} :partition :server
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200
@@ -6148,7 +6317,7 @@
               match (schema/decode-domain-operation op)
                 (:err error)
                   raise $ str |Invalid-reel-operation: error
-                (:ok typed-op) (updater db typed-op typed-sid typed-op-id typed-op-time)
+                (:ok typed-op) (hooks/updater db typed-op typed-sid typed-op-id typed-op-time)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
             :args $ [] 'app.schema/Db 'Input 'Sid 'OpId 'Time
@@ -6163,8 +6332,8 @@
                       :records $ []
                       :merged? false
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
-                  updated $ reel-reducer reel updater connect-op 1 |op-1 10 true
-                assert= (updater base connect-op 1 |op-1 10) (:db updated)
+                  updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
+                assert= (hooks/updater base connect-op 1 |op-1 10) (:db updated)
                 assert=
                   [] $ [] connect-op 1 |op-1 10
                   :records updated
@@ -6180,7 +6349,7 @@
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
                   router $ %{} schema/Router (:name :profile)
                     :target $ Option :none
-                  expected $ updater (updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
+                  expected $ hooks/updater (hooks/updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
                   records $ []
                     [] (:: :session/connect) 1 |op-1 10
                     []
@@ -6199,7 +6368,7 @@
                       :records $ []
                       :merged? false
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
-                  updated $ reel-reducer reel updater connect-op 1 |op-1 10 true
+                  updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
                   control-updater $ fn (db op sid op-id op-time)
                     hint-fn $ {}
                       :args $ [] 'app.schema/Db 'app.schema/Op 'Number 'String 'Number
@@ -6245,14 +6414,13 @@
                     , false
                   fn (detail) (includes? detail "|expected number, got string")
               :tags $ #{} :server
-      :ns $ %{} 'NsEntry (:doc |)
+      :ns $ %{} 'NsEntry
+        :doc "|Template server runtime (do not edit per app): Reel, session Store sync, partition registry and fan-out, ACK/backpressure, cold-query transport, persistence. Business code is reached only through app.hooks.server."
         :code $ quote $ ns app.sync.server
           :require (app.schema :as schema)
             app.schema :refer $ Op
-            app.updater :refer $ updater
             cumulo-reel.core :refer $ reel-reducer refresh-reel reel-schema
             app.config :as config
-            app.twig.container :refer $ twig-container twig-shared
             recollect.diff :refer $ diff-twig-budgeted DiffBudget DiffStats
             wss.core :refer $ wss-serve! wss-send!
             recollect.twig :refer $ clear-twig-caches!
@@ -6263,8 +6431,7 @@
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
             app.sync.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
-            app.feature.kanban.twig :refer $ project-partition session-partitions affected-partitions
-            app.feature.kanban.updater :refer $ kanban-effects apply-cold-effects history-page card-detail-reply session-user-id
+            app.hooks.server :as hooks
     'app.twig.container $ %{} 'FileEntry
       :defs $ {}
         'twig-container $ %{} 'CodeEntry (:doc |)
