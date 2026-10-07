@@ -3346,10 +3346,8 @@
                 bad $ parse-cirru-edn
                   format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
                   , mapper
-              assert= (Result :ok view)
-                try-decode-map-as (struct-tree-input raw) 'app.schema/PartitionView
-              assert= true $ match
-                try-decode-map-as (struct-tree-input bad) 'app.schema/PartitionView
+              assert= (Result :ok view) (decode-partition-view raw)
+              assert= true $ match (decode-partition-view bad)
                 (:err detail) (includes? detail |title)
                 _ false
             :tags $ #{} :client :schema :server
