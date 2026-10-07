@@ -23,6 +23,17 @@
           :code $ quote $ defatom *connected? false
           :examples $ []
           :schema $ :: 'Dynamic
+        '*partitions $ %{} 'CodeEntry
+          :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
+          :code $ quote $ defatom *partitions
+            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionSlot)
+          :examples $ []
+          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionSlot
+        '*resources $ %{} 'CodeEntry
+          :doc "|Cold callback cache: fetched history pages and open card details."
+          :code $ quote $ defatom *resources resource/empty-resources
+          :examples $ []
+          :schema $ :: 'Ref 'app.resource/Resources
         '*states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *states
             {} $ :states $ {}
@@ -69,6 +80,41 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number
+            :features $ #{} :js-ffi
+        'apply-partition-message! $ %{} 'CodeEntry
+          :doc "|Apply partition envelopes: snapshots replace the slot, delta chains apply atomically or trigger a partition resync, drops clear caches (dropping the user partition clears private cold data)."
+          :code $ quote $ defn apply-partition-message! (message)
+            match message
+              (:part/snapshot key epoch revision view)
+                do
+                  swap! *partitions assoc key $ %{} PartitionSlot (:epoch epoch) (:revision revision) (:view view)
+                  ws-send! $ schema/ClientMessage :part/ack key epoch revision
+                  refresh-stale-details! key
+              (:part/patch key epoch deltas)
+                match (get @*partitions key)
+                  (:none)
+                    ws-send! $ schema/ClientMessage :part/resync key
+                  (:some slot)
+                    match (apply-partition-deltas slot epoch deltas)
+                      (:ok next-slot)
+                        do (swap! *partitions assoc key next-slot)
+                          ws-send! $ schema/ClientMessage :part/ack key epoch $ :revision next-slot
+                          refresh-stale-details! key
+                      (:err detail)
+                        do
+                          js/console.warn |Partition-resync (str key) detail
+                          swap! *partitions dissoc key
+                          ws-send! $ schema/ClientMessage :part/resync key
+              (:part/drop key)
+                do (swap! *partitions dissoc key)
+                  match key
+                    (:user _user-id) (reset! *resources resource/empty-resources)
+                    _ &unit
+              _ &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/ServerMessage
             :features $ #{} :js-ffi
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn apply-server-patch! (base-revision revision changes)
@@ -120,7 +166,7 @@
                     console-error! "|Lost connection!"
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
-                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op)
+                  :class-mapper $ {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:CardDetail schema/CardDetail) (:HistoryEvent schema/HistoryEvent) (:HistoryPage schema/HistoryPage) (:QueryReply schema/QueryReply) (:UserSettings schema/UserSettings) (:UserHotView schema/UserHotView) (:Card schema/Card) (:Column schema/Column) (:Board schema/Board) (:BoardBrief schema/BoardBrief) (:LobbyView schema/LobbyView) (:PartitionDelta schema/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -154,6 +200,12 @@
               (:states cursor s)
                 reset! *states $ assert-type (update-states @*states cursor s) (:: 'Map 'Tag 'Dynamic)
               (:effect/connect) (connect!)
+              (:client/load-history append?)
+                send-query! $ resource/begin-history-query @*resources append?
+              (:client/close-card card-id)
+                reset! *resources $ resource/close-detail @*resources card-id
+              (:client/open-card board-id card-id)
+                send-query! $ resource/begin-detail-query @*resources board-id card-id
               _ $ ws-send! $ %:: schema/ClientMessage :dispatch op
             , &unit
           :examples $ []
@@ -202,6 +254,8 @@
               connect!
               add-watch! *store :changes on-store-change!
               add-watch! *states :changes on-states-change!
+              add-watch! *partitions :changes on-states-change!
+              add-watch! *resources :changes on-states-change!
               install-activity-lifecycle!
               workload-entry!
               println "|App started!"
@@ -228,6 +282,15 @@
                       when config/dev? $ js/console.log |Changes changes
                       apply-server-patch! base-revision revision changes
                   (:effect/pong) &unit
+                  (:part/snapshot _key _epoch _revision _view) (apply-partition-message! message)
+                  (:part/patch _key _epoch _deltas) (apply-partition-message! message)
+                  (:part/drop _key) (apply-partition-message! message)
+                  (:query/reply request-id reply)
+                    swap! *resources $ fn (resources)
+                      hint-fn $ {}
+                        :args $ [] 'app.resource/Resources
+                        :return 'app.resource/Resources
+                      resource/receive-reply resources request-id reply
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -253,6 +316,28 @@
           :schema $ :: 'Fn $ {}
             :args $ []
             :return $ :: 'JsNullish 'respo.dom/DomElement
+        'refresh-stale-details! $ %{} 'CodeEntry
+          :doc "|After a board update, refetch only open card details whose hot detail-rev moved forward."
+          :code $ quote $ defn refresh-stale-details! (key)
+            match key
+              (:board _board-id)
+                match (get @*partitions key)
+                  (:some slot)
+                    match (:view slot)
+                      (:board board)
+                        each (resource/stale-details @*resources board)
+                          fn (card-id)
+                            hint-fn $ {}
+                              :args $ [] 'String
+                              :return 'Unit
+                            send-query! $ resource/begin-detail-query @*resources (:id board) card-id
+                      _ &unit
+                  (:none) &unit
+              _ &unit
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/PartitionKey
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (non-nil? client-errors) (hud! |error client-errors)
@@ -290,6 +375,13 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
+        'send-query! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn send-query! (request)
+            reset! *resources $ :resources request
+            ws-send! $ schema/ClientMessage :query (:request-id request) (:query request)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.resource/QueryRequest
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
             match (stored-login)
@@ -482,6 +574,8 @@
             js-ffi.browser :as browser
             respo.ffi.browser :refer $ narrow-element
             js-ffi.shared :refer $ console-error!
+            app.partition :refer $ PartitionSlot apply-partition-deltas
+            app.resource :as resource
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry (:doc |)
@@ -822,6 +916,12 @@
         :code $ quote $ ns app.config
     'app.partition $ %{} 'FileEntry
       :defs $ {}
+        'PartitionAction $ %{} 'CodeEntry
+          :doc "|One transport action for a connection: drop a revoked partition, or send its snapshot or delta chain."
+          :code $ quote $ defenum PartitionAction (:drop 'app.schema/PartitionKey) (:snapshot 'app.partition/PartitionState)
+            :deltas 'app.partition/PartitionState $ :: 'List 'app.schema/PartitionDelta
+          :examples $ []
+          :schema $ :: 'EnumDef
         'PartitionAdvance $ %{} 'CodeEntry
           :doc "|Outcome of projecting a new partition view: no change, one retained delta, or a reset that forces snapshots."
           :code $ quote $ defenum PartitionAdvance (:unchanged) (:delta 'app.schema/PartitionDelta 'recollect.diff/DiffStats) (:reset 'recollect.diff/DiffStats)
@@ -839,6 +939,12 @@
             :deltas $ :: 'List 'app.schema/PartitionDelta
           :examples $ []
           :schema $ :: 'EnumDef
+        'PartitionSlot $ %{} 'CodeEntry
+          :doc "|Client cache of one subscribed partition: lineage epoch, applied revision and validated view."
+          :code $ quote $ defstruct PartitionSlot (:epoch 'Number) (:revision 'Number)
+            :view $ quote app.schema/PartitionView
+          :examples $ []
+          :schema $ :: 'StructDef
         'PartitionState $ %{} 'CodeEntry
           :doc "|Server-owned hot state of one partition. epoch changes whenever revisions restart, so old acknowledgements never match a new lineage."
           :code $ quote $ defstruct PartitionState
@@ -985,6 +1091,149 @@
                           :in-flight $ Option :none
                   _ $ raise |Expected-reset
               :tags $ #{} :partition :server
+        'apply-partition-deltas $ %{} 'CodeEntry
+          :doc "|Apply a delta chain atomically: epoch and every base revision must match, and the final view must validate, otherwise the cached slot is left untouched."
+          :code $ quote $ defn apply-partition-deltas (slot epoch deltas)
+            if
+              not= epoch $ :epoch slot
+              Result :err $ str "|Partition epoch mismatch: " epoch "| vs " $ :epoch slot
+              let
+                  applied $ foldl deltas
+                    assert-type
+                      Result :ok $ [] (:revision slot) (:view slot)
+                      :: 'Result (:: 'List 'Dynamic) 'String
+                    fn (acc delta)
+                      hint-fn $ {}
+                        :args $ []
+                          :: 'Result (:: 'List 'Dynamic) 'String
+                          , 'app.schema/PartitionDelta
+                        :return $ :: 'Result (:: 'List 'Dynamic) 'String
+                      match acc
+                        (:err _) acc
+                        (:ok pair)
+                          let[] (revision view) pair $ if
+                            not= revision $ :base delta
+                            Result :err $ str "|Partition base mismatch: " (:base delta) "| vs " revision
+                            match
+                              .apply-to
+                                patch-batch $ :changes delta
+                                , view
+                              (:ok next-view)
+                                Result :ok $ [] (:revision delta) next-view
+                              (:err error)
+                                Result :err $ patch-error-message error
+                match applied
+                  (:err detail) (Result :err detail)
+                  (:ok pair)
+                    let[] (revision view) pair $ match (decode-partition-view view)
+                      (:ok typed)
+                        Result :ok $ %{} PartitionSlot (:epoch epoch)
+                          :revision $ assert-type revision Number
+                          :view typed
+                      (:err detail) (Result :err detail)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.partition/PartitionSlot 'Number $ :: 'List 'app.schema/PartitionDelta
+            :return $ :: 'Result 'app.partition/PartitionSlot 'String
+          :tests $ [] $ %{} 'TestEntry (:name |atomic-chain-application)
+            :code $ quote $ let
+                v1 $ test-lobby $ [] |a |b
+                s1 $ new-partition (PartitionKey :lobby) 7 v1
+                s2 $ :state $ advance-partition s1
+                  test-lobby $ [] |a |c
+                  , test-budget 8 64
+                s3 $ :state $ advance-partition s2
+                  test-lobby $ [] |d |c |e
+                  , test-budget 8 64
+                slot $ %{} PartitionSlot (:epoch 7) (:revision 1) (:view v1)
+              assert=
+                Result :ok $ %{} PartitionSlot (:epoch 7) (:revision 3)
+                  :view $ :view s3
+                apply-partition-deltas slot 7 $ :history s3
+              assert= true $ match
+                apply-partition-deltas slot 8 $ :history s3
+                (:err detail) (includes? detail |epoch)
+                _ false
+              assert= true $ match
+                apply-partition-deltas slot 7 $ slice (:history s3) 1 2
+                (:err detail) (includes? detail |base)
+                _ false
+            :tags $ #{} :client :partition :server
+        'connection-actions $ %{} 'CodeEntry
+          :doc "|Plan one connection's transport work: drops for partitions it may no longer see, then snapshots or retained delta chains for authorized partitions."
+          :code $ quote $ defn connection-actions (partitions progress desired)
+            let
+                drops $ -> (.to-list progress)
+                  filter $ fn (pair)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return 'Bool
+                    let[] (key _progress) pair $ not $ includes? desired key
+                  map $ fn (pair)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic
+                      :return 'app.partition/PartitionAction
+                    let[] (key _progress) pair $ PartitionAction :drop $ assert-type key app.schema/PartitionKey
+                sends $ foldl (.to-list desired) ([])
+                  fn (acc key)
+                    hint-fn $ {}
+                      :args $ [] (:: 'List 'app.partition/PartitionAction) 'app.schema/PartitionKey
+                      :return $ :: 'List 'app.partition/PartitionAction
+                    match (get partitions key)
+                      (:none) acc
+                      (:some raw-state)
+                        let
+                            state $ assert-type raw-state app.partition/PartitionState
+                            progress-option $ match (get progress key)
+                              (:some raw)
+                                Option :some $ assert-type raw app.partition/PartitionProgress
+                              (:none) (Option :none)
+                          match (plan-partition-send state progress-option)
+                            (:idle) acc
+                            (:snapshot)
+                              conj acc $ PartitionAction :snapshot state
+                            (:deltas deltas)
+                              conj acc $ PartitionAction :deltas state deltas
+              concat drops sends
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress) (:: 'Set 'app.schema/PartitionKey)
+            :return $ :: 'List 'app.partition/PartitionAction
+          :tests $ [] $ %{} 'TestEntry (:name |drops-revoked-and-plans-authorized)
+            :code $ quote $ let
+                lobby $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
+                lobby2 $ :state $ advance-partition lobby
+                  test-lobby $ [] |b
+                  , test-budget 8 64
+                partitions $ assert-type
+                  {} $
+                    PartitionKey :lobby
+                    , lobby2
+                  :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState
+                acked $ %{} PartitionProgress (:epoch 7) (:acked 1)
+                  :in-flight $ Option :none
+                progress $ assert-type
+                  {}
+                      PartitionKey :lobby
+                      , acked
+                    (PartitionKey :board |gone) acked
+                  :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+                no-progress $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress)
+                actions $ connection-actions partitions progress $ #{} (PartitionKey :lobby) (PartitionKey :user |u1)
+              assert= 2 $ count actions
+              assert= true $ includes? actions $ PartitionAction :drop (PartitionKey :board |gone)
+              assert= true $ includes? actions $ PartitionAction :deltas lobby2 (:history lobby2)
+              assert=
+                [] $ PartitionAction :snapshot lobby2
+                connection-actions partitions no-progress $ #{} $ PartitionKey :lobby
+            :tags $ #{} :partition :server
+        'decode-partition-view $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-partition-view (value)
+            try-decode-map-as (app.schema/struct-tree-input value) 'app.schema/PartitionView
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/PartitionView 'String
         'delta-chain $ %{} 'CodeEntry
           :doc "|Return the complete retained chain from an acknowledged revision to the current revision, or none when any link was trimmed or reset."
           :code $ quote $ defn delta-chain (history from to)
@@ -1182,6 +1431,281 @@
           :require
             app.schema :refer $ PartitionKey PartitionView PartitionDelta
             recollect.diff :refer $ diff-twig-budgeted DiffBudget DiffStats
+            recollect.patch :refer $ patch-batch patch-error-message
+    'app.resource $ %{} 'FileEntry
+      :defs $ {}
+        'DetailResource $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct DetailResource (:board-id 'String)
+            :detail $ :: 'Option 'app.schema/CardDetail
+            :missing? 'Bool
+            :loading? 'Bool
+          :examples $ []
+          :schema $ :: 'StructDef
+        'HistoryResource $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct HistoryResource
+            :items $ :: 'List 'app.schema/HistoryEvent
+            :next-cursor $ :: 'Option 'Number
+            :history-rev 'Number
+            :loaded? 'Bool
+            :loading? 'Bool
+          :examples $ []
+          :schema $ :: 'StructDef
+        'QueryRequest $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct QueryRequest
+            :resources $ quote app.resource/Resources
+            :request-id 'String
+            :query $ quote app.schema/Query
+          :examples $ []
+          :schema $ :: 'StructDef
+        'QueryTarget $ %{} 'CodeEntry
+          :doc "|What a pending request id will update: the history list (append or replace) or one open card detail."
+          :code $ quote $ defenum QueryTarget (:history 'Bool) (:detail 'String)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Resources $ %{} 'CodeEntry
+          :doc "|Cold data the browser has fetched. Only open card details are kept; history pages accumulate until history-rev announces newer events."
+          :code $ quote $ defstruct Resources
+            :history $ quote app.resource/HistoryResource
+            :details $ :: 'Map 'String 'app.resource/DetailResource
+            :pending $ :: 'Map 'String 'app.resource/QueryTarget
+            :counter 'Number
+          :examples $ []
+          :schema $ :: 'StructDef
+        'begin-detail-query $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn begin-detail-query (resources board-id card-id)
+            let
+                request-id $ str |q $ inc (:counter resources)
+                current $ match
+                  get (:details resources) card-id
+                  (:some existing) existing
+                  (:none)
+                    %{} DetailResource (:board-id board-id)
+                      :detail $ Option :none
+                      :missing? false
+                      :loading? false
+                pending $ without-target (:pending resources)
+                  fn (item)
+                    match item
+                      (:history _) false
+                      (:detail id) (= id card-id)
+              %{} QueryRequest (:request-id request-id)
+                :query $ Query :card-detail board-id card-id
+                :resources $ struct-with resources
+                  :counter $ inc $ :counter resources
+                  :pending $ assoc pending request-id $ QueryTarget :detail card-id
+                  :details $ assoc (:details resources) card-id $ struct-with current (:loading? true)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.resource/QueryRequest)
+            :args $ [] 'app.resource/Resources 'String 'String
+        'begin-history-query $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn begin-history-query (resources append?)
+            let
+                history $ :history resources
+                request-id $ str |q $ inc (:counter resources)
+                target $ QueryTarget :history append?
+                pending $ without-target (:pending resources)
+                  fn (item)
+                    match item
+                      (:history _) true
+                      (:detail _) false
+              %{} QueryRequest (:request-id request-id)
+                :query $ Query :history
+                  if append? (:next-cursor history) (Option :none)
+                  , 20
+                :resources $ struct-with resources
+                  :counter $ inc $ :counter resources
+                  :pending $ assoc pending request-id target
+                  :history $ struct-with history $ :loading? true
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.resource/QueryRequest)
+            :args $ [] 'app.resource/Resources 'Bool
+        'close-detail $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn close-detail (resources card-id)
+            struct-with resources
+              :details $ dissoc (:details resources) card-id
+              :pending $ without-target (:pending resources)
+                fn (item)
+                  match item
+                    (:history _) false
+                    (:detail id) (= id card-id)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.resource/Resources)
+            :args $ [] 'app.resource/Resources 'String
+        'empty-resources $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def empty-resources
+            %{} Resources
+              :history $ %{} HistoryResource
+                :items $ []
+                :next-cursor $ Option :none
+                :history-rev 0
+                :loaded? false
+                :loading? false
+              :details $ {}
+              :pending $ {}
+              :counter 0
+          :examples $ []
+          :schema $ :: 'app.resource/Resources
+        'receive-reply $ %{} 'CodeEntry
+          :doc "|Apply a reply only if its request id is still pending; closed panels, superseded requests and older content revisions are ignored."
+          :code $ quote $ defn receive-reply (resources request-id reply)
+            match
+              get (:pending resources) request-id
+              (:none) resources
+              (:some target)
+                let
+                    base $ struct-with resources $ :pending
+                      dissoc (:pending resources) request-id
+                  match target
+                    (:history append?)
+                      let
+                          history $ :history base
+                        match reply
+                          (:history page)
+                            struct-with base $ :history $ struct-with history
+                              :items $ if append?
+                                concat (:items history) (:items page)
+                                :items page
+                              :next-cursor $ :next-cursor page
+                              :history-rev $ :history-rev page
+                              :loaded? true
+                              :loading? false
+                          _ $ struct-with base $ :history
+                            struct-with history $ :loading? false
+                    (:detail card-id)
+                      match
+                        get (:details base) card-id
+                        (:none) base
+                        (:some current)
+                          let
+                              update! $ fn (next)
+                                hint-fn $ {}
+                                  :args $ [] 'app.resource/DetailResource
+                                  :return 'app.resource/Resources
+                                struct-with base $ :details $ assoc (:details base) card-id next
+                            match reply
+                              (:card-detail detail)
+                                if
+                                  match (:detail current)
+                                    (:some existing)
+                                      < (:rev detail) (:rev existing)
+                                    (:none) false
+                                  update! $ struct-with current $ :loading? false
+                                  update! $ struct-with current
+                                    :detail $ Option :some detail
+                                    :missing? false
+                                    :loading? false
+                              (:missing _)
+                                update! $ struct-with current (:missing? true) (:loading? false)
+                              _ $ update! $ struct-with current (:loading? false)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.resource/Resources)
+            :args $ [] 'app.resource/Resources 'String 'app.schema/QueryReply
+          :tests $ [] $ %{} 'TestEntry (:name |stale-and-versioned-replies)
+            :code $ quote $ let
+                detail $ fn (rev text)
+                  hint-fn $ {}
+                    :args $ [] 'Number 'String
+                    :return 'app.schema/CardDetail
+                  %{} CardDetail (:card-id |c1) (:board-id |b1) (:rev rev) (:description text) (:updated-at 0)
+                r1 $ begin-detail-query empty-resources |b1 |c1
+                r2 $ begin-detail-query (:resources r1) |b1 |c1
+                late $ receive-reply (:resources r2) (:request-id r1)
+                  QueryReply :card-detail $ detail 1 |old
+                fresh $ receive-reply (:resources r2) (:request-id r2)
+                  QueryReply :card-detail $ detail 2 |new
+                r3 $ begin-detail-query fresh |b1 |c1
+                older $ receive-reply (:resources r3) (:request-id r3)
+                  QueryReply :card-detail $ detail 1 |older
+                closed $ receive-reply
+                  close-detail (:resources r3) |c1
+                  :request-id r3
+                  QueryReply :card-detail $ detail 3 |x
+                description $ fn (resources)
+                  hint-fn $ {}
+                    :args $ [] 'app.resource/Resources
+                    :return $ :: 'Option 'String
+                  match
+                    get (:details resources) |c1
+                    (:some resource)
+                      match (:detail resource)
+                        (:some d)
+                          Option :some $ :description d
+                        (:none) (Option :none)
+                    (:none) (Option :none)
+                h1 $ begin-history-query empty-resources false
+                page $ %{} app.schema/HistoryPage
+                  :items $ []
+                  :next-cursor $ Option :some 3
+                  :history-rev 5
+                h-done $ receive-reply (:resources h1) (:request-id h1) (QueryReply :history page)
+                h2 $ begin-history-query h-done true
+              assert= (Option :none) (description late)
+              assert= (Option :some |new) (description fresh)
+              assert= (Option :some |new) (description older)
+              assert= (Option :none) (description closed)
+              assert=
+                Query :history (Option :none) 20
+                :query h1
+              assert= 5 $ :history-rev $ :history h-done
+              assert=
+                Query :history (Option :some 3) 20
+                :query h2
+              assert= 1 $ count $ :pending (:resources h2)
+            :tags $ #{} :client :kanban :server
+        'stale-details $ %{} 'CodeEntry
+          :doc "|Open card details whose hot detail-rev moved past the cached content revision; only these are refetched, unused content is never downloaded."
+          :code $ quote $ defn stale-details (resources board)
+            ->
+              .to-list $ :details resources
+              filter $ fn (pair)
+                hint-fn $ {}
+                  :args $ [] 'Dynamic
+                  :return 'Bool
+                let[] (raw-card-id raw-resource) pair $ let
+                    card-id $ assert-type raw-card-id String
+                    resource $ assert-type raw-resource app.resource/DetailResource
+                  and
+                    = (:board-id resource) (:id board)
+                    not $ :loading? resource
+                    match
+                      get (:cards board) card-id
+                      (:none) false
+                      (:some raw-card)
+                        let
+                            hot-rev $ :detail-rev $ assert-type raw-card app.schema/Card
+                          match (:detail resource)
+                            (:some detail)
+                              > hot-rev $ :rev detail
+                            (:none) false
+              map $ fn (pair)
+                hint-fn $ {}
+                  :args $ [] 'Dynamic
+                  :return 'String
+                assert-type
+                  option:unwrap $ nth pair 0
+                  , String
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.resource/Resources 'app.schema/Board
+            :return $ :: 'List 'String
+        'without-target $ %{} 'CodeEntry
+          :doc "|Forget older requests for the same target so their late replies are ignored."
+          :code $ quote $ defn without-target (pending matches?)
+            .filter-map-kv pending $ fn (id target)
+              hint-fn $ {}
+                :args $ [] 'String 'app.resource/QueryTarget
+                :return $ :: 'MapEntryDecision 'String 'app.resource/QueryTarget
+              if (matches? target) (%:: MapEntryDecision :drop) (%:: MapEntryDecision :keep id target)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'Map 'String 'app.resource/QueryTarget)
+              :: 'Fn $ {} (:return 'Bool)
+                :args $ [] 'app.resource/QueryTarget
+            :return $ :: 'Map 'String 'app.resource/QueryTarget
+      :ns $ %{} 'NsEntry
+        :doc "|Client cache for cold callback data: request ids, stale-response rejection and content-revision checks."
+        :code $ quote $ ns app.resource
+          :require $ app.schema :refer $ Query QueryReply HistoryEvent CardDetail
     'app.schema $ %{} 'FileEntry
       :defs $ {}
         'AttachedView $ %{} 'CodeEntry (:doc |)
@@ -1210,8 +1734,8 @@
           :examples $ []
           :schema $ :: 'StructDef
         'ClientMessage $ %{} 'CodeEntry
-          :doc "|Typed messages accepted from a browser connection."
-          :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op)
+          :doc "|Typed messages accepted from a browser connection. part/ack names partition, epoch and revision; part/resync asks for a fresh partition snapshot."
+          :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op) (:part/ack 'app.schema/PartitionKey 'Number 'Number) (:part/resync 'app.schema/PartitionKey) (:query 'String 'app.schema/Query)
           :examples $ []
           :schema $ :: 'EnumDef
         'ColdEffects $ %{} 'CodeEntry
@@ -1291,7 +1815,7 @@
           :examples $ []
           :schema $ :: 'StructDef
         'Op $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:kanban 'app.schema/KanbanOp)
+          :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:kanban 'app.schema/KanbanOp) (:client/open-card 'String 'String) (:client/close-card 'String) (:client/load-history 'Bool)
             :states (:: 'List 'Dynamic) 'Dynamic
           :examples $ []
           :schema $ :: 'EnumDef
@@ -1342,10 +1866,14 @@
           :examples $ []
           :schema $ :: 'StructDef
         'ServerMessage $ %{} 'CodeEntry
-          :doc "|Typed synchronization and effect messages sent to a browser."
+          :doc "|Typed synchronization and effect messages sent to a browser. part/* messages carry partition epoch and revisions; query/reply answers one cold read by request id."
           :code $ quote $ defenum ServerMessage (:snapshot 'Number 'app.schema/Store)
             :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
             :effect/pong
+            :part/snapshot 'app.schema/PartitionKey 'Number 'Number 'app.schema/PartitionView
+            :part/patch 'app.schema/PartitionKey 'Number $ :: 'List 'app.schema/PartitionDelta
+            :part/drop 'app.schema/PartitionKey
+            :query/reply 'String 'app.schema/QueryReply
           :examples $ []
           :schema $ :: 'EnumDef
         'Session $ %{} 'CodeEntry (:doc "|A connected session in the nominal database.")
@@ -1453,6 +1981,26 @@
                       (:ok typed-op)
                         %:: Result :ok $ %:: ClientMessage :dispatch typed-op
                       (:err error) (%:: Result :err error)
+                  (:query request-id query)
+                    if (string? request-id)
+                      match (decode-query query)
+                        (:ok typed-query)
+                          Result :ok $ ClientMessage :query request-id typed-query
+                        (:err error) (Result :err error)
+                      invalid-message $ str "|Invalid query request id: " message
+                  (:part/resync key)
+                    match (decode-partition-key key)
+                      (:ok typed-key)
+                        Result :ok $ ClientMessage :part/resync typed-key
+                      (:err error) (Result :err error)
+                  (:part/ack key epoch revision)
+                    match (decode-partition-key key)
+                      (:ok typed-key)
+                        if
+                          and (number? epoch) (number? revision)
+                          Result :ok $ ClientMessage :part/ack typed-key epoch revision
+                          invalid-message $ str "|Invalid partition acknowledgement: " message
+                      (:err error) (Result :err error)
                   _ $ match (decode-operation message)
                     (:ok typed-op)
                       %:: Result :ok $ %:: ClientMessage :dispatch typed-op
@@ -1514,6 +2062,33 @@
                   (:err _) true
                   _ false
               :tags $ #{} :client :server
+            %{} 'TestEntry (:name |decodes-partition-and-query-messages)
+              :code $ quote $ do
+                assert=
+                  Result :ok $ ClientMessage :part/ack (PartitionKey :board |b1) 7 3
+                  decode-client-message $ parse-cirru-edn $ format-cirru-edn
+                    ClientMessage :part/ack (PartitionKey :board |b1) 7 3
+                assert=
+                  Result :ok $ ClientMessage :part/resync $ PartitionKey :lobby
+                  decode-client-message $ parse-cirru-edn $ format-cirru-edn
+                    ClientMessage :part/resync $ PartitionKey :lobby
+                assert=
+                  Result :ok $ ClientMessage :query |r1 $ Query :history (Option :some 4) 20
+                  decode-client-message $ parse-cirru-edn $ format-cirru-edn
+                    ClientMessage :query |r1 $ Query :history (Option :some 4) 20
+                assert=
+                  Result :ok $ ClientMessage :query |r2 $ Query :history (Option :none) 20
+                  decode-client-message $ parse-cirru-edn $ format-cirru-edn
+                    ClientMessage :query |r2 $ Query :history (Option :none) 20
+                assert= true $ match
+                  decode-client-message $ :: :part/ack (:: :board 42) 1 1
+                  (:err _) true
+                  _ false
+                assert= true $ match
+                  decode-client-message $ :: :query |r3 $ :: :card-detail |b1 7
+                  (:err _) true
+                  _ false
+              :tags $ #{} :partition :server
         'decode-cold-store $ %{} 'CodeEntry
           :doc "|Validate persisted cold storage before it is used for queries."
           :code $ quote $ defn decode-cold-store (data)
@@ -1928,6 +2503,19 @@
                       (:ok typed)
                         Result :ok $ %:: Op :kanban typed
                       (:err error) (Result :err error)
+                  (:client/open-card board-id card-id)
+                    if
+                      and (string? board-id) (string? card-id)
+                      Result :ok $ %:: Op :client/open-card board-id card-id
+                      invalid-message $ str "|Invalid open-card: " op
+                  (:client/close-card card-id)
+                    if (string? card-id)
+                      Result :ok $ %:: Op :client/close-card card-id
+                      invalid-message $ str "|Invalid close-card: " op
+                  (:client/load-history append?)
+                    if (bool? append?)
+                      Result :ok $ %:: Op :client/load-history append?
+                      invalid-message $ str "|Invalid load-history: " op
                   _ $ invalid-message $ str "|Unknown application operation: " op
                 invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
@@ -2017,6 +2605,73 @@
             :generics $ [] 'T
             :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
           :tags $ #{} :scaffold
+        'decode-partition-key $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-partition-key (data)
+            let
+                key $ if (enum? data)
+                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  , data
+              if (enum? key)
+                match key
+                  (:lobby)
+                    Result :ok $ PartitionKey :lobby
+                  (:board id)
+                    if (string? id)
+                      Result :ok $ PartitionKey :board id
+                      invalid-message $ str "|Invalid board partition: " key
+                  (:user id)
+                    if (string? id)
+                      Result :ok $ PartitionKey :user id
+                      invalid-message $ str "|Invalid user partition: " key
+                  _ $ invalid-message $ str "|Unknown partition: " key
+                invalid-message $ str "|Expected-enum-partition: " key
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/PartitionKey 'app.schema/MessageDecodeError
+        'decode-query $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn decode-query (data)
+            let
+                query $ if (enum? data)
+                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  , data
+              if (enum? query)
+                match query
+                  (:history cursor limit)
+                    let
+                        typed-cursor $ cond
+                            nil? cursor
+                            Option :some $ Option :none
+                          (number? cursor)
+                            Option :some $ Option :some cursor
+                          (enum? cursor)
+                            match cursor
+                              (:none)
+                                Option :some $ Option :none
+                              (:some position)
+                                if (number? position)
+                                  Option :some $ Option :some position
+                                  Option :none
+                              _ $ Option :none
+                          true $ Option :none
+                      match typed-cursor
+                        (:some valid-cursor)
+                          if (number? limit)
+                            Result :ok $ Query :history valid-cursor limit
+                            invalid-message $ str "|Invalid history limit: " query
+                        (:none)
+                          invalid-message $ str "|Invalid history cursor: " query
+                  (:card-detail board-id card-id)
+                    if
+                      and (string? board-id) (string? card-id)
+                      Result :ok $ Query :card-detail board-id card-id
+                      invalid-message $ str "|Invalid card-detail query: " query
+                  _ $ invalid-message $ str "|Unknown query: " query
+                invalid-message $ str "|Expected-enum-query: " query
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/Query 'app.schema/MessageDecodeError
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
@@ -2078,6 +2733,10 @@
                         invalid-message $ str "|Invalid patch envelope: " message
                   (:effect/pong)
                     %:: Result :ok $ %:: ServerMessage :effect/pong
+                  (:query/reply _request-id _reply) (decode-typed-server-message message)
+                  (:part/drop _key) (decode-typed-server-message message)
+                  (:part/patch _key _epoch _deltas) (decode-typed-server-message message)
+                  (:part/snapshot _key _epoch _revision _view) (decode-typed-server-message message)
                   _ $ invalid-message $ str "|Unknown server message: " message
                 invalid-message $ str "|Unknown server message: " message
           :examples $ []
@@ -2337,6 +2996,18 @@
                       (:err detail) (includes? detail |$.user.id)
                       _ false
               :tags $ #{} :client
+        'decode-typed-server-message $ %{} 'CodeEntry
+          :doc "|Validate partition and query envelopes against the nominal ServerMessage schema after ws-edn class mapping; nested views, deltas and replies are checked field by field."
+          :code $ quote $ defn decode-typed-server-message (message)
+            match
+              try-decode-map-as (struct-tree-input message) 'app.schema/ServerMessage
+              (:ok typed) (Result :ok typed)
+              (:err detail)
+                invalid-message $ str "|Invalid server message: " detail
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Dynamic
+            :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
@@ -2519,7 +3190,7 @@
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'Dynamic
         'struct-tree-input $ %{} 'CodeEntry
-          :doc "|Recursively turn untrusted struct trees into maps so try-decode-map-as can validate them against a nominal schema."
+          :doc "|Recursively turn untrusted struct trees, including struct payloads inside nominal enums, into maps so try-decode-map-as can validate them against a nominal schema."
           :code $ quote $ defn struct-tree-input (value)
             cond
                 struct? value
@@ -2536,16 +3207,38 @@
                 map
                   decode-map-as value $ :: 'List 'Dynamic
                   , struct-tree-input
-              (and (enum? value) (enum-definition-matches? value Option))
-                match value
-                  (:some item)
-                    Option :some $ struct-tree-input item
-                  (:none) value
-                  _ value
+              (enum? value)
+                foldl
+                  range 1 $ count value
+                  , value $ fn (acc idx)
+                    hint-fn $ {}
+                      :args $ [] 'Dynamic 'Number
+                      :return 'Dynamic
+                    assoc acc idx $ struct-tree-input $ option:unwrap (nth value idx)
               true value
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ [] 'Dynamic
+          :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
+            :code $ quote $ let
+                mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board Board) (:Column Column) (:Card Card)
+                board $ %{} Board (:id |b1) (:title |T) (:created-at 1)
+                  :columns $ {} $ |k
+                    %{} Column (:id |k) (:title |K) (:rank 1)
+                  :cards $ {}
+                view $ PartitionView :board board
+                raw $ parse-cirru-edn (format-cirru-edn view) mapper
+                bad-title $ parse-cirru-edn $ format-cirru-edn 42
+                bad $ parse-cirru-edn
+                  format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
+                  , mapper
+              assert= (Result :ok view)
+                try-decode-map-as (struct-tree-input raw) 'app.schema/PartitionView
+              assert= true $ match
+                try-decode-map-as (struct-tree-input bad) 'app.schema/PartitionView
+                (:err detail) (includes? detail |title)
+                _ false
+            :tags $ #{} :client :schema :server
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def user
             %{} User (:name ||) (:id ||)
@@ -2566,10 +3259,27 @@
           :code $ quote $ defatom *client-states ({})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'Tag 'Dynamic)
+        '*cold-store $ %{} 'CodeEntry
+          :doc "|Cold history and card details. They are written by committed operations and read only through queries."
+          :code $ quote $ defatom *cold-store
+            if (path-exists? cold-storage-file)
+              match
+                read-cold-store $ read-file cold-storage-file
+                (:ok store) store
+                (:err error)
+                  do (eprintln "|Invalid cold storage, starting empty:" error) schema/empty-cold-store
+              , schema/empty-cold-store
+          :examples $ []
+          :schema $ :: 'Ref 'app.schema/ColdStore
         '*dirty-clients $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *dirty-clients (#{})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Set 'Number
+        '*dirty-partitions $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defatom *dirty-partitions
+            assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+          :examples $ []
+          :schema $ :: 'Ref $ :: 'Set 'app.schema/PartitionKey
         '*initial-db $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *initial-db
             if
@@ -2583,6 +3293,34 @@
               do (println "|Found no data") schema/database
           :examples $ []
           :schema $ :: 'Ref 'app.schema/Db
+        '*partition-epoch $ %{} 'CodeEntry
+          :doc "|Monotonic epoch source seeded from process start; a recreated partition never reuses an old revision lineage."
+          :code $ quote $ defatom *partition-epoch (unix-time-ms)
+          :examples $ []
+          :schema $ :: 'Ref 'Number
+        '*partition-metrics $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defatom *partition-metrics empty-partition-metrics
+          :examples $ []
+          :schema $ :: 'Ref 'app.server/PartitionMetrics
+        '*partition-payloads $ %{} 'CodeEntry
+          :doc "|Encoded single-delta patch per partition, reused by every subscriber at the previous revision."
+          :code $ quote $ defatom *partition-payloads
+            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.server/CachedPayload)
+          :examples $ []
+          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.server/CachedPayload
+        '*partition-progress $ %{} 'CodeEntry
+          :doc "|Per-connection subscription progress: acknowledged revision and pending send for each partition."
+          :code $ quote $ defatom *partition-progress
+            assert-type ({})
+              :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+          :examples $ []
+          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress)
+        '*partitions $ %{} 'CodeEntry
+          :doc "|Live partitions with at least one subscribed connection; each keeps one view, revision and bounded delta history."
+          :code $ quote $ defatom *partitions
+            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState)
+          :examples $ []
+          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState
         '*reader-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defatom *reader-reel @*reel
           :examples $ []
@@ -2618,6 +3356,16 @@
           :code $ quote $ defatom *sync-scheduled? false
           :examples $ []
           :schema $ :: 'Ref 'Bool
+        'CachedPayload $ %{} 'CodeEntry
+          :doc "|Encoded latest single-delta patch of one partition lineage and revision."
+          :code $ quote $ defstruct CachedPayload (:epoch 'Number) (:revision 'Number) (:payload 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'PartitionMetrics $ %{} 'CodeEntry
+          :doc "|Partition sync counters. diffs counts partition diff computations, independent of subscriber count; sends count per-connection fan-out."
+          :code $ quote $ defstruct PartitionMetrics (:advances 'Number) (:diffs 'Number) (:resets 'Number) (:snapshot-sends 'Number) (:delta-sends 'Number) (:reused-payloads 'Number) (:drops 'Number) (:queries 'Number) (:live-partitions 'Number)
+          :examples $ []
+          :schema $ :: 'StructDef
         'SyncDiffPlan $ %{} 'CodeEntry
           :doc "|Atomic server decision. Snapshot variants carry statistics and an optional budget reason but never partial changes."
           :code $ quote $ defenum SyncDiffPlan
@@ -2631,6 +3379,30 @@
           :code $ quote $ defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
           :examples $ []
           :schema $ :: 'StructDef
+        'ack-partition! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn ack-partition! (sid key epoch revision)
+            update-progress! sid $ fn (progress)
+              match (get progress key)
+                (:some current)
+                  assoc progress key $ ack-partition-progress current epoch revision
+                (:none) progress
+            request-sync!
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'app.schema/PartitionKey 'Number 'Number
+        'ack-partition-progress-for! $ %{} 'CodeEntry
+          :doc "|Apply the acknowledgement a client sends after applying the given partition state's revision; used by ack-partition! and regression tests."
+          :code $ quote $ defn ack-partition-progress-for! (sid state)
+            update-progress! sid $ fn (progress)
+              match
+                get progress $ :key state
+                (:some current)
+                  assoc progress (:key state)
+                    ack-partition-progress current (:epoch state) (:revision state)
+                (:none) progress
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'app.partition/PartitionState
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn acknowledge-client! (sid revision)
             let
@@ -2685,6 +3457,70 @@
                 {} $ 9 $ {} (:last-heartbeat 123)
                 assoc-client-state-field ({}) 9 :last-heartbeat 123
               :tags $ #{} :server
+        'cold-history-limit $ %{} 'CodeEntry
+          :doc "|Per-user bound of the in-process cold history log used by this template."
+          :code $ quote $ def cold-history-limit 2000
+          :examples $ []
+          :schema $ :: 'Number
+        'cold-storage-file $ %{} 'CodeEntry
+          :doc "|File holding cold history and card details, separate from the hot database snapshot."
+          :code $ quote $ def cold-storage-file
+            if (empty? calcit-dirname) |cold-storage.cirru $ str calcit-dirname |/cold-storage.cirru
+          :examples $ []
+          :schema $ :: 'String
+        'collect-partitions! $ %{} 'CodeEntry
+          :doc "|Reclaim partitions no connection subscribes to, bounding live partition count and memory; a later subscriber gets a fresh epoch."
+          :code $ quote $ defn collect-partitions! ()
+            let
+                live $ foldl (.to-list @*partition-progress)
+                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                  fn (acc pair)
+                    hint-fn $ {}
+                      :args $ [] (:: 'Set 'app.schema/PartitionKey) 'Dynamic
+                      :return $ :: 'Set 'app.schema/PartitionKey
+                    let[] (_sid raw-progress) pair $ union acc $ keys
+                      assert-type raw-progress $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+              swap! *partitions $ fn (partitions)
+                hint-fn $ {}
+                  :args $ [] $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState
+                  :return $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState
+                .filter-map-kv partitions $ fn (key state)
+                  hint-fn $ {}
+                    :args $ [] 'app.schema/PartitionKey 'app.partition/PartitionState
+                    :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'app.partition/PartitionState
+                  if (includes? live key) (%:: MapEntryDecision :keep key state) (%:: MapEntryDecision :drop)
+              , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+        'count-partition-event! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn count-partition-event! (kind)
+            swap! *partition-metrics $ fn (m)
+              hint-fn $ {}
+                :args $ [] 'app.server/PartitionMetrics
+                :return 'app.server/PartitionMetrics
+              match kind
+                :advance $ struct-with m $ :advances
+                  inc $ :advances m
+                :diff $ struct-with m $ :diffs
+                  inc $ :diffs m
+                :reset $ struct-with m $ :resets
+                  inc $ :resets m
+                :snapshot $ struct-with m $ :snapshot-sends
+                  inc $ :snapshot-sends m
+                :delta $ struct-with m $ :delta-sends
+                  inc $ :delta-sends m
+                :reuse $ struct-with m $ :reused-payloads
+                  inc $ :reused-payloads m
+                :drop $ struct-with m $ :drops
+                  inc $ :drops m
+                :query $ struct-with m $ :queries
+                  inc $ :queries m
+                _ m
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Tag
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (op sid)
             let
@@ -2700,6 +3536,7 @@
                     reset! *reel $ struct-with @*reel
                       :db $ :base @*reel
                       :records $ []
+                    mark-all-partitions-dirty!
                     request-sync!
                 (:reel/merge)
                   do
@@ -2707,6 +3544,7 @@
                       :base $ :db @*reel
                       :records $ []
                       :merged? true
+                    mark-all-partitions-dirty!
                     request-sync!
                 (:session/connect)
                   dispatch-domain! (%:: schema/DomainOp :session/connect) sid op-id op-time
@@ -2760,10 +3598,23 @@
                         assert= ([]) (:records merge-result)
                         assert= true $ :merged? merge-result
             :tags $ #{} :server
-        'dispatch-domain! $ %{} 'CodeEntry (:doc |)
+        'dispatch-domain! $ %{} 'CodeEntry
+          :doc "|Commit one domain operation to hot state, append its cold effects, then mark only the partitions it can affect before publication."
           :code $ quote $ defn dispatch-domain! (op sid op-id op-time)
-            do
+            let
+                db-before $ reel-db @*reel
               reset! *reel $ reel-reducer @*reel updater op sid op-id op-time config/dev?
+              match op
+                (:kanban kanban-op)
+                  swap! *cold-store $ fn (cold)
+                    hint-fn $ {}
+                      :args $ [] 'app.schema/ColdStore
+                      :return 'app.schema/ColdStore
+                    apply-cold-effects cold
+                      kanban-effects db-before (reel-db @*reel) kanban-op sid op-id op-time
+                      , cold-history-limit
+                _ &unit
+              mark-partitions-dirty! $ affected-partitions db-before op sid
               request-sync!
               , &unit
           :examples $ []
@@ -2775,6 +3626,20 @@
             %{} DiffStats (:visited-nodes 0) (:emitted-ops 0)
           :examples $ []
           :schema $ :: 'recollect.diff/DiffStats
+        'empty-partition-metrics $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def empty-partition-metrics
+            %{} PartitionMetrics (:advances 0) (:diffs 0) (:resets 0) (:snapshot-sends 0) (:delta-sends 0) (:reused-payloads 0) (:drops 0) (:queries 0) (:live-partitions 0)
+          :examples $ []
+          :schema $ :: 'app.server/PartitionMetrics
+        'ensure-partition! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn ensure-partition! (db cold key)
+            when
+              option:none? $ get @*partitions key
+              swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (project-partition db cold key)
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db 'app.schema/ColdStore 'app.schema/PartitionKey
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-backup-path! ()
             join-path calcit-dirname |backups $ str (unix-time-ms) |-snapshot.cirru
@@ -2808,9 +3673,38 @@
                 do (record-resync!) (mark-client-active! sid client-revision true)
               (:sync/ack revision) (acknowledge-client! sid revision)
               (:dispatch op) (dispatch! op sid)
+              (:query request-id query) (handle-query! sid request-id query)
+              (:part/resync key) (resync-partition! sid key)
+              (:part/ack key epoch revision) (ack-partition! sid key epoch revision)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'app.schema/ClientMessage 'Number
+        'handle-partition-send! $ %{} 'CodeEntry
+          :doc "|Only an accepted send records a pending revision; backpressure retries later from the unchanged acknowledged baseline."
+          :code $ quote $ defn handle-partition-send! (sid state outcome)
+            match outcome
+              (:accepted)
+                update-progress! sid $ fn (progress)
+                  assoc progress (:key state)
+                    mark-partition-sent state $ get progress $ :key state
+              (:backpressured)
+                do (swap! *dirty-clients include sid) (request-sync-retry!)
+              (:too-large)
+                do
+                  eprintln "|Partition payload is too large for client:" sid $ :key state
+                  , &unit
+              (:closed) &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'app.partition/PartitionState 'wss.core/WssSendOutcome
+        'handle-query! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn handle-query! (sid request-id query) (count-partition-event! :query)
+            wss-send! sid $ format-cirru-edn $ schema/ServerMessage :query/reply request-id
+              query-reply (reel-db @*reel) @*cold-store sid query
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'String 'app.schema/Query
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-sync-send! (sid revision new-store outcome)
             swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
@@ -2862,6 +3756,13 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
+        'mark-all-partitions-dirty! $ %{} 'CodeEntry
+          :doc "|Used when the whole database may have changed (reel reset/merge, hot reload)."
+          :code $ quote $ defn mark-all-partitions-dirty! ()
+            mark-partitions-dirty! $ keys @*partitions
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
         'mark-client-active! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-active! (sid client-revision force-snapshot?)
             let
@@ -2882,7 +3783,7 @@
                     :needs-snapshot? $ or resumed? $ option:unwrap-or (get state :needs-snapshot?) false
                 next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
               swap! *client-states assoc sid next-state
-              when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (request-sync!)
+              when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (release-partition-sends! sid) (request-sync!)
             , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -2913,6 +3814,22 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number
+        'mark-partitions-dirty! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn mark-partitions-dirty! (partition-keys)
+            swap! *dirty-partitions $ fn (dirty)
+              hint-fn $ {}
+                :args $ [] $ :: 'Set 'app.schema/PartitionKey
+                :return $ :: 'Set 'app.schema/PartitionKey
+              union dirty partition-keys
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] $ :: 'Set 'app.schema/PartitionKey
+        'next-partition-epoch! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn next-partition-epoch! () (swap! *partition-epoch inc) @*partition-epoch
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Number)
+            :args $ []
         'next-sync-ack-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-sync-ack-state (current revision)
             dissoc
@@ -3071,6 +3988,42 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Dynamic)
             :args $ []
+        'partition-history-limit $ %{} 'CodeEntry
+          :doc "|Retained deltas per partition; slower subscribers fall back to one bounded partition snapshot."
+          :code $ quote $ def partition-history-limit 32
+          :examples $ []
+          :schema $ :: 'Number
+        'partition-patch-payload $ %{} 'CodeEntry
+          :doc "|Encode the latest single-delta patch once per partition revision; longer catch-up chains are encoded per send."
+          :code $ quote $ defn partition-patch-payload (state deltas)
+            let
+                key $ :key state
+                encode! $ fn ()
+                  hint-fn $ {}
+                    :args $ []
+                    :return 'String
+                  let
+                      payload $ format-cirru-edn $ schema/ServerMessage :part/patch key (:epoch state) deltas
+                    when
+                      = 1 $ count deltas
+                      swap! *partition-payloads assoc key $ %{} CachedPayload
+                        :epoch $ :epoch state
+                        :revision $ :revision state
+                        :payload payload
+                    , payload
+              match (get @*partition-payloads key)
+                (:some cached)
+                  if
+                    and
+                      = 1 $ count deltas
+                      = (:epoch cached) (:epoch state)
+                      = (:revision cached) (:revision state)
+                    do (count-partition-event! :reuse) (:payload cached)
+                    encode!
+                (:none) (encode!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'String)
+            :args $ [] 'app.partition/PartitionState $ :: 'List 'app.schema/PartitionDelta
         'patch-operation-limit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def patch-operation-limit 64
           :examples $ []
@@ -3083,8 +4036,70 @@
                 storage-path storage-file
                 backup-path $ get-backup-path!
               do (check-write-file! storage-path file-content) (check-write-file! backup-path file-content)
+                check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ []
+        'progress-of $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn progress-of (sid)
+            match (get @*partition-progress sid)
+              (:some progress) progress
+              (:none)
+                assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'Number
+            :return $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+        'query-reply $ %{} 'CodeEntry
+          :doc "|Answer one cold read using the session identity; history is always the caller's own."
+          :code $ quote $ defn query-reply (db cold sid query)
+            match (session-user-id db sid)
+              (:none) (schema/QueryReply :denied |login-required)
+              (:some user-id)
+                match query
+                  (:history cursor limit)
+                    schema/QueryReply :history $ history-page cold user-id cursor limit
+                  (:card-detail board-id card-id) (card-detail-reply db cold board-id card-id)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
+            :args $ [] 'app.schema/Db 'app.schema/ColdStore 'Number 'app.schema/Query
+          :tests $ [] $ %{} 'TestEntry (:name |identity-comes-from-session)
+            :code $ quote $ let
+                db $ app.updater.kanban/apply-kanban app.updater.kanban/fixture-db (schema/KanbanOp :board/create |Plan) 1 |b1 1
+                cold $ apply-cold-effects schema/empty-cold-store
+                  kanban-effects app.updater.kanban/fixture-db db (schema/KanbanOp :board/create |Plan) 1 |b1 1
+                  , 100
+              assert= (schema/QueryReply :denied |login-required)
+                query-reply db cold 2 $ schema/Query :history (Option :none) 10
+              match
+                query-reply db cold 1 $ schema/Query :history (Option :none) 10
+                (:history page)
+                  assert= 1 $ :history-rev page
+                _ $ raise |Expected-history-page
+            :tags $ #{} :kanban :server
+        'read-cold-store $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn read-cold-store (content)
+            try
+              schema/decode-cold-store $ parse-cirru-edn content
+              fn (error)
+                Result :err $ %:: schema/DatabaseDecodeError :invalid |cold $ str "|Malformed cold Cirru EDN: " error
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'String
+            :return $ :: 'Result 'app.schema/ColdStore 'app.schema/DatabaseDecodeError
+          :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-and-roundtrips)
+            :code $ quote $ do
+              assert= true $ match (read-cold-store "|{} (:history")
+                (:err _) true
+                _ false
+              assert= (Result :ok schema/empty-cold-store)
+                read-cold-store $ format-cirru-edn schema/empty-cold-store
+            :tags $ #{} :kanban :server
+        'read-partition-metrics $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn read-partition-metrics ()
+            struct-with @*partition-metrics $ :live-partitions $ count @*partitions
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.server/PartitionMetrics)
             :args $ []
         'read-persisted-database $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-persisted-database (content)
@@ -3256,11 +4271,50 @@
                 assert= ([]) (:records refreshed)
                 assert= false $ :merged? refreshed
               :tags $ #{} :server
+        'refresh-partitions! $ %{} 'CodeEntry
+          :doc "|Advance each dirty live partition with exactly one projection and one bounded diff, before any connection is planned."
+          :code $ quote $ defn refresh-partitions! (db cold)
+            let
+                dirty @*dirty-partitions
+              reset! *dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+              each dirty $ fn (key)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/PartitionKey
+                  :return 'Unit
+                match (get @*partitions key)
+                  (:none) &unit
+                  (:some raw-state)
+                    let
+                        state $ assert-type raw-state app.partition/PartitionState
+                        step $ advance-partition state (project-partition db cold key) sync-diff-budget partition-history-limit patch-operation-limit
+                      swap! *partitions assoc key $ :state step
+                      count-partition-event! :diff
+                      match (:advance step)
+                        (:unchanged) &unit
+                        (:delta _delta _stats) (count-partition-event! :advance)
+                        (:reset _stats) (count-partition-event! :reset)
+              , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db 'app.schema/ColdStore
+        'release-partition-sends! $ %{} 'CodeEntry
+          :doc "|When a connection resumes after idling, forget sends whose ACK may have been lost; clients reject mismatched bases and resync."
+          :code $ quote $ defn release-partition-sends! (sid)
+            update-progress! sid $ fn (progress)
+              .filter-map-kv progress $ fn (key item)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/PartitionKey 'app.partition/PartitionProgress
+                  :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'app.partition/PartitionProgress
+                %:: MapEntryDecision :keep key $ release-partition-send item
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
             if (not config/dev?) (raise "|reloading only happens in dev mode")
             clear-twig-caches!
             invalidate-sync-caches!
+            mark-all-partitions-dirty!
             reset! *reel $ refresh-domain-reel @*reel @*initial-db updater-from-reel
             render-loop!
           :examples $ []
@@ -3287,6 +4341,7 @@
               swap! *sync-revision inc
               mark-clients-dirty! @*sync-revision
             sync-clients! @*reader-reel
+            sync-partitions! $ reel-db @*reader-reel
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -3324,6 +4379,14 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Number)
             :args $ []
+        'resync-partition! $ %{} 'CodeEntry
+          :doc "|Forget progress for one partition so the next flush sends a fresh snapshot."
+          :code $ quote $ defn resync-partition! (sid key)
+            update-progress! sid $ fn (progress) (dissoc progress key)
+            request-sync!
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'app.schema/PartitionKey
         'run-server! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn run-server! (port)
             wss-serve!
@@ -3354,6 +4417,7 @@
                       swap! *client-caches remove-client-cache sid
                       swap! *client-states dissoc sid
                       swap! *dirty-clients remove-dirty-client sid
+                      swap! *partition-progress dissoc sid
                   _ $ println "|unknown data:" data
             , &unit
           :examples $ []
@@ -3418,6 +4482,25 @@
                         , reason
                   _ $ assert |overflow-must-select-snapshot false
               :tags $ #{} :server
+        'send-partition-action! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn send-partition-action! (sid action)
+            match action
+              (:drop key)
+                do
+                  update-progress! sid $ fn (progress) (dissoc progress key)
+                  count-partition-event! :drop
+                  wss-send! sid $ format-cirru-edn $ schema/ServerMessage :part/drop key
+                  , &unit
+              (:snapshot state)
+                do (count-partition-event! :snapshot)
+                  handle-partition-send! sid state $ wss-send! sid $ format-cirru-edn
+                    schema/ServerMessage :part/snapshot (:key state) (:epoch state) (:revision state) (:view state)
+              (:deltas state deltas)
+                do (count-partition-event! :delta)
+                  handle-partition-send! sid state $ wss-send! sid $ partition-patch-payload state deltas
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number 'app.partition/PartitionAction
         'site-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-port ()
             assert-type (&map:get config/site :port) Number
@@ -3539,6 +4622,183 @@
           :code $ quote $ def sync-diff-visited-limit 50000
           :examples $ []
           :schema $ :: 'Number
+        'sync-partitions! $ %{} 'CodeEntry
+          :doc "|Partition synchronization over the WebSocket transport."
+          :code $ quote $ defn sync-partitions! (db) (sync-partitions-with! db send-partition-action!)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db
+        'sync-partitions-with! $ %{} 'CodeEntry
+          :doc "|Advance dirty partitions once, then plan each active connection from its authorized partition set through an injectable transport; diff count is independent of subscriber count."
+          :code $ quote $ defn sync-partitions-with! (db send!)
+            let
+                cold @*cold-store
+              refresh-partitions! db cold
+              each (keys @*client-states)
+                fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'Unit
+                  let
+                      state $ option:unwrap $ get @*client-states sid
+                    when
+                      = :active $ option:unwrap-or (get state :status) :idle
+                      match
+                        get (:sessions db) sid
+                        (:none) &unit
+                        (:some raw-session)
+                          let
+                              desired $ session-partitions db $ assert-type raw-session app.schema/Session
+                            each desired $ fn (key)
+                              hint-fn $ {}
+                                :args $ [] 'app.schema/PartitionKey
+                                :return 'Unit
+                              ensure-partition! db cold key
+                            each
+                              connection-actions @*partitions (progress-of sid) desired
+                              fn (action)
+                                hint-fn $ {}
+                                  :args $ [] 'app.partition/PartitionAction
+                                  :return 'Unit
+                                send! sid action
+                    , &unit
+              collect-partitions!
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'app.schema/Db $ :: 'Fn
+              {} (:return 'Unit)
+                :args $ [] 'Number 'app.partition/PartitionAction
+          :tests $ [] $ %{} 'TestEntry (:name |one-diff-for-many-subscribers)
+            :code $ quote $ let
+                saved-partitions @*partitions
+                saved-progress @*partition-progress
+                saved-dirty @*dirty-partitions
+                saved-metrics @*partition-metrics
+                saved-clients @*client-states
+                saved-cold @*cold-store
+                saved-payloads @*partition-payloads
+                sids $ [] 1 2 3 4 5
+                user $ fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'app.schema/User
+                  %{} schema/User
+                    :id $ str |u sid
+                    :name $ str |user sid
+                    :nickname $ Option :none
+                    :avatar $ Option :none
+                    :password |hash
+                session $ fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'app.schema/Session
+                  %{} schema/Session (:id sid)
+                    :user-id $ Option :some $ str |u sid
+                    :nickname $ Option :none
+                    :router $ %{} schema/Router (:name :board)
+                      :target $ Option :some |b1
+                    :messages $ {}
+                base $ %{} schema/Db
+                  :sessions $ assert-type
+                    pairs-map $ map sids $ fn (sid)
+                      [] sid $ session sid
+                    :: 'Map 'Number 'app.schema/Session
+                  :users $ assert-type
+                    pairs-map $ map sids $ fn (sid)
+                      [] (str |u sid) (user sid)
+                    :: 'Map 'String 'app.schema/User
+                  :boards $ {}
+                  :settings $ {}
+                db1 $ app.updater.kanban/apply-kanban base (schema/KanbanOp :board/create |Plan) 1 |b1 1
+                add-op $ schema/DomainOp :kanban $ schema/KanbanOp :card/add |b1 |b1-todo |Ship
+                db2 $ app.updater.kanban/apply-kanban db1 (schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
+                *sent $ atom $ assert-type ([]) (:: 'List 'app.partition/PartitionAction)
+                record! $ fn (sid action)
+                  hint-fn $ {}
+                    :args $ [] 'Number 'app.partition/PartitionAction
+                    :return 'Unit
+                  swap! *sent conj action
+                  match action
+                    (:drop _key) &unit
+                    (:snapshot state)
+                      do
+                        handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
+                        ack-partition-progress-for! sid state
+                    (:deltas state deltas)
+                      do (partition-patch-payload state deltas)
+                        handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
+                        ack-partition-progress-for! sid state
+                sends-of $ fn (tag)
+                  hint-fn $ {}
+                    :args $ [] 'Tag
+                    :return 'Number
+                  count $ filter @*sent $ fn (action)
+                    hint-fn $ {}
+                      :args $ [] 'app.partition/PartitionAction
+                      :return 'Bool
+                    = tag $ match action
+                      (:snapshot _state) :snapshot
+                      (:deltas _state _deltas) :deltas
+                      (:drop _key) :drop
+                board-deltas $ fn ()
+                  hint-fn $ {}
+                    :args $ []
+                    :return $ :: 'List $ :: 'List 'app.schema/PartitionDelta
+                  foldl @*sent
+                    assert-type ([])
+                      :: 'List $ :: 'List 'app.schema/PartitionDelta
+                    fn (acc action)
+                      hint-fn $ {}
+                        :args $ []
+                          :: 'List $ :: 'List 'app.schema/PartitionDelta
+                          , 'app.partition/PartitionAction
+                        :return $ :: 'List $ :: 'List 'app.schema/PartitionDelta
+                      match action
+                        (:deltas state deltas)
+                          if
+                            = (:key state) (schema/PartitionKey :board |b1)
+                            conj acc deltas
+                            , acc
+                        _ acc
+              reset! *partitions $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.partition/PartitionState)
+              reset! *partition-progress $ assert-type ({})
+                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+              reset! *dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+              reset! *partition-metrics empty-partition-metrics
+              reset! *partition-payloads $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.server/CachedPayload)
+              reset! *cold-store schema/empty-cold-store
+              reset! *client-states $ assert-type
+                pairs-map $ map sids $ fn (sid)
+                  [] sid $ {} $ :status :active
+                :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+              sync-partitions-with! db1 record!
+              let
+                  initial-snapshots $ sends-of :snapshot
+                  initial-partitions $ count @*partitions
+                reset! *sent $ assert-type ([]) (:: 'List 'app.partition/PartitionAction)
+                mark-partitions-dirty! $ affected-partitions db1 add-op 1
+                sync-partitions-with! db2 record!
+                let
+                    metrics $ read-partition-metrics
+                    deltas $ board-deltas
+                    snapshots $ sends-of :snapshot
+                    delta-sends $ sends-of :deltas
+                  reset! *partitions saved-partitions
+                  reset! *partition-progress saved-progress
+                  reset! *dirty-partitions saved-dirty
+                  reset! *partition-metrics saved-metrics
+                  reset! *client-states saved-clients
+                  reset! *cold-store saved-cold
+                  reset! *partition-payloads saved-payloads
+                  assert= 15 initial-snapshots
+                  assert= 7 initial-partitions
+                  assert= 3 $ :diffs metrics
+                  assert= 0 snapshots
+                  assert= 10 delta-sends
+                  assert= 5 $ count deltas
+                  assert= 1 $ count $ distinct deltas
+                  assert= 8 $ :reused-payloads metrics
+            :tags $ #{} :partition :server
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200
@@ -3555,6 +4815,16 @@
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number 'Number
+        'update-progress! $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn update-progress! (sid f)
+            swap! *partition-progress assoc sid $ f $ progress-of sid
+            , &unit
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'Unit)
+            :args $ [] 'Number $ :: 'Fn
+              {}
+                :args $ [] $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
+                :return $ :: 'Map 'app.schema/PartitionKey 'app.partition/PartitionProgress
         'updater-from-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn updater-from-reel (db op sid op-id op-time)
             let
@@ -3678,6 +4948,9 @@
             calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
+            app.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
+            app.twig.partition :refer $ project-partition session-partitions affected-partitions
+            app.updater.kanban :refer $ kanban-effects apply-cold-effects history-page card-detail-reply session-user-id
     'app.twig.container $ %{} 'FileEntry
       :defs $ {}
         'twig-container $ %{} 'CodeEntry (:doc |)
@@ -3862,6 +5135,208 @@
             app.twig.user :refer $ twig-user
             recollect.memo :refer $ memo-twig-by1
             app.schema :refer $ AttachedView MessageView RouterView SessionView SharedTwig Store
+    'app.twig.partition $ %{} 'FileEntry
+      :defs $ {}
+        'affected-partitions $ %{} 'CodeEntry
+          :doc "|Partitions whose projection may change after one operation, computed from the database before the operation (so log-out still dirties the old user). Only live partitions are re-projected; route changes only alter subscriptions."
+          :code $ quote $ defn affected-partitions (db op sid)
+            let
+                user-keys $ match (app.updater.kanban/session-user-id db sid)
+                  (:some user-id)
+                    #{} $ PartitionKey :user user-id
+                  (:none)
+                    assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+              match op
+                (:kanban kanban-op)
+                  let
+                      board-key $ fn (board-id)
+                        hint-fn $ {}
+                          :args $ [] 'String
+                          :return $ :: 'Set 'app.schema/PartitionKey
+                        include
+                          include user-keys $ PartitionKey :lobby
+                          PartitionKey :board board-id
+                    match kanban-op
+                      (:board/create _title)
+                        include user-keys $ PartitionKey :lobby
+                      (:board/rename board-id _title) (board-key board-id)
+                      (:column/add board-id _title) (board-key board-id)
+                      (:card/add board-id _column-id _title) (board-key board-id)
+                      (:card/rename board-id _card-id _title) (board-key board-id)
+                      (:card/move board-id _card-id _column-id) (board-key board-id)
+                      (:card/shift board-id _card-id _step) (board-key board-id)
+                      (:card/remove board-id _card-id) (board-key board-id)
+                      (:card/edit-detail board-id _card-id _description) (board-key board-id)
+                      (:settings/toggle-compact) user-keys
+                      (:settings/set-accent _accent) user-keys
+                (:router/change _router)
+                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                (:session/remove-message _message)
+                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                _ $ include user-keys $ PartitionKey :lobby
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number
+            :return $ :: 'Set 'app.schema/PartitionKey
+        'project-lobby $ %{} 'CodeEntry
+          :doc "|Bounded public lobby: board briefs and online user names. Passwords and per-session data never enter it."
+          :code $ quote $ defn project-lobby (db)
+            %{} LobbyView
+              :boards $ .filter-map-kv (:boards db)
+                fn (id board)
+                  hint-fn $ {}
+                    :args $ [] 'String 'app.schema/Board
+                    :return $ :: 'MapEntryDecision 'String 'app.schema/BoardBrief
+                  %:: MapEntryDecision :keep id $ %{} BoardBrief (:id id)
+                    :title $ :title board
+                    :card-count $ count $ :cards board
+              :online $ foldl
+                .to-list $ :sessions db
+                {}
+                fn (acc pair)
+                  hint-fn $ {}
+                    :args $ [] (:: 'Map 'String 'String) 'Dynamic
+                    :return $ :: 'Map 'String 'String
+                  let[] (_sid raw-session) pair $ let
+                      session $ assert-type raw-session app.schema/Session
+                    match (:user-id session)
+                      (:none) acc
+                      (:some user-id)
+                        match
+                          get (:users db) user-id
+                          (:some raw-user)
+                            assoc acc user-id $ :name $ assert-type raw-user app.schema/User
+                          (:none) acc
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/LobbyView)
+            :args $ [] 'app.schema/Db
+        'project-partition $ %{} 'CodeEntry
+          :doc "|Project one partition from hot state. The user partition only carries history-rev from cold storage, never the events themselves."
+          :code $ quote $ defn project-partition (db cold key)
+            match key
+              (:lobby)
+                PartitionView :lobby $ project-lobby db
+              (:board board-id)
+                match (board-of db board-id)
+                  (:some board) (PartitionView :board board)
+                  (:none) (PartitionView :missing)
+              (:user user-id)
+                match
+                  get (:users db) user-id
+                  (:none) (PartitionView :missing)
+                  (:some raw-user)
+                    let
+                        user $ assert-type raw-user app.schema/User
+                      PartitionView :user $ %{} UserHotView (:id user-id)
+                        :name $ :name user
+                        :settings $ match
+                          get (:settings db) user-id
+                          (:some raw) (assert-type raw app.schema/UserSettings)
+                          (:none) app.schema/default-settings
+                        :history-rev $ match
+                          get (:history cold) user-id
+                          (:some events) (count events)
+                          (:none) 0
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
+            :args $ [] 'app.schema/Db 'app.schema/ColdStore 'app.schema/PartitionKey
+        'session-partitions $ %{} 'CodeEntry
+          :doc "|Server-side authorization: only signed-in sessions subscribe, only to their own user partition, and to the board they currently route to. Logging out drops every partition."
+          :code $ quote $ defn session-partitions (db session)
+            match (:user-id session)
+              (:none) (#{})
+              (:some user-id)
+                let
+                    router $ :router session
+                    base $ #{} (PartitionKey :lobby) (PartitionKey :user user-id)
+                  if
+                    = :board $ :name router
+                    match (:target router)
+                      (:some board-id)
+                        if
+                          option:some? $ board-of db board-id
+                          include base $ PartitionKey :board board-id
+                          , base
+                      (:none) base
+                    , base
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] 'app.schema/Db 'app.schema/Session
+            :return $ :: 'Set 'app.schema/PartitionKey
+          :tests $ [] $ %{} 'TestEntry (:name |authorization-follows-session)
+            :code $ quote $ let
+                db0 $ struct-with app.updater.kanban/fixture-db $ :users
+                  {} $ |u1 $ %{} app.schema/User (:id |u1) (:name |Ann)
+                    :nickname $ Option :none
+                    :avatar $ Option :none
+                    :password |hash
+                db $ app.updater.kanban/apply-kanban db0 (app.schema/KanbanOp :board/create |Plan) 1 |b1 1
+                session $ fn (sid)
+                  hint-fn $ {}
+                    :args $ [] 'Number
+                    :return 'app.schema/Session
+                  assert-type
+                    option:unwrap $ get (:sessions db) sid
+                    , app.schema/Session
+                on-board $ fn (target)
+                  hint-fn $ {}
+                    :args $ [] 'String
+                    :return 'app.schema/Session
+                  struct-with (session 1)
+                    :router $ %{} app.schema/Router (:name :board)
+                      :target $ Option :some target
+              assert= (#{})
+                session-partitions db $ session 2
+              assert=
+                #{} (PartitionKey :lobby) (PartitionKey :user |u1)
+                session-partitions db $ session 1
+              assert=
+                #{} (PartitionKey :lobby) (PartitionKey :user |u1) (PartitionKey :board |b1)
+                session-partitions db $ on-board |b1
+              assert=
+                #{} (PartitionKey :lobby) (PartitionKey :user |u1)
+                session-partitions db $ on-board |nope
+              match
+                project-partition db app.schema/empty-cold-store $ PartitionKey :lobby
+                (:lobby lobby)
+                  do
+                    assert=
+                      {} $ |u1 |Ann
+                      :online lobby
+                    assert= 0 $ :card-count $ option:unwrap
+                      get (:boards lobby) |b1
+                _ $ raise |Expected-lobby
+              assert= (PartitionView :missing)
+                project-partition db app.schema/empty-cold-store $ PartitionKey :board |nope
+              match
+                project-partition db app.schema/empty-cold-store $ PartitionKey :user |u1
+                (:user view)
+                  do
+                    assert= app.schema/default-settings $ :settings view
+                    assert= 0 $ :history-rev view
+                _ $ raise |Expected-user-view
+              assert=
+                #{} (PartitionKey :lobby) (PartitionKey :user |u1) (PartitionKey :board |b1)
+                affected-partitions db
+                  app.schema/DomainOp :kanban $ app.schema/KanbanOp :card/move |b1 |c1 |k1
+                  , 1
+              assert=
+                #{} $ PartitionKey :user |u1
+                affected-partitions db
+                  app.schema/DomainOp :kanban $ app.schema/KanbanOp :settings/toggle-compact
+                  , 1
+              assert= (#{})
+                affected-partitions db
+                  app.schema/DomainOp :router/change $ %{} app.schema/Router (:name :home)
+                    :target $ Option :none
+                  , 1
+            :tags $ #{} :partition :server
+      :ns $ %{} 'NsEntry
+        :doc "|Pure partition projections, server-side subscription authorization, and per-operation dirty partition derivation."
+        :code $ quote $ ns app.twig.partition
+          :require
+            app.schema :refer $ PartitionKey PartitionView LobbyView BoardBrief UserHotView
+            app.updater.kanban :refer $ board-of board-cards
     'app.twig.user $ %{} 'FileEntry
       :defs $ {} $ 'twig-user
         %{} 'CodeEntry (:doc |)
