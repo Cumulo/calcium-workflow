@@ -818,10 +818,393 @@
           :schema $ :: 'Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
+    'app.partition $ %{} 'FileEntry
+      :defs $ {}
+        'PartitionAdvance $ %{} 'CodeEntry
+          :doc "|Outcome of projecting a new partition view: no change, one retained delta, or a reset that forces snapshots."
+          :code $ quote $ defenum PartitionAdvance (:unchanged) (:delta 'app.schema/PartitionDelta 'recollect.diff/DiffStats) (:reset 'recollect.diff/DiffStats)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'PartitionProgress $ %{} 'CodeEntry
+          :doc "|Per-connection progress for one subscribed partition: acknowledged revision plus at most one unacknowledged send."
+          :code $ quote $ defstruct PartitionProgress (:epoch 'Number) (:acked 'Number)
+            :in-flight $ :: 'Option 'Number
+          :examples $ []
+          :schema $ :: 'StructDef
+        'PartitionSendPlan $ %{} 'CodeEntry
+          :doc "|What one subscriber needs next: nothing, a full snapshot, or the retained contiguous delta chain from its acknowledged revision."
+          :code $ quote $ defenum PartitionSendPlan (:idle) (:snapshot)
+            :deltas $ :: 'List 'app.schema/PartitionDelta
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'PartitionState $ %{} 'CodeEntry
+          :doc "|Server-owned hot state of one partition. epoch changes whenever revisions restart, so old acknowledgements never match a new lineage."
+          :code $ quote $ defstruct PartitionState
+            :key $ quote app.schema/PartitionKey
+            :epoch 'Number
+            :revision 'Number
+            :view $ quote app.schema/PartitionView
+            :history $ :: 'List 'app.schema/PartitionDelta
+          :examples $ []
+          :schema $ :: 'StructDef
+        'PartitionStep $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defstruct PartitionStep
+            :state $ quote app.partition/PartitionState
+            :advance $ quote app.partition/PartitionAdvance
+          :examples $ []
+          :schema $ :: 'StructDef
+        'ack-partition-progress $ %{} 'CodeEntry
+          :doc "|Advance the baseline only for the matching epoch and pending revision; stale, duplicate, and reordered ACKs are ignored."
+          :code $ quote $ defn ack-partition-progress (progress epoch revision)
+            match (:in-flight progress)
+              (:some pending)
+                if
+                  and
+                    = epoch $ :epoch progress
+                    = revision pending
+                  struct-with progress (:acked revision)
+                    :in-flight $ Option :none
+                  , progress
+              (:none) progress
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionProgress)
+            :args $ [] 'app.partition/PartitionProgress 'Number 'Number
+          :tests $ [] $ %{} 'TestEntry (:name |single-pending-send-and-stale-acks)
+            :code $ quote $ let
+                s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
+                sent $ mark-partition-sent s1 $ Option :none
+                s2 $ :state $ advance-partition s1
+                  test-lobby $ [] |b
+                  , test-budget 8 64
+                wrong-epoch $ ack-partition-progress sent 6 1
+                wrong-revision $ ack-partition-progress sent 7 2
+                acked $ ack-partition-progress sent 7 1
+              assert= (Option :some 1) (:in-flight sent)
+              assert= (PartitionSendPlan :idle)
+                plan-partition-send s2 $ Option :some sent
+              assert= sent wrong-epoch
+              assert= sent wrong-revision
+              assert= 1 $ :acked acked
+              assert= (Option :none) (:in-flight acked)
+              assert= acked $ ack-partition-progress acked 7 1
+              assert=
+                PartitionSendPlan :deltas $ :history s2
+                plan-partition-send s2 $ Option :some acked
+              assert= 0 $ :acked $ release-partition-send sent
+              assert= (Option :none)
+                :in-flight $ release-partition-send sent
+            :tags $ #{} :partition :server
+        'advance-partition $ %{} 'CodeEntry
+          :doc "|Diff the retained view against a new projection exactly once. Budget or operation overflow resets history instead of emitting a partial patch."
+          :code $ quote $ defn advance-partition (state view budget history-limit operation-limit)
+            match
+              diff-twig-budgeted (:view state) view
+                {} $ :key :id
+                , budget
+              (:budget-exceeded _reason stats) (reset-step state view stats)
+              (:complete changes stats)
+                cond
+                    empty? changes
+                    %{} PartitionStep (:state state)
+                      :advance $ PartitionAdvance :unchanged
+                  (> (count changes) operation-limit)
+                    reset-step state view stats
+                  true $ let
+                      next-revision $ inc $ :revision state
+                      delta $ %{} PartitionDelta
+                        :base $ :revision state
+                        :revision next-revision
+                        :changes changes
+                    %{} PartitionStep
+                      :state $ struct-with state (:revision next-revision) (:view view)
+                        :history $ trim-history
+                          conj (:history state) delta
+                          , history-limit
+                      :advance $ PartitionAdvance :delta delta stats
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionStep)
+            :args $ [] 'app.partition/PartitionState 'app.schema/PartitionView 'recollect.diff/DiffBudget 'Number 'Number
+          :tests $ []
+            %{} 'TestEntry (:name |unchanged-view-keeps-revision)
+              :code $ quote $ let
+                  state $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a |b)
+                  step $ advance-partition state
+                    test-lobby $ [] |a |b
+                    , test-budget 8 64
+                assert= (PartitionAdvance :unchanged) (:advance step)
+                assert= 1 $ :revision $ :state step
+                assert= ([])
+                  :history $ :state step
+              :tags $ #{} :partition :server
+            %{} 'TestEntry (:name |one-delta-serves-every-subscriber)
+              :code $ quote $ let
+                  state $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a |b)
+                  step $ advance-partition state
+                    test-lobby $ [] |a |c
+                    , test-budget 8 64
+                  next-state $ :state step
+                  progress $ %{} PartitionProgress (:epoch 7) (:acked 1)
+                    :in-flight $ Option :none
+                  plans $ map (range 5)
+                    fn (_idx)
+                      hint-fn $ {}
+                        :args $ [] 'Number
+                        :return 'app.partition/PartitionSendPlan
+                      plan-partition-send next-state $ Option :some progress
+                match (:advance step)
+                  (:delta delta _stats)
+                    do
+                      assert= 1 $ :base delta
+                      assert= 2 $ :revision delta
+                      assert= 1 $ count $ :history next-state
+                      assert= 1 $ count $ distinct plans
+                      assert=
+                        Option :some $ PartitionSendPlan :deltas $ [] delta
+                        first plans
+                  _ $ raise |Expected-one-delta
+              :tags $ #{} :partition :server
+            %{} 'TestEntry (:name |operation-overflow-resets-history)
+              :code $ quote $ let
+                  s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
+                  s2 $ :state $ advance-partition s1
+                    test-lobby $ [] |b
+                    , test-budget 8 64
+                  step $ advance-partition s2
+                    test-lobby $ [] |x |y |z
+                    , test-budget 8 0
+                  s3 $ :state step
+                match (:advance step)
+                  (:reset _stats)
+                    do
+                      assert= 3 $ :revision s3
+                      assert= ([]) (:history s3)
+                      assert= (PartitionSendPlan :snapshot)
+                        plan-partition-send s3 $ Option :some $ %{} PartitionProgress (:epoch 7) (:acked 2)
+                          :in-flight $ Option :none
+                  _ $ raise |Expected-reset
+              :tags $ #{} :partition :server
+        'delta-chain $ %{} 'CodeEntry
+          :doc "|Return the complete retained chain from an acknowledged revision to the current revision, or none when any link was trimmed or reset."
+          :code $ quote $ defn delta-chain (history from to)
+            match
+              find-index history $ fn (delta)
+                hint-fn $ {}
+                  :args $ [] 'app.schema/PartitionDelta
+                  :return 'Bool
+                = from $ :base delta
+              (:none) (Option :none)
+              (:some index)
+                let
+                    chain $ &list:slice history index
+                  match (last chain)
+                    (:some tail)
+                      if
+                        = to $ :revision tail
+                        Option :some chain
+                        Option :none
+                    (:none) (Option :none)
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'List 'app.schema/PartitionDelta) 'Number 'Number
+            :return $ :: 'Option $ :: 'List 'app.schema/PartitionDelta
+          :tests $ [] $ %{} 'TestEntry (:name |replayed-chain-converges)
+            :code $ quote $ let
+                v1 $ test-lobby $ [] |a |b
+                s1 $ new-partition (PartitionKey :lobby) 7 v1
+                s2 $ :state $ advance-partition s1
+                  test-lobby $ [] |a |c
+                  , test-budget 8 64
+                s3 $ :state $ advance-partition s2
+                  test-lobby $ [] |d |c |e
+                  , test-budget 8 64
+              match
+                delta-chain (:history s3) 1 3
+                (:some chain)
+                  let
+                      replayed $ foldl chain v1 $ fn (acc delta)
+                        hint-fn $ {}
+                          :args $ [] 'Dynamic 'app.schema/PartitionDelta
+                          :return 'Dynamic
+                        match
+                          .apply-to
+                            recollect.patch/patch-batch $ :changes delta
+                            , acc
+                          (:ok next) next
+                          (:err error)
+                            raise $ str |Patch-failed: error
+                    assert= (:view s3) replayed
+                    assert= (Option :none)
+                      delta-chain (:history s3) 5 3
+                (:none) (raise |Expected-complete-chain)
+            :tags $ #{} :partition :server
+        'mark-partition-sent $ %{} 'CodeEntry
+          :doc "|Record one accepted send of the current revision. The acknowledged baseline only moves when the matching ACK arrives."
+          :code $ quote $ defn mark-partition-sent (state progress-option)
+            let
+                acked $ match progress-option
+                  (:some progress)
+                    if
+                      = (:epoch progress) (:epoch state)
+                      :acked progress
+                      , 0
+                  (:none) 0
+              %{} PartitionProgress
+                :epoch $ :epoch state
+                :acked acked
+                :in-flight $ Option :some $ :revision state
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionProgress)
+            :args $ [] 'app.partition/PartitionState $ :: 'Option 'app.partition/PartitionProgress
+        'new-partition $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn new-partition (key epoch view)
+            %{} PartitionState (:key key) (:epoch epoch) (:revision 1) (:view view)
+              :history $ []
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionState)
+            :args $ [] 'app.schema/PartitionKey 'Number 'app.schema/PartitionView
+        'plan-partition-send $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn plan-partition-send (state progress-option)
+            match progress-option
+              (:none) (PartitionSendPlan :snapshot)
+              (:some progress)
+                cond
+                    option:some? $ :in-flight progress
+                    PartitionSendPlan :idle
+                  (not= (:epoch progress) (:epoch state))
+                    PartitionSendPlan :snapshot
+                  (= (:acked progress) (:revision state))
+                    PartitionSendPlan :idle
+                  true $ match
+                    delta-chain (:history state) (:acked progress) (:revision state)
+                    (:some deltas) (PartitionSendPlan :deltas deltas)
+                    (:none) (PartitionSendPlan :snapshot)
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionSendPlan)
+            :args $ [] 'app.partition/PartitionState $ :: 'Option 'app.partition/PartitionProgress
+          :tests $ []
+            %{} 'TestEntry (:name |trimmed-history-falls-back-to-snapshot)
+              :code $ quote $ let
+                  s1 $ new-partition (PartitionKey :lobby) 7 $ test-lobby ([] |a)
+                  s2 $ :state $ advance-partition s1
+                    test-lobby $ [] |b
+                    , test-budget 2 64
+                  s3 $ :state $ advance-partition s2
+                    test-lobby $ [] |c
+                    , test-budget 2 64
+                  s4 $ :state $ advance-partition s3
+                    test-lobby $ [] |d
+                    , test-budget 2 64
+                  at $ fn (acked)
+                    hint-fn $ {}
+                      :args $ [] 'Number
+                      :return 'app.partition/PartitionSendPlan
+                    plan-partition-send s4 $ Option :some $ %{} PartitionProgress (:epoch 7) (:acked acked)
+                      :in-flight $ Option :none
+                assert= 4 $ :revision s4
+                assert= 2 $ count $ :history s4
+                assert= (PartitionSendPlan :snapshot) (at 1)
+                assert=
+                  PartitionSendPlan :deltas $ :history s4
+                  at 2
+                assert= (PartitionSendPlan :idle) (at 4)
+                assert= (PartitionSendPlan :snapshot) (at 9)
+                assert= (PartitionSendPlan :snapshot)
+                  plan-partition-send s4 $ Option :none
+              :tags $ #{} :partition :server
+            %{} 'TestEntry (:name |epoch-change-forces-snapshot)
+              :code $ quote $ let
+                  state $ new-partition (PartitionKey :lobby) 8 $ test-lobby ([] |a)
+                  stale $ %{} PartitionProgress (:epoch 7) (:acked 1)
+                    :in-flight $ Option :none
+                assert= (PartitionSendPlan :snapshot)
+                  plan-partition-send state $ Option :some stale
+                assert= 0 $ :acked $ mark-partition-sent state (Option :some stale)
+              :tags $ #{} :partition :server
+        'release-partition-send $ %{} 'CodeEntry
+          :doc "|Forget a send that the transport did not accept, keeping the acknowledged baseline for the next attempt."
+          :code $ quote $ defn release-partition-send (progress)
+            struct-with progress $ :in-flight $ Option :none
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionProgress)
+            :args $ [] 'app.partition/PartitionProgress
+        'reset-step $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defn reset-step (state view stats)
+            %{} PartitionStep
+              :state $ struct-with state
+                :revision $ inc $ :revision state
+                :view view
+                :history $ []
+              :advance $ PartitionAdvance :reset stats
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.partition/PartitionStep)
+            :args $ [] 'app.partition/PartitionState 'app.schema/PartitionView 'recollect.diff/DiffStats
+        'test-budget $ %{} 'CodeEntry
+          :doc "|Generous deterministic budget used by partition engine tests."
+          :code $ quote $ def test-budget
+            %{} DiffBudget
+              :max-visited $ Option :some 10000
+              :max-emitted $ Option :some 10000
+          :examples $ []
+          :schema $ :: 'recollect.diff/DiffBudget
+        'test-lobby $ %{} 'CodeEntry
+          :doc "|Deterministic lobby projection used by partition engine tests."
+          :code $ quote $ defn test-lobby (titles)
+            PartitionView :lobby $ %{} app.schema/LobbyView
+              :boards $ assert-type
+                -> titles
+                  map-indexed $ fn (idx title)
+                    let
+                        id $ str |b idx
+                      [] id $ %{} app.schema/BoardBrief (:id id) (:title title) (:card-count idx)
+                  pairs-map
+                :: 'Map 'String 'app.schema/BoardBrief
+              :online $ {}
+          :examples $ []
+          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
+            :args $ [] $ :: 'List 'String
+        'trim-history $ %{} 'CodeEntry
+          :doc "|Keep only the newest deltas; subscribers older than the retained chain receive a snapshot."
+          :code $ quote $ defn trim-history (history limit)
+            let
+                size $ count history
+              if (> size limit)
+                slice history (- size limit) size
+                , history
+          :examples $ []
+          :schema $ :: 'Fn $ {}
+            :args $ [] (:: 'List 'app.schema/PartitionDelta) 'Number
+            :return $ :: 'List 'app.schema/PartitionDelta
+      :ns $ %{} 'NsEntry
+        :doc "|Pure partition synchronization engine: one diff per partition revision, bounded delta history, and per-subscriber send planning."
+        :code $ quote $ ns app.partition
+          :require
+            app.schema :refer $ PartitionKey PartitionView PartitionDelta
+            recollect.diff :refer $ diff-twig-budgeted DiffBudget DiffStats
     'app.schema $ %{} 'FileEntry
       :defs $ {}
         'AttachedView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct AttachedView (:type 'Tag) (:content 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'Board $ %{} 'CodeEntry
+          :doc "|Hot board state shared by every authorized subscriber of the board partition."
+          :code $ quote $ defstruct Board (:id 'String) (:title 'String) (:created-at 'Number)
+            :columns $ :: 'Map 'String 'app.schema/Column
+            :cards $ :: 'Map 'String 'app.schema/Card
+          :examples $ []
+          :schema $ :: 'StructDef
+        'BoardBrief $ %{} 'CodeEntry (:doc "|Bounded lobby summary of one board.")
+          :code $ quote $ defstruct BoardBrief (:id 'String) (:title 'String) (:card-count 'Number)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'Card $ %{} 'CodeEntry
+          :doc "|Hot card summary. The description lives in cold storage; detail-rev tells clients when a cached detail is stale."
+          :code $ quote $ defstruct Card (:id 'String) (:column-id 'String) (:rank 'String) (:title 'String) (:detail-rev 'Number) (:updated-at 'Number) (:updated-by 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'CardDetail $ %{} 'CodeEntry
+          :doc "|Cold card content. rev matches Card :detail-rev after the same committed operation."
+          :code $ quote $ defstruct CardDetail (:card-id 'String) (:board-id 'String) (:rev 'Number) (:description 'String) (:updated-at 'Number)
           :examples $ []
           :schema $ :: 'StructDef
         'ClientMessage $ %{} 'CodeEntry
@@ -829,6 +1212,11 @@
           :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op)
           :examples $ []
           :schema $ :: 'EnumDef
+        'Column $ %{} 'CodeEntry
+          :doc "|One Kanban column. Order is a fractional rank string so moving a column changes one leaf."
+          :code $ quote $ defstruct Column (:id 'String) (:title 'String) (:rank 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
         'DatabaseDecodeError $ %{} 'CodeEntry
           :doc "|A path-aware failure produced while decoding untrusted or legacy persisted database data."
           :code $ quote $ defenum DatabaseDecodeError (:invalid 'String 'String)
@@ -846,6 +1234,26 @@
           :code $ quote $ defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router)
           :examples $ []
           :schema $ :: 'EnumDef
+        'HistoryEvent $ %{} 'CodeEntry
+          :doc "|Cold, append-only personal operation history entry."
+          :code $ quote $ defstruct HistoryEvent (:id 'String) (:time 'Number) (:user-id 'String) (:kind 'Tag) (:board-id 'String) (:summary 'String)
+          :examples $ []
+          :schema $ :: 'StructDef
+        'HistoryPage $ %{} 'CodeEntry
+          :doc "|Newest-first page of personal history. next-cursor is an exclusive index into the append-only log, stable under appends."
+          :code $ quote $ defstruct HistoryPage
+            :items $ :: 'List 'app.schema/HistoryEvent
+            :next-cursor $ :: 'Option 'Number
+            :history-rev 'Number
+          :examples $ []
+          :schema $ :: 'StructDef
+        'LobbyView $ %{} 'CodeEntry
+          :doc "|Public hot partition: board briefs and online user names keyed by user id."
+          :code $ quote $ defstruct LobbyView
+            :boards $ :: 'Map 'String 'app.schema/BoardBrief
+            :online $ :: 'Map 'String 'String
+          :examples $ []
+          :schema $ :: 'StructDef
         'Message $ %{} 'CodeEntry (:doc "|A persisted session message.")
           :code $ quote $ defstruct Message (:id 'String) (:text 'String)
           :examples $ []
@@ -862,6 +1270,34 @@
         'Op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge)
             :states (:: 'List 'Dynamic) 'Dynamic
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'PartitionDelta $ %{} 'CodeEntry
+          :doc "|One retained diff step of a partition, computed once and reused for every subscriber at its base revision."
+          :code $ quote $ defstruct PartitionDelta (:base 'Number) (:revision 'Number)
+            :changes $ :: 'List 'recollect.schema/change-op
+          :examples $ []
+          :schema $ :: 'StructDef
+        'PartitionKey $ %{} 'CodeEntry
+          :doc "|Identity of one synchronization partition. A partition is a visibility boundary: everything inside is visible to all its subscribers."
+          :code $ quote $ defenum PartitionKey (:lobby) (:board 'String) (:user 'String)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'PartitionView $ %{} 'CodeEntry
+          :doc "|Typed projection of one partition; :missing marks a deleted or unknown target."
+          :code $ quote $ defenum PartitionView (:lobby 'app.schema/LobbyView) (:board 'app.schema/Board) (:user 'app.schema/UserHotView) (:missing)
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'Query $ %{} 'CodeEntry
+          :doc "|Cold read requests. Identity always comes from the server session, never from query parameters."
+          :code $ quote $ defenum Query
+            :history (:: 'Option 'Number) 'Number
+            :card-detail 'String
+          :examples $ []
+          :schema $ :: 'EnumDef
+        'QueryReply $ %{} 'CodeEntry
+          :doc "|Typed cold read results, distinguishing missing content from denied access."
+          :code $ quote $ defenum QueryReply (:history 'app.schema/HistoryPage) (:card-detail 'app.schema/CardDetail) (:missing 'String) (:denied 'String)
           :examples $ []
           :schema $ :: 'EnumDef
         'RemoveMessage $ %{} 'CodeEntry
@@ -929,6 +1365,18 @@
             :nickname $ :: 'Option 'String
             :avatar $ :: 'Option 'String
             :password 'String
+          :examples $ []
+          :schema $ :: 'StructDef
+        'UserHotView $ %{} 'CodeEntry
+          :doc "|Private hot partition of one user. history-rev only announces that cold history changed; events are fetched by query."
+          :code $ quote $ defstruct UserHotView (:id 'String) (:name 'String)
+            :settings $ quote app.schema/UserSettings
+            :history-rev 'Number
+          :examples $ []
+          :schema $ :: 'StructDef
+        'UserSettings $ %{} 'CodeEntry
+          :doc "|Personal hot preferences synchronized to every connection of the same user."
+          :code $ quote $ defstruct UserSettings (:compact? 'Bool) (:accent 'String)
           :examples $ []
           :schema $ :: 'StructDef
         'UserView $ %{} 'CodeEntry (:doc |)
@@ -1777,6 +2225,11 @@
                 {} $ |u1 $ {} (:id |u2) (:name |demo) (:nickname nil) (:avatar nil) (:password |hash)
                 , |users
             :tags $ #{} :server
+        'default-settings $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ def default-settings
+            %{} UserSettings (:compact? false) (:accent |#2a8bd6)
+          :examples $ []
+          :schema $ :: 'app.schema/UserSettings
         'enum-definition-matches? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn enum-definition-matches? (value target)
             match (enum-definition value)
