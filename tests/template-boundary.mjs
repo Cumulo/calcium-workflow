@@ -34,11 +34,11 @@ for (const [ns, body] of files) {
   const layer = layerOf(ns);
   if (layer === "template") {
     for (const hit of mentions(body, /app\.feature\.[\w.\-]*/g)) violations.push(`${ns} (template) names ${hit}`);
-    for (const hit of mentions(body, /\bapp\.(client|server)(\/[^\s)]+|\s+:)/g)) violations.push(`${ns} (template) names entry ${hit.trim()}`);
+    for (const hit of mentions(body, /\bapp\.(client|server)(?![\w.\-])(\/[^\s)]+)?/g)) violations.push(`${ns} (template) names entry ${hit.trim()}`);
   }
   if (layer === "feature") {
     for (const hit of mentions(body, /\bapp\.hooks(\.[\w-]+)?\b/g)) violations.push(`${ns} (feature) depends on wiring ${hit}`);
-    for (const hit of mentions(body, /\bapp\.(client|server)(\/[^\s)]+|\s+:)/g)) violations.push(`${ns} (feature) names entry ${hit.trim()}`);
+    for (const hit of mentions(body, /\bapp\.(client|server)(?![\w.\-])(\/[^\s)]+)?/g)) violations.push(`${ns} (feature) names entry ${hit.trim()}`);
   }
 }
 

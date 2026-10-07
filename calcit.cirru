@@ -677,7 +677,8 @@
                   (:some detail) (:description detail)
                   (:none) |
                 text $ match draft-option
-                  (:some draft) (assert-type draft String)
+                  (:some draft)
+                    if (string? draft) (assert-type draft String) cached-text
                   (:none) cached-text
               div
                 {} $ :style $ {} (:position :fixed) (:right 16) (:top 64) (:width 320) (:padding 12) (:background-color :white) (:border-radius 8) (:z-index 10)

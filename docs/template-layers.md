@@ -8,7 +8,7 @@
 
 | 层 | 命名空间 | 复制后怎么处理 |
 |----|------|------|
-| **template** | `app.sync.server`、`app.sync.client`、`app.sync.partition` | 原样保留，不按项目修改。包括 Reel、会话 Store 同步、分区引擎与扇出、ACK/背压/resync、冷查询传输和持久化 |
+| **template** | `app.sync.server`、`app.sync.client`、`app.sync.partition` | 原样保留，不按项目修改。包括 Reel、会话 Store 同步、分区引擎与扇出、ACK/背压/resync、冷查询传输，以及热 Db 快照的持久化流程；业务冷状态及其持久化由 `app.feature.<name>.server` 负责，经 `app.hooks.server/persist!` 调用 |
 | **wiring** | `app.schema`、`app.hooks`、`app.hooks.server`、`app.hooks.client`、`app.updater`、`app.client`、`app.server`、`app.comp.container` | 唯一点名当前业务的地方，改成指向新业务 |
 | **base** | `app.twig.*`、`app.updater.{session,user,router}`、`app.comp.{login,navigation,profile}`、`app.config`、`app.workload.diff-patch` | 账号、会话、路由脚手架，大多数项目保留，按需修改 |
 | **feature** | `app.feature.<name>.*`（当前是 `app.feature.kanban.*`） | 可以整体删除，换成自己的业务 |
