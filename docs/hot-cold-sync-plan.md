@@ -125,6 +125,4 @@ snapshot/delta 发送次数、reused-payloads、drops、queries 和 live-partiti
 - **#57 场景与规模基准**：10k/100k 冷数据下的 RSS、diff 次数与连接数的关系、callback 延迟，需要在固定环境下测量并保留原始数据。
 - **#58 声明式 Resource**：`app.feature.kanban.resource` 已提供 request id、过期丢弃和 rev 比较这个核心；ResourceRef、
   订阅生命周期、inspect 仍是后续工作。
-- **工具链**：Calcit 0.29.0-alpha.16 + 最新 respo/recollect 在 `caps --strict` 下与 cumulo-reel 0.0.48、
-  respo-message 0.0.29、cumulo-util 0.0.25、ws-edn 0.0.35 的依赖请求冲突，需要等这些库发版后再升级；
-  当前保持 alpha.6。
+- **工具链**：已升级到 Calcit 0.29.0-alpha.16（respo-message 0.0.30、cumulo-reel 0.0.50 随之发版）。

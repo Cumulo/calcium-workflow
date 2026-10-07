@@ -4112,6 +4112,7 @@
                   :class-mapper $ merge
                     {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta cumulo-reel.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
                     , hooks/class-mapper
+            , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -4924,6 +4925,7 @@
                   , :sent-rev :sent-store
               swap! *client-caches remove-client-cache sid
               swap! *dirty-clients remove-dirty-client sid
+            , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Number 'Number
@@ -5239,6 +5241,7 @@
               hint-fn $ {} (:return 'app.sync.server/SyncMetrics)
                 :args $ [] 'app.sync.server/SyncMetrics
               struct-with metrics $ :resync-count $ inc (:resync-count metrics)
+            , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -5261,6 +5264,7 @@
                 :args $ [] 'app.sync.server/SyncMetrics
                 :return 'app.sync.server/SyncMetrics
               next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
+            , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ [] 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
