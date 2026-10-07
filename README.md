@@ -54,6 +54,9 @@ CI 完整执行上述验证与原有运行回归，不以入口检查代替完�
 [Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
 [旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围。
 
+后续冷热分离调整（公共 topic 广播 patch、个人数据局部 patch、冷数据分页查询，以 Kanban 与个人操作历史为 demo）见
+[冷热分离同步方案](docs/hot-cold-sync-plan.md)。
+
 ### Realtime sync lifecycle
 
 Calcium keeps realtime synchronization state per browser connection. A visible
