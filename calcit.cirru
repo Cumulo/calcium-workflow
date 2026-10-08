@@ -6194,7 +6194,7 @@
           :code $ quote $ defn log-in (db username password sid op-id op-time)
             let
                 maybe-user $ find
-                  -> (:users db) vals .to-list
+                  -> (:users db) distinct-values .to-list
                   fn (raw-user)
                     let
                         user-data $ assert-type raw-user app.schema/User
@@ -6275,7 +6275,7 @@
           :code $ quote $ defn sign-up (db username password sid op-id op-time)
             let
                 maybe-user $ find
-                  -> (:users db) vals .to-list
+                  -> (:users db) distinct-values .to-list
                   fn (raw-user)
                     let
                         user-data $ assert-type raw-user app.schema/User
