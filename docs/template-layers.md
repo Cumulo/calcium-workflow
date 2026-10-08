@@ -89,7 +89,7 @@ feature 不依赖 `app.hooks*` 和入口命名空间。
 传给 `apply-partition-deltas`。
 
 放进 cumulo-reel 而不是新建模块：它本来就依赖 recollect、锁定同一工具链，而且只有应用直接依赖它，
-发一个版本就能更新，不增加新的依赖冲突（对照 Calcit alpha.16 因为上游依赖冲突无法升级的情况）。
+发一个版本就能更新，不增加新的依赖冲突（升级 Calcit alpha.16 时，只需要 respo-message 和 cumulo-reel 两个模块发版）。
 
 服务端运行时（分区注册表、发送、ACK 消息、冷查询传输）依赖 calcit-wss 原生传输，hooks 接口也还在演进，
 仍然作为模板代码留在 `app.sync.*`。
