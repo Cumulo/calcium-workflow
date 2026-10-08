@@ -180,7 +180,7 @@ defn your-updater (db data sid op-id op-time)
 defn twig-your-feature (db session)
   let
       user-id $ :user-id session
-    if (some? user-id)
+    if (non-nil? user-id)
       ; Return only what this client should see
       {}
         :my-data $ get-in db ([] :users user-id :my-data)
@@ -421,7 +421,7 @@ defn user/log-in (db username password sid op-id op-time)
   let
       maybe-user $ find-user db username
     if
-      and (some? maybe-user)
+      and (non-nil? maybe-user)
         = (md5 password) (:password maybe-user)
       ; Success: Set user-id in session
       assoc-in db ([] :sessions sid :user-id) (:id maybe-user)
