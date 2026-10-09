@@ -128,7 +128,7 @@ for (const text of ["Roadmap", "Todo", "Doing", "Done", "Ship-partitions", "Cold
 }
 assert.ok(make_string(comp_board(viewStates, missingView, emptyResources, false)).includes("Board not found."));
 // After Save the panel clears its draft to nil; it must fall back to the cached cold description.
-const clearedDraft = c.parse_cirru_edn("{} (:cursor ([])) (|detail-c1 $ {} (:cursor ([] |detail-c1)) (:data nil))");
+const clearedDraft = c.parse_cirru_edn("{} (:cursor ([])) (:detail-c1 $ {} (:cursor ([] :detail-c1)) (:data nil))");
 assert.ok(make_string(comp_board(clearedDraft, boardView, detailResources, false)).includes("Cold-text"), "cleared draft shows cached detail");
 assert.ok(make_string(comp_history(emptyResources, userView)).includes(">Load<"));
 assert.ok(make_string(comp_settings(userView)).includes("Compact cards: off"));

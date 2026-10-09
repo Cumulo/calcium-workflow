@@ -7,11 +7,16 @@ let raw = null;
 let readError;
 const keys = [];
 const storage = {
+  length: 0,
   getItem(key) {
     keys.push(key);
     if (readError) throw readError;
     return raw;
   },
+  key() { return null; },
+  setItem() {},
+  removeItem() {},
+  clear() {},
 };
 globalThis.window = { localStorage: storage };
 globalThis.document = {

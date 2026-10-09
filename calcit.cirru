@@ -238,8 +238,12 @@
         'comp-login $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-login (states)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
-                state $ option:unwrap-or (get states :data) initial-state
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
+                state $ decode-map-as
+                  option:unwrap-or (get states :data) initial-state
+                  :: 'Map 'Tag 'String
               div
                 {} $ :class-name $ str-spaced css/flex css/center
                 div ({})
@@ -592,7 +596,7 @@
                                       nth column-ids $ + index 1
                                       , compact?
                             comp-draft-input
-                              >> states $ :id column
+                              >> states $ turn-tag $ :id column
                               , "|New card" $ fn (title)
                                 kanban-op $ app.feature.kanban.schema/KanbanOp :card/add (:id board) (:id column) title
                     list-> ({})
@@ -602,7 +606,7 @@
                           let[] (raw-card-id raw-resource) pair $ let
                               card-id $ assert-type raw-card-id String
                             [] card-id $ comp-card-detail
-                              >> states $ str |detail- card-id
+                              >> states $ turn-tag $ str |detail- card-id
                               , board card-id $ assert-type raw-resource app.feature.kanban.resource/DetailResource
               (:none)
                 div
@@ -664,7 +668,9 @@
           :doc "|Card detail panel fed by the cold cache; shows cached content revision next to the hot detail-rev so staleness is visible."
           :code $ quote $ defcomp comp-card-detail (states board card-id resource)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
                 draft-option $ get states :data
                 card-option $ get (:cards board) card-id
                 hot-rev $ match card-option
@@ -720,8 +726,12 @@
           :doc "|Small text input keeping its draft in Respo component state and submitting one domain operation."
           :code $ quote $ defcomp comp-draft-input (states placeholder on-submit)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
-                draft $ option:unwrap-or (get states :data) |
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
+                draft $ decode-map-as
+                  option:unwrap-or (get states :data) |
+                  , 'String
               div
                 {} $ :class-name css/row-middle
                 input $ {} (:class-name css/input) (:placeholder placeholder) (:value draft)
@@ -3002,14 +3012,11 @@
                     :users $ {}
                     :boards $ {} $ |b1 board
                     :settings $ {} $ |u1 app.feature.kanban.schema/default-settings
-                  bad-rank $ parse-cirru-edn $ format-cirru-edn |high
-                  corrupt $ struct-with db $ :boards
-                    {} $ |b1 $ struct-with board
-                      :cards $ {} $ |c1 (&struct:assoc card :rank bad-rank)
+                  corrupt $ .replace (format-cirru-edn db) "|(:rank 1) (:title |Ship)" "|(:rank |high) (:title |Ship)"
                 assert= (Result :ok db)
                   decode-database $ parse-cirru-edn $ format-cirru-edn db
                 match
-                  decode-database $ parse-cirru-edn $ format-cirru-edn corrupt
+                  decode-database $ parse-cirru-edn corrupt
                   (:ok _) (raise |Expected-corrupt-card-rejection)
                   (:err error)
                     match error $
@@ -3342,9 +3349,8 @@
                   :cards $ {}
                 view $ PartitionView :board board
                 raw $ parse-cirru-edn (format-cirru-edn view) mapper
-                bad-title $ parse-cirru-edn $ format-cirru-edn 42
                 bad $ parse-cirru-edn
-                  format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
+                  .replace (format-cirru-edn view) "|(:title |T)" "|(:title 42)"
                   , mapper
               assert= (Result :ok view) (decode-partition-view raw)
               assert= true $ match (decode-partition-view bad)
@@ -3646,10 +3652,12 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  match
-                    decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
-                    (:err detail) (includes? detail |$.count)
-                    _ false
+                  try
+                    match
+                      decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
+                      (:err detail) (includes? detail |$.count)
+                      _ false
+                    fn (detail) (includes? detail "|field `count`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-nested-field)
               :code $ quote $ assert= true
@@ -3669,10 +3677,12 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  match
-                    decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
-                    (:err detail) (includes? detail |$.user)
-                    _ false
+                  try
+                    match
+                      decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
+                      (:err detail) (includes? detail |$.user)
+                      _ false
+                    fn (detail) (includes? detail "|field `user`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |preserves-open-router-payload)
               :code $ quote $ let
@@ -3694,29 +3704,33 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  let
-                      message $ %{} MessageView (:id |m1) (:text |valid)
-                      bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
-                      bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
-                    match
-                      decode-store $ &struct:assoc store :session bad-session
-                      (:err detail) (includes? detail |$.session.messages)
-                      _ false
+                  try
+                    let
+                        message $ %{} MessageView (:id |m1) (:text |valid)
+                        bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
+                        bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
+                      match
+                        decode-store $ &struct:assoc store :session bad-session
+                        (:err detail) (includes? detail |$.session.messages)
+                        _ false
+                    fn (detail) (includes? detail "|field `text`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-present-user)
               :code $ quote $ assert= true
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  let
-                      user $ %{} UserView (:name |name) (:id |id)
-                        :nickname $ Option :none
-                        :avatar $ Option :none
-                      bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
-                    match
-                      decode-store $ &struct:assoc store :user $ Option :some bad-user
-                      (:err detail) (includes? detail |$.user.id)
-                      _ false
+                  try
+                    let
+                        user $ %{} UserView (:name |name) (:id |id)
+                          :nickname $ Option :none
+                          :avatar $ Option :none
+                        bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
+                      match
+                        decode-store $ &struct:assoc store :user $ Option :some bad-user
+                        (:err detail) (includes? detail |$.user.id)
+                        _ false
+                    fn (detail) (includes? detail "|field `id`")
               :tags $ #{} :client
         'decode-typed-server-message $ %{} 'CodeEntry
           :doc "|Validate partition and query envelopes against the nominal ServerMessage schema after ws-edn class mapping; nested views, deltas and replies are checked field by field."
@@ -4369,6 +4383,8 @@
                   (:err error)
                     match error
                       (:invalid-result detail) (includes? detail |$.color)
+                      (:invalid-patch detail)
+                        includes? (str detail) |:color
                       _ false
                   _ false
                 assert= original-count $ :count store
@@ -5040,7 +5056,9 @@
               (:backpressured)
                 merge current $ {}
                   :dirty-rev $ let
-                      current-dirty $ option:unwrap-or (get current :dirty-rev) 0
+                      current-dirty $ decode-map-as
+                        option:unwrap-or (get current :dirty-rev) 0
+                        , 'Number
                     if (> revision current-dirty) revision current-dirty
                   :slow-client? true
                   :last-send-outcome :backpressured
@@ -5307,9 +5325,10 @@
                       :records $ []
                       :merged? false
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
-                  corrupt $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
                 assert= true $ try
-                  do (reel-record-count corrupt) false
+                  do
+                    reel-record-count $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
+                    , false
                   fn (detail) (includes? detail |list)
               :tags $ #{} :server
         'refresh-domain-reel $ %{} 'CodeEntry
@@ -5324,19 +5343,24 @@
                       raise $ str |Invalid-reel-base: error
                   , base
                 next-db $ cumulo-reel.core/play-records next-base (:records reel) replay-updater
-              struct-with reel (:base next-base) (:db next-db)
+              assert-type
+                struct-with reel (:base next-base) (:db next-db)
+                :: 'cumulo-reel.core/ReelState 'app.schema/Db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'cumulo-reel.core/ReelState)
+          :schema $ :: 'Fn $ {}
             :args $ [] 'cumulo-reel.core/ReelState 'app.schema/Db $ :: 'Fn
               {} (:return 'app.schema/Db)
                 :args $ [] 'app.schema/Db 'Dynamic 'Dynamic 'Dynamic 'Dynamic
+            :return $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
           :tests $ []
             %{} 'TestEntry (:name |rejects-invalid-merged-base)
               :code $ quote $ assert= true
                 try
                   do
                     refresh-domain-reel
-                      %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                      %{} cumulo-reel.core/ReelState
+                        :base $ parse-cirru-edn $ format-cirru-edn 42
+                        :db schema/database
                         :records $ []
                         :merged? true
                       , schema/database updater-from-reel
@@ -5346,7 +5370,9 @@
             %{} 'TestEntry (:name |fresh-base-ignores-unmerged-old-base)
               :code $ quote $ let
                   base schema/database
-                  reel $ %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                  reel $ %{} cumulo-reel.core/ReelState
+                    :base $ parse-cirru-edn $ format-cirru-edn 42
+                    :db schema/database
                     :records $ []
                     :merged? false
                   refreshed $ refresh-domain-reel reel base updater-from-reel
