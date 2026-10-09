@@ -9,7 +9,7 @@
       :kind :data
       :doc "|Cleanup capability for Calcium application-level browser activity signals."
       :schema $ :: 'Ref (:: 'Option 'Fn)
-      :code $ quote $ defatom *activity-cleanup $ %none
+      :code $ quote $ defref *activity-cleanup $ %none
     'app.client/cleanup-activity-lifecycle! $ {}
       :mode :ensure
       :kind :fn

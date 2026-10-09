@@ -34,7 +34,7 @@ values, rejected invalid field types, and Session/User EDN roundtrips. CI runs
 this suite after compilation. The existing quality baseline passes unchanged,
 and the production build passes.
 
-Browser acceptance also exposed a pre-existing client state bug: the atom
+Browser acceptance also exposed a pre-existing client state bug: the state ref
 initializer was an anonymous loading enum while subsequent values were Store
 structs. Generated JS erased the enum predicate's alternative and tried to
 render Store as an offline enum. Client state now has a nominal
@@ -43,7 +43,7 @@ and patch handlers wrap validated Store values; rendering unwraps only ready.
 The patch validator's Result schema was also reversed; it now uses the canonical
 `Result<Value, Error>` order, with a typed ready-state regression.
 
-浏览器验收发现原先客户端 atom 混放 Enum/Store，导致生成 JS 丢失正常渲染分支。
+浏览器验收发现原先客户端 ref 混放 Enum/Store，导致生成 JS 丢失正常渲染分支。
 现改为具名 ClientState；同时修正补丁验证器 Result 类型参数顺序。客户端状态
 容器不参与服务端序列化，消息 envelope 和补丁算法不变。
 

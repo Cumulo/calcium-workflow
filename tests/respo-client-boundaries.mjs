@@ -43,7 +43,7 @@ const { twig_container, twig_shared } = await load("app.twig.container.mjs");
 const { twig_user } = await load("app.twig.user.mjs");
 const { make_string } = await load("respo.render.html.mjs");
 
-const wrapped = wrap_dispatch(c.atom(client.dispatch_from_respo_$x_));
+const wrapped = wrap_dispatch(c.ref(client.dispatch_from_respo_$x_));
 const payload = c.parse_cirru_edn("{} (:value |kept)");
 assert.equal(wrapped(c.parse_cirru_edn("[] :field"), payload), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.field.data, { value: "kept" });
