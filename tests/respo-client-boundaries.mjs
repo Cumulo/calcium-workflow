@@ -43,7 +43,7 @@ const { twig_container, twig_shared } = await load("app.twig.container.mjs");
 const { twig_user } = await load("app.twig.user.mjs");
 const { make_string } = await load("respo.render.html.mjs");
 
-const wrapped = wrap_dispatch(c.atom(client.dispatch_from_respo_$x_));
+const wrapped = wrap_dispatch(c.ref(client.dispatch_from_respo_$x_));
 const payload = c.parse_cirru_edn("{} (:value |kept)");
 assert.equal(wrapped(c.parse_cirru_edn("[] :field"), payload), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.field.data, { value: "kept" });
@@ -128,7 +128,7 @@ for (const text of ["Roadmap", "Todo", "Doing", "Done", "Ship-partitions", "Cold
 }
 assert.ok(make_string(comp_board(viewStates, missingView, emptyResources, false)).includes("Board not found."));
 // After Save the panel clears its draft to nil; it must fall back to the cached cold description.
-const clearedDraft = c.parse_cirru_edn("{} (:cursor ([])) (|detail-c1 $ {} (:cursor ([] |detail-c1)) (:data nil))");
+const clearedDraft = c.parse_cirru_edn("{} (:cursor ([])) (:detail-c1 $ {} (:cursor ([] :detail-c1)) (:data nil))");
 assert.ok(make_string(comp_board(clearedDraft, boardView, detailResources, false)).includes("Cold-text"), "cleared draft shows cached detail");
 assert.ok(make_string(comp_history(emptyResources, userView)).includes(">Load<"));
 assert.ok(make_string(comp_settings(userView)).includes("Compact cards: off"));

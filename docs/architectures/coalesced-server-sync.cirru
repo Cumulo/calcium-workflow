@@ -10,14 +10,14 @@
       :doc "|Whether a fast coalesced server sync callback is pending."
       :schema $ :: 'Ref 'Bool
       :code $ quote
-        defatom *sync-scheduled? false
+        defref *sync-scheduled? false
     'app.server/*sync-retry-scheduled? $ {}
       :mode :ensure
       :kind :data
       :doc "|Whether a slower backpressure retry callback is pending."
       :schema $ :: 'Ref 'Bool
       :code $ quote
-        defatom *sync-retry-scheduled? false
+        defref *sync-retry-scheduled? false
     'app.server/sync-coalesce-delay $ {}
       :mode :ensure
       :kind :data

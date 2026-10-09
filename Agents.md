@@ -24,8 +24,8 @@ calcit libs readme respo.calcit -f docs/Respo-Agent.md
 
 **Core Architecture** (already in template):
 
-- **Server**: `*reel` atom → `updater` (pure fn) → `twig-container` → `diff-twig` → patches
-- **Client**: WebSocket → `patch-twig` → `*store` atom → Respo render
+- **Server**: `*reel` ref (`defref`) → `updater` (pure fn) → `twig-container` → `diff-twig` → patches
+- **Client**: WebSocket → `patch-twig` → `*store` ref (`defref *store`) → Respo render
 - **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel; `cumulo-reel.partition` partition engine), `ws-edn` (WebSocket)
 - **Partitions** (hot/cold split, see `docs/hot-cold-sync-plan.md`):
   `app.hooks.server/project-partition` → `cumulo-reel.partition/advance-partition`

@@ -60,10 +60,8 @@ assert.equal(unchanged.tag.value, "ok");
 assert.ok(c._$n__$e_(store, unchanged.get(1)));
 // A nominal Struct identity alone does not prove its nested fields are valid.
 const fields = c.init_tags(["count", "session", "id", "user", "some", "unknown", "snapshot"]);
-const corruptCount = c._$n_struct_$o_assoc(store, fields.count, "not-a-number");
-const rejectedCount = decode_store(corruptCount);
-assert.equal(rejectedCount.tag.value, "err");
-assert.match(rejectedCount.get(1), /\$\.count/);
+// The runtime now refuses a corrupt scalar field write before decoding.
+assert.throws(() => c._$n_struct_$o_assoc(store, fields.count, "not-a-number"), /field :count expects/);
 const badSession = c._$n_struct_$o_assoc(c.get(store, fields.session).get(1), fields.id, c._PCT_some("bad-id"));
 const corruptSession = c._$n_struct_$o_assoc(store, fields.session, badSession);
 const rejectedSession = decode_store(corruptSession);
@@ -74,7 +72,7 @@ assert.equal(rejectedSnapshot.tag.value, "err");
 assert.match(rejectedSnapshot.get(1).get(1), /\$\.session\.id/);
 const invalidOption = c._$n_enum_$o_assoc(c._PCT_some("payload"), 0, fields.unknown);
 assert.equal(decode_store(c._$n_struct_$o_assoc(store, fields.user, invalidOption)).tag.value, "err");
-assert.equal(decode_store(c._$n_struct_$o_assoc(store, fields.user, "bad-option")).tag.value, "err");
+assert.throws(() => c._$n_struct_$o_assoc(store, fields.user, "bad-option"), /field :user expects/);
 assert.ok(c._$n__$e_(store, decode_store(store).get(1)));
 
 // Exercise actual state publication and wire acknowledgement, with no network.

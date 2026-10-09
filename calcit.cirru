@@ -238,8 +238,12 @@
         'comp-login $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-login (states)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
-                state $ option:unwrap-or (get states :data) initial-state
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
+                state $ decode-map-as
+                  option:unwrap-or (get states :data) initial-state
+                  :: 'Map 'Tag 'String
               div
                 {} $ :class-name $ str-spaced css/flex css/center
                 div ({})
@@ -449,7 +453,7 @@
       :defs $ {}
         '*resources $ %{} 'CodeEntry
           :doc "|Cold callback cache: fetched history pages and open card details."
-          :code $ quote $ defatom *resources resource/empty-resources
+          :code $ quote $ defref *resources resource/empty-resources
           :examples $ []
           :schema $ :: 'Ref 'app.feature.kanban.resource/Resources
         'dispatch-client! $ %{} 'CodeEntry
@@ -592,7 +596,7 @@
                                       nth column-ids $ + index 1
                                       , compact?
                             comp-draft-input
-                              >> states $ :id column
+                              >> states $ turn-tag $ :id column
                               , "|New card" $ fn (title)
                                 kanban-op $ app.feature.kanban.schema/KanbanOp :card/add (:id board) (:id column) title
                     list-> ({})
@@ -602,7 +606,7 @@
                           let[] (raw-card-id raw-resource) pair $ let
                               card-id $ assert-type raw-card-id String
                             [] card-id $ comp-card-detail
-                              >> states $ str |detail- card-id
+                              >> states $ turn-tag $ str |detail- card-id
                               , board card-id $ assert-type raw-resource app.feature.kanban.resource/DetailResource
               (:none)
                 div
@@ -664,7 +668,9 @@
           :doc "|Card detail panel fed by the cold cache; shows cached content revision next to the hot detail-rev so staleness is visible."
           :code $ quote $ defcomp comp-card-detail (states board card-id resource)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
                 draft-option $ get states :data
                 card-option $ get (:cards board) card-id
                 hot-rev $ match card-option
@@ -720,8 +726,12 @@
           :doc "|Small text input keeping its draft in Respo component state and submitting one domain operation."
           :code $ quote $ defcomp comp-draft-input (states placeholder on-submit)
             let
-                cursor $ option:unwrap-or (get states :cursor) ([])
-                draft $ option:unwrap-or (get states :data) |
+                cursor $ decode-map-as
+                  option:unwrap-or (get states :cursor) ([])
+                  :: 'List 'Dynamic
+                draft $ decode-map-as
+                  option:unwrap-or (get states :data) |
+                  , 'String
               div
                 {} $ :class-name css/row-middle
                 input $ {} (:class-name css/input) (:placeholder placeholder) (:value draft)
@@ -1427,7 +1437,7 @@
       :defs $ {}
         '*cold-store $ %{} 'CodeEntry
           :doc "|Cold history and card details. They are written by committed operations and read only through queries."
-          :code $ quote $ defatom *cold-store
+          :code $ quote $ defref *cold-store
             if (path-exists? cold-storage-file)
               match
                 read-cold-store $ read-file cold-storage-file
@@ -2446,7 +2456,7 @@
                 db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
                 add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
                 db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
-                *sent $ atom $ assert-type ([])
+                *sent $ ref $ assert-type ([])
                   :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                 record! $ fn (sid action)
                   hint-fn $ {}
@@ -3002,14 +3012,11 @@
                     :users $ {}
                     :boards $ {} $ |b1 board
                     :settings $ {} $ |u1 app.feature.kanban.schema/default-settings
-                  bad-rank $ parse-cirru-edn $ format-cirru-edn |high
-                  corrupt $ struct-with db $ :boards
-                    {} $ |b1 $ struct-with board
-                      :cards $ {} $ |c1 (&struct:assoc card :rank bad-rank)
+                  corrupt $ .replace (format-cirru-edn db) "|(:rank 1) (:title |Ship)" "|(:rank |high) (:title |Ship)"
                 assert= (Result :ok db)
                   decode-database $ parse-cirru-edn $ format-cirru-edn db
                 match
-                  decode-database $ parse-cirru-edn $ format-cirru-edn corrupt
+                  decode-database $ parse-cirru-edn corrupt
                   (:ok _) (raise |Expected-corrupt-card-rejection)
                   (:err error)
                     match error $
@@ -3342,9 +3349,8 @@
                   :cards $ {}
                 view $ PartitionView :board board
                 raw $ parse-cirru-edn (format-cirru-edn view) mapper
-                bad-title $ parse-cirru-edn $ format-cirru-edn 42
                 bad $ parse-cirru-edn
-                  format-cirru-edn $ PartitionView :board $ &struct:assoc board :title bad-title
+                  .replace (format-cirru-edn view) "|(:title |T)" "|(:title 42)"
                   , mapper
               assert= (Result :ok view) (decode-partition-view raw)
               assert= true $ match (decode-partition-view bad)
@@ -3646,10 +3652,12 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  match
-                    decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
-                    (:err detail) (includes? detail |$.count)
-                    _ false
+                  try
+                    match
+                      decode-store $ &struct:assoc store :count $ parse-cirru-edn (format-cirru-edn |not-a-number)
+                      (:err detail) (includes? detail |$.count)
+                      _ false
+                    fn (detail) (includes? detail "|field `count`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-nested-field)
               :code $ quote $ assert= true
@@ -3669,10 +3677,12 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  match
-                    decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
-                    (:err detail) (includes? detail |$.user)
-                    _ false
+                  try
+                    match
+                      decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
+                      (:err detail) (includes? detail |$.user)
+                      _ false
+                    fn (detail) (includes? detail "|field `user`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |preserves-open-router-payload)
               :code $ quote $ let
@@ -3694,29 +3704,33 @@
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  let
-                      message $ %{} MessageView (:id |m1) (:text |valid)
-                      bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
-                      bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
-                    match
-                      decode-store $ &struct:assoc store :session bad-session
-                      (:err detail) (includes? detail |$.session.messages)
-                      _ false
+                  try
+                    let
+                        message $ %{} MessageView (:id |m1) (:text |valid)
+                        bad-message $ &struct:assoc message :text $ parse-cirru-edn (format-cirru-edn 42)
+                        bad-session $ &struct:assoc (:session store) :messages $ {} (|m1 bad-message)
+                      match
+                        decode-store $ &struct:assoc store :session bad-session
+                        (:err detail) (includes? detail |$.session.messages)
+                        _ false
+                    fn (detail) (includes? detail "|field `text`")
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-present-user)
               :code $ quote $ assert= true
                 let
                     db app.schema/database
                     store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
-                  let
-                      user $ %{} UserView (:name |name) (:id |id)
-                        :nickname $ Option :none
-                        :avatar $ Option :none
-                      bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
-                    match
-                      decode-store $ &struct:assoc store :user $ Option :some bad-user
-                      (:err detail) (includes? detail |$.user.id)
-                      _ false
+                  try
+                    let
+                        user $ %{} UserView (:name |name) (:id |id)
+                          :nickname $ Option :none
+                          :avatar $ Option :none
+                        bad-user $ &struct:assoc user :id $ parse-cirru-edn (format-cirru-edn 42)
+                      match
+                        decode-store $ &struct:assoc store :user $ Option :some bad-user
+                        (:err detail) (includes? detail |$.user.id)
+                        _ false
+                    fn (detail) (includes? detail "|field `id`")
               :tags $ #{} :client
         'decode-typed-server-message $ %{} 'CodeEntry
           :doc "|Validate partition and query envelopes against the nominal ServerMessage schema after ws-edn class mapping; nested views, deltas and replies are checked field by field."
@@ -3966,37 +3980,37 @@
       :defs $ {}
         '*activity-cleanup $ %{} 'CodeEntry
           :doc "|Cleanup capability for Calcium application-level browser activity signals."
-          :code $ quote $ defatom *activity-cleanup (Option :none)
+          :code $ quote $ defref *activity-cleanup (Option :none)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Option 'Fn
         '*connected? $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *connected? false
+          :code $ quote $ defref *connected? false
           :examples $ []
           :schema $ :: 'Dynamic
         '*partitions $ %{} 'CodeEntry
           :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
-          :code $ quote $ defatom *partitions
+          :code $ quote $ defref *partitions
             assert-type ({})
               :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
         '*states $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *states
+          :code $ quote $ defref *states
             {} $ :states $ {}
               :cursor $ []
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Tag 'Dynamic
         '*store $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *store (ClientState :loading)
+          :code $ quote $ defref *store (ClientState :loading)
           :examples $ []
           :schema $ :: 'Ref 'app.sync.client/ClientState
         '*sync-revision $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *sync-revision 0
+          :code $ quote $ defref *sync-revision 0
           :examples $ []
           :schema $ :: 'Dynamic
         '*ws-client $ %{} 'CodeEntry
           :doc "|Current nominal ws-edn client, retained across browser recovery events."
-          :code $ quote $ defatom *ws-client (Option :none)
+          :code $ quote $ defref *ws-client (Option :none)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Option 'ws-edn.client/WsClient
         'ClientPatchError $ %{} 'CodeEntry
@@ -4369,6 +4383,8 @@
                   (:err error)
                     match error
                       (:invalid-result detail) (includes? detail |$.color)
+                      (:invalid-patch detail)
+                        includes? (str detail) |:color
                       _ false
                   _ false
                 assert= original-count $ :count store
@@ -4427,24 +4443,24 @@
     'app.sync.server $ %{} 'FileEntry
       :defs $ {}
         '*client-caches $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *client-caches ({})
+          :code $ quote $ defref *client-caches ({})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Number 'Dynamic
         '*client-states $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *client-states ({})
+          :code $ quote $ defref *client-states ({})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'Tag 'Dynamic)
         '*dirty-clients $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *dirty-clients (#{})
+          :code $ quote $ defref *dirty-clients (#{})
           :examples $ []
           :schema $ :: 'Ref $ :: 'Set 'Number
         '*dirty-partitions $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *dirty-partitions
+          :code $ quote $ defref *dirty-partitions
             assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Set 'app.schema/PartitionKey
         '*initial-db $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *initial-db
+          :code $ quote $ defref *initial-db
             if
               path-exists? $ w-log storage-file
               do (println "|Found local EDN data")
@@ -4458,66 +4474,66 @@
           :schema $ :: 'Ref 'app.schema/Db
         '*partition-epoch $ %{} 'CodeEntry
           :doc "|Monotonic epoch source seeded from process start; a recreated partition never reuses an old revision lineage."
-          :code $ quote $ defatom *partition-epoch (unix-time-ms)
+          :code $ quote $ defref *partition-epoch (unix-time-ms)
           :examples $ []
           :schema $ :: 'Ref 'Number
         '*partition-metrics $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *partition-metrics empty-partition-metrics
+          :code $ quote $ defref *partition-metrics empty-partition-metrics
           :examples $ []
           :schema $ :: 'Ref 'app.sync.server/PartitionMetrics
         '*partition-payloads $ %{} 'CodeEntry
           :doc "|Encoded single-delta patch per partition, reused by every subscriber at the previous revision."
-          :code $ quote $ defatom *partition-payloads
+          :code $ quote $ defref *partition-payloads
             assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload
         '*partition-progress $ %{} 'CodeEntry
           :doc "|Per-connection subscription progress: acknowledged revision and pending send for each partition."
-          :code $ quote $ defatom *partition-progress
+          :code $ quote $ defref *partition-progress
             assert-type ({})
               :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
         '*partitions $ %{} 'CodeEntry
           :doc "|Live partitions with at least one subscribed connection; each keeps one view, revision and bounded delta history."
-          :code $ quote $ defatom *partitions
+          :code $ quote $ defref *partitions
             assert-type ({})
               :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
           :examples $ []
           :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView)
         '*reader-reel $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *reader-reel @*reel
+          :code $ quote $ defref *reader-reel @*reel
           :examples $ []
           :schema $ :: 'Dynamic
         '*reel $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *reel
+          :code $ quote $ defref *reel
             %{} cumulo-reel.core/ReelState (:base @*initial-db) (:db @*initial-db)
               :records $ []
               :merged? false
           :examples $ []
           :schema $ :: 'Ref $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
         '*shared-twig-cache $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *shared-twig-cache
+          :code $ quote $ defref *shared-twig-cache
             {} (:revision -1) (:value nil)
           :examples $ []
           :schema $ :: 'Dynamic
         '*sync-metrics $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *sync-metrics
+          :code $ quote $ defref *sync-metrics
             %{} SyncMetrics (:last-diff-latency-ms 0) (:last-patch-bytes 0) (:last-snapshot-bytes 0) (:last-visited-nodes 0) (:last-emitted-ops 0) (:budget-fallback-count 0) (:pending-clients 0) (:slow-clients 0) (:resync-count 0) (:patch-attempts 0) (:snapshot-attempts 0) (:last-revision 0)
           :examples $ []
           :schema $ :: 'Dynamic
         '*sync-retry-scheduled? $ %{} 'CodeEntry
           :doc "|Whether a slower backpressure retry callback is pending."
-          :code $ quote $ defatom *sync-retry-scheduled? false
+          :code $ quote $ defref *sync-retry-scheduled? false
           :examples $ []
           :schema $ :: 'Ref 'Bool
         '*sync-revision $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ defatom *sync-revision 0
+          :code $ quote $ defref *sync-revision 0
           :examples $ []
           :schema $ :: 'Ref 'Number
         '*sync-scheduled? $ %{} 'CodeEntry
           :doc "|Whether a fast coalesced server sync callback is pending."
-          :code $ quote $ defatom *sync-scheduled? false
+          :code $ quote $ defref *sync-scheduled? false
           :examples $ []
           :schema $ :: 'Ref 'Bool
         'CachedPayload $ %{} 'CodeEntry
@@ -5040,7 +5056,9 @@
               (:backpressured)
                 merge current $ {}
                   :dirty-rev $ let
-                      current-dirty $ option:unwrap-or (get current :dirty-rev) 0
+                      current-dirty $ decode-map-as
+                        option:unwrap-or (get current :dirty-rev) 0
+                        , 'Number
                     if (> revision current-dirty) revision current-dirty
                   :slow-client? true
                   :last-send-outcome :backpressured
@@ -5307,9 +5325,10 @@
                       :records $ []
                       :merged? false
                     :: 'cumulo-reel.core/ReelState 'app.schema/Db
-                  corrupt $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
                 assert= true $ try
-                  do (reel-record-count corrupt) false
+                  do
+                    reel-record-count $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
+                    , false
                   fn (detail) (includes? detail |list)
               :tags $ #{} :server
         'refresh-domain-reel $ %{} 'CodeEntry
@@ -5324,19 +5343,24 @@
                       raise $ str |Invalid-reel-base: error
                   , base
                 next-db $ cumulo-reel.core/play-records next-base (:records reel) replay-updater
-              struct-with reel (:base next-base) (:db next-db)
+              assert-type
+                struct-with reel (:base next-base) (:db next-db)
+                :: 'cumulo-reel.core/ReelState 'app.schema/Db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'cumulo-reel.core/ReelState)
+          :schema $ :: 'Fn $ {}
             :args $ [] 'cumulo-reel.core/ReelState 'app.schema/Db $ :: 'Fn
               {} (:return 'app.schema/Db)
                 :args $ [] 'app.schema/Db 'Dynamic 'Dynamic 'Dynamic 'Dynamic
+            :return $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
           :tests $ []
             %{} 'TestEntry (:name |rejects-invalid-merged-base)
               :code $ quote $ assert= true
                 try
                   do
                     refresh-domain-reel
-                      %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                      %{} cumulo-reel.core/ReelState
+                        :base $ parse-cirru-edn $ format-cirru-edn 42
+                        :db schema/database
                         :records $ []
                         :merged? true
                       , schema/database updater-from-reel
@@ -5346,7 +5370,9 @@
             %{} 'TestEntry (:name |fresh-base-ignores-unmerged-old-base)
               :code $ quote $ let
                   base schema/database
-                  reel $ %{} cumulo-reel.core/ReelState (:base 42) (:db schema/database)
+                  reel $ %{} cumulo-reel.core/ReelState
+                    :base $ parse-cirru-edn $ format-cirru-edn 42
+                    :db schema/database
                     :records $ []
                     :merged? false
                   refreshed $ refresh-domain-reel reel base updater-from-reel
