@@ -62,8 +62,14 @@ assert.ok(c._$n__$e_(store, unchanged.get(1)));
 const fields = c.init_tags(["count", "session", "id", "user", "some", "unknown", "snapshot"]);
 // The runtime now refuses a corrupt scalar field write before decoding.
 assert.throws(() => c._$n_struct_$o_assoc(store, fields.count, "not-a-number"), /field :count expects/);
-const badSession = c._$n_struct_$o_assoc(c.get(store, fields.session).get(1), fields.id, c._PCT_some("bad-id"));
-const corruptSession = c._$n_struct_$o_assoc(store, fields.session, badSession);
+assert.throws(() => c._$n_struct_$o_assoc(c.get(store, fields.session).get(1), fields.id, c._PCT_some("bad-id")), /field :id expects/);
+// Exercise decoder rejection separately, using wire data rather than an illegal typed write.
+const optionClasses = c.assoc(c.parse_cirru_edn("{}"), c.init_tags(["Option"]).Option, c.Option);
+const storeWire = c.format_cirru_edn(store);
+assert.ok(c._$n__$e_(store, decode_store(c.parse_cirru_edn(storeWire, optionClasses)).get(1)));
+const corruptWire = storeWire.replace(":id $ %:: 'Option 'some 0", ":id $ %:: 'Option 'some |bad-id");
+assert.notEqual(corruptWire, storeWire);
+const corruptSession = c.parse_cirru_edn(corruptWire, optionClasses);
 const rejectedSession = decode_store(corruptSession);
 assert.equal(rejectedSession.tag.value, "err");
 assert.match(rejectedSession.get(1), /\$\.session\.id/);
@@ -71,7 +77,7 @@ const rejectedSnapshot = decode_server_message(c._$o__$o_(fields.snapshot, 7, co
 assert.equal(rejectedSnapshot.tag.value, "err");
 assert.match(rejectedSnapshot.get(1).get(1), /\$\.session\.id/);
 const invalidOption = c._$n_enum_$o_assoc(c._PCT_some("payload"), 0, fields.unknown);
-assert.equal(decode_store(c._$n_struct_$o_assoc(store, fields.user, invalidOption)).tag.value, "err");
+assert.throws(() => c._$n_struct_$o_assoc(store, fields.user, invalidOption), /field :user expects/);
 assert.throws(() => c._$n_struct_$o_assoc(store, fields.user, "bad-option"), /field :user expects/);
 assert.ok(c._$n__$e_(store, decode_store(store).get(1)));
 
