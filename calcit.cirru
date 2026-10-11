@@ -53,9 +53,11 @@
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
             let
-                states $ match (get @*states :states)
-                  (:some value) value
-                  (:none) ({})
+                states $ decode-map-as
+                  match (get @*states :states)
+                    (:some value) value
+                    (:none) ({})
+                  :: 'Map 'Dynamic 'Dynamic
                 app $ match @*store
                   (:loading)
                     comp-offline $ :: :loading
@@ -93,7 +95,7 @@
             let
                 session $ :session store
                 router $ :router store
-                router-data $ option:unwrap-or (:data router) ({})
+                router-data $ .unwrap-or (:data router) ({})
                 logged-in? $ :logged-in? store
                 user-view $ match (:user-id session)
                   (:some user-id)
@@ -121,7 +123,7 @@
                       :history $ comp-history resources user-view
                       :profile $ div ({})
                         comp-profile
-                          option:unwrap $ :user store
+                          .unwrap $ :user store
                           , router-data
                         comp-settings user-view
                       _ $ <> (str router) nil
@@ -136,9 +138,10 @@
                   div $ {}
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.schema/Store
+            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'app.schema/Store
               :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
               , 'app.feature.kanban.resource/Resources
+            :generics $ [] 'StateKey
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -239,10 +242,10 @@
           :code $ quote $ defcomp comp-login (states)
             let
                 cursor $ decode-map-as
-                  option:unwrap-or (get states :cursor) ([])
+                  .unwrap-or (get states :cursor) ([])
                   :: 'List 'Dynamic
                 state $ decode-map-as
-                  option:unwrap-or (get states :data) initial-state
+                  .unwrap-or (get states :data) initial-state
                   :: 'Map 'Tag 'String
               div
                 {} $ :class-name $ str-spaced css/flex css/center
@@ -250,7 +253,7 @@
                   div ({})
                     div ({})
                       input $ {} (:placeholder |Username) (:class-name css/input)
-                        :value $ option:unwrap-or (get state :username) |
+                        :value $ .unwrap-or (get state :username) |
                         :on-input $ fn (e d!)
                           let
                               value $ get e :value
@@ -258,7 +261,7 @@
                     =< nil 8
                     div ({})
                       input $ {} (:placeholder |Password) (:class-name css/input)
-                        :value $ option:unwrap-or (get state :password) |
+                        :value $ .unwrap-or (get state :password) |
                         :on-input $ fn (e d!)
                           let
                               value $ get e :value
@@ -268,18 +271,19 @@
                     {} $ :style $ {} (:text-align :right)
                     span $ {} (:inner-text "|Sign up") (:class-name css/link)
                       :on-click $ on-submit
-                        option:unwrap-or (get state :username) |
-                        option:unwrap-or (get state :password) |
+                        .unwrap-or (get state :username) |
+                        .unwrap-or (get state :password) |
                         , true
                     =< 8 nil
                     span $ {} (:inner-text "|Log in") (:class-name css/link)
                       :on-click $ on-submit
-                        option:unwrap-or (get state :username) |
-                        option:unwrap-or (get state :password) |
+                        .unwrap-or (get state :username) |
+                        .unwrap-or (get state :password) |
                         , false
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] $ :: 'Map 'Tag 'Dynamic
+            :args $ [] $ :: 'Map 'StateKey 'Dynamic
+            :generics $ [] 'StateKey
         'initial-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
@@ -294,7 +298,7 @@
                     storage $ unsafe-coerce js/localStorage 'js-ffi.browser/StorageHost
                   storage .set-item!
                     assert-type
-                      option:unwrap $ get config/site :storage-key
+                      .unwrap $ get config/site :storage-key
                       , 'String
                     format-cirru-edn $ [] username password
           :examples $ []
@@ -325,7 +329,7 @@
                       :target $ Option :none
                   :style $ {} $ :cursor :pointer
                 <>
-                  option:unwrap-or (get config/site :title) |Calcium
+                  .unwrap-or (get config/site :title) |Calcium
                   , nil
               div
                 {} $ :class-name css/row-middle
@@ -391,7 +395,7 @@
                         match
                           app.schema/decode-optional-string (Option :some username) |profile.members
                           (:ok name-option)
-                            <> $ option:unwrap-or name-option |
+                            <> $ .unwrap-or name-option |
                           (:err detail)
                             raise $ str |Invalid-profile-member: detail
               =< nil 48
@@ -408,7 +412,7 @@
                     :style $ {} (:color :red) (:border-color :red)
                     :on-click $ fn (e dispatch!)
                       dispatch! $ %:: app.schema/Op :user/log-out
-                      js/localStorage.removeItem $ option:unwrap $ get config/site :storage-key
+                      js/localStorage.removeItem $ .unwrap $ get config/site :storage-key
                       , &unit
                   <> "|Log out"
           :examples $ []
@@ -439,7 +443,7 @@
       :defs $ {}
         'dev? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def dev?
-            = |dev $ option:unwrap-or (get-env |mode) |release
+            = |dev $ .unwrap-or (get-env |mode) |release
           :examples $ []
           :schema $ :: 'Dynamic
         'site $ %{} 'CodeEntry (:doc |)
@@ -616,7 +620,8 @@
                     , nil
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) (:: 'Option 'app.schema/PartitionView) 'app.feature.kanban.resource/Resources 'Bool
+            :args $ [] (:: 'Map 'StateKey 'Dynamic) (:: 'Option 'app.schema/PartitionView) 'app.feature.kanban.resource/Resources 'Bool
+            :generics $ [] 'StateKey
         'comp-card $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-card (board card prev-column next-column compact?)
             let
@@ -669,7 +674,7 @@
           :code $ quote $ defcomp comp-card-detail (states board card-id resource)
             let
                 cursor $ decode-map-as
-                  option:unwrap-or (get states :cursor) ([])
+                  .unwrap-or (get states :cursor) ([])
                   :: 'List 'Dynamic
                 draft-option $ get states :data
                 card-option $ get (:cards board) card-id
@@ -713,7 +718,7 @@
                 textarea $ {} (:class-name css/textarea) (:value text) (:placeholder "|Description lives in cold storage")
                   :style $ {} (:width |100%) (:min-height 120)
                   :on-input $ fn (e d!)
-                    d! $ schema/Op :states cursor $ option:unwrap-or (get e :value) |
+                    d! $ schema/Op :states cursor $ .unwrap-or (get e :value) |
                 =< nil 8
                 button $ {} (:class-name css/button) (:inner-text |Save)
                   :on-click $ fn (e d!)
@@ -721,23 +726,24 @@
                     d! $ schema/Op :states cursor nil
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'app.feature.kanban.schema/Board 'String 'app.feature.kanban.resource/DetailResource
+            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'app.feature.kanban.schema/Board 'String 'app.feature.kanban.resource/DetailResource
+            :generics $ [] 'StateKey
         'comp-draft-input $ %{} 'CodeEntry
           :doc "|Small text input keeping its draft in Respo component state and submitting one domain operation."
           :code $ quote $ defcomp comp-draft-input (states placeholder on-submit)
             let
                 cursor $ decode-map-as
-                  option:unwrap-or (get states :cursor) ([])
+                  .unwrap-or (get states :cursor) ([])
                   :: 'List 'Dynamic
                 draft $ decode-map-as
-                  option:unwrap-or (get states :data) |
+                  .unwrap-or (get states :data) |
                   , 'String
               div
                 {} $ :class-name css/row-middle
                 input $ {} (:class-name css/input) (:placeholder placeholder) (:value draft)
                   :style $ {} (:min-width 80) (:flex 1)
                   :on-input $ fn (e d!)
-                    d! $ schema/Op :states cursor $ option:unwrap-or (get e :value) |
+                    d! $ schema/Op :states cursor $ .unwrap-or (get e :value) |
                 =< 6 nil
                 button $ {} (:class-name css/button) (:inner-text |Add)
                   :on-click $ fn (e d!)
@@ -747,9 +753,10 @@
                       d! $ schema/Op :states cursor |
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'String $ :: 'Fn
+            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'String $ :: 'Fn
               {} (:return 'app.schema/Op)
                 :args $ [] 'String
+            :generics $ [] 'StateKey
         'comp-history $ %{} 'CodeEntry
           :doc "|Personal history from cold pages. The private hot partition only announces history-rev, so new events show as a count until the user loads them."
           :code $ quote $ defcomp comp-history (resources user-option)
@@ -855,7 +862,8 @@
                 (:none) (<> "|Loading lobby..." nil)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'Tag 'Dynamic) (:: 'Option 'app.schema/PartitionView)
+            :args $ [] (:: 'Map 'StateKey 'Dynamic) (:: 'Option 'app.schema/PartitionView)
+            :generics $ [] 'StateKey
         'comp-settings $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-settings (user-option)
             match (user-in user-option)
@@ -1207,7 +1215,7 @@
                   :args $ [] 'Dynamic
                   :return 'String
                 assert-type
-                  option:unwrap $ nth pair 0
+                  .unwrap $ nth pair 0
                   , String
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -1328,7 +1336,7 @@
           :code $ quote $ defn decode-kanban-op (data)
             let
                 op $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
                 strings? $ fn (values)
                   hint-fn $ {}
@@ -1481,6 +1489,7 @@
         'persist-cold! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-cold! ()
             check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
+            , &unit
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -1662,7 +1671,7 @@
                     match (:target router)
                       (:some board-id)
                         if
-                          option:some? $ board-of db board-id
+                          .some? $ board-of db board-id
                           include base $ PartitionKey :board board-id
                           , base
                       (:none) base
@@ -1750,7 +1759,7 @@
         'add-card $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn add-card (board column-id title user-id op-id op-time)
             if
-              option:some? $ get (:columns board) column-id
+              .some? $ get (:columns board) column-id
               struct-with board $ :cards $ assoc (:cards board) op-id
                 %{} Card (:id op-id) (:column-id column-id)
                   :rank $ next-rank $ column-card-ranks board column-id
@@ -2228,7 +2237,7 @@
           :doc "|Move a card to the end of another column by changing two leaves: column-id and rank."
           :code $ quote $ defn move-card (board card-id column-id user-id op-time)
             if
-              option:some? $ get (:columns board) column-id
+              .some? $ get (:columns board) column-id
               update-card board card-id $ fn (card)
                 if
                   = column-id $ :column-id card
@@ -2352,7 +2361,7 @@
             let
                 db1 $ kanban/apply-kanban kanban/fixture-db (app.feature.kanban.schema/KanbanOp :board/create |Roadmap) 1 |b1 1
                 db2 $ kanban/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship-partitions) 1 |c1 2
-                board $ option:unwrap $ kanban/board-of db2 |b1
+                board $ .unwrap $ kanban/board-of db2 |b1
                 request $ resource/begin-detail-query resource/empty-resources |b1 |c1
                 resources $ resource/receive-reply (:resources request) (:request-id request)
                   app.schema/QueryReply :card-detail $ %{} app.feature.kanban.schema/CardDetail (:card-id |c1) (:board-id |b1) (:rev 0) (:description |Cold-text) (:updated-at 0)
@@ -2763,7 +2772,7 @@
           :code $ quote $ defn decode-client-message (data)
             let
                 message $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
               if (enum? message)
                 match message
@@ -2911,10 +2920,10 @@
               if
                 = (type-of source) :map
                 let
-                    sessions-data $ option:unwrap-or (get source :sessions) ({})
-                    users-data $ option:unwrap-or (get source :users) ({})
-                    boards-data $ option:unwrap-or (get source :boards) ({})
-                    settings-data $ option:unwrap-or (get source :settings) ({})
+                    sessions-data $ .unwrap-or (get source :sessions) ({})
+                    users-data $ .unwrap-or (get source :users) ({})
+                    boards-data $ .unwrap-or (get source :boards) ({})
+                    settings-data $ .unwrap-or (get source :settings) ({})
                   match (decode-sessions sessions-data |db.sessions)
                     (:err error) (Result :err error)
                     (:ok sessions)
@@ -3140,7 +3149,7 @@
           :code $ quote $ defn decode-operation (data)
             let
                 op $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
               if (enum? op)
                 match op
@@ -3312,7 +3321,7 @@
           :code $ quote $ defn decode-partition-key (data)
             let
                 key $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
               if (enum? key)
                 match key
@@ -3361,7 +3370,7 @@
           :code $ quote $ defn decode-query (data)
             let
                 query $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
               if (enum? query)
                 match query
@@ -3432,7 +3441,7 @@
           :code $ quote $ defn decode-server-message (data)
             let
                 message $ if (enum? data)
-                  assoc data 0 $ turn-tag $ option:unwrap (nth data 0)
+                  assoc data 0 $ turn-tag $ .unwrap (nth data 0)
                   , data
               if (enum? message)
                 match message
@@ -3507,20 +3516,26 @@
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-corrupt-nominal-store-snapshot)
               :code $ quote $ assert= true
-                let
-                    db app.schema/database
-                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                try
                   let
-                      bad-session $ &struct:assoc (:session store) :id $ Option :some
-                        parse-cirru-edn $ format-cirru-edn |not-a-number
-                      corrupt $ &struct:assoc store :session bad-session
-                    match
-                      decode-server-message $ :: :snapshot 7 corrupt
-                      (:err error)
-                        match error $
-                          :invalid detail
-                          includes? detail |$.session.id
-                      _ false
+                      db app.schema/database
+                      store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                    let
+                        bad-session $ &struct:assoc (:session store) :id $ Option :some
+                          parse-cirru-edn $ format-cirru-edn |not-a-number
+                        corrupt $ &struct:assoc store :session bad-session
+                      match
+                        decode-server-message $ :: :snapshot 7 corrupt
+                        (:err error)
+                          match error $
+                            :invalid detail
+                            includes? detail |$.session.id
+                        _ false
+                  fn (detail)
+                    hint-fn $ {}
+                      :args $ [] 'String
+                      :return 'Bool
+                    includes? detail "|field :id expects type"
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-non-enum-envelope)
               :code $ quote $ assert= true
@@ -3561,9 +3576,9 @@
                       let
                           user-id-result $ decode-optional-string (get source :user-id) (str path |.user-id)
                           nickname-result $ decode-optional-string (get source :nickname) (str path |.nickname)
-                          router-data $ option:unwrap-or (get source :router)
+                          router-data $ .unwrap-or (get source :router)
                             {} $ :name :home
-                          messages-data $ option:unwrap-or (get source :messages) ({})
+                          messages-data $ .unwrap-or (get source :messages) ({})
                           router-result $ decode-router router-data $ str path |.router
                           messages-result $ decode-messages messages-data $ str path |.messages
                         match user-id-result
@@ -3661,16 +3676,22 @@
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-nested-field)
               :code $ quote $ assert= true
-                let
-                    db app.schema/database
-                    store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                try
                   let
-                      bad-session $ &struct:assoc (:session store) :id $ Option :some
-                        parse-cirru-edn $ format-cirru-edn |not-a-number
-                    match
-                      decode-store $ &struct:assoc store :session bad-session
-                      (:err detail) (includes? detail |$.session.id)
-                      _ false
+                      db app.schema/database
+                      store $ app.twig.container/twig-container db app.schema/session $ app.twig.container/twig-shared db 0
+                    let
+                        bad-session $ &struct:assoc (:session store) :id $ Option :some
+                          parse-cirru-edn $ format-cirru-edn |not-a-number
+                      match
+                        decode-store $ &struct:assoc store :session bad-session
+                        (:err detail) (includes? detail |$.session.id)
+                        _ false
+                  fn (detail)
+                    hint-fn $ {}
+                      :args $ [] 'String
+                      :return 'Bool
+                    includes? detail "|field :id expects type"
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-optional-user)
               :code $ quote $ assert= true
@@ -3682,7 +3703,8 @@
                       decode-store $ &struct:assoc store :user $ parse-cirru-edn (format-cirru-edn |not-an-option)
                       (:err detail) (includes? detail |$.user)
                       _ false
-                    fn (detail) (includes? detail "|field `user`")
+                    fn (detail)
+                      or (includes? detail "|field `user`") (includes? detail "|field :user expects type")
               :tags $ #{} :client
             %{} 'TestEntry (:name |preserves-open-router-payload)
               :code $ quote $ let
@@ -3937,8 +3959,8 @@
               do
                 ; "|Initialize lazy definitions before starting background callbacks."
                 identity @*reader-reel
-              set-interval 5000 $ fn () $ sweep-idle-clients!
-              set-interval 600000 $ fn () $ persist-db!
+              set-interval! 5000 $ fn () $ sweep-idle-clients!
+              set-interval! 600000 $ fn () $ persist-db!
               on-control-c on-exit!
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -3968,7 +3990,6 @@
             recollect.twig :refer $ clear-twig-caches!
             app.$meta :refer $ calcit-dirname
             calcit.std.fs :refer $ path-exists? check-write-file!
-            calcit.std.time :refer $ set-timeout set-interval
             calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
@@ -3976,6 +3997,7 @@
             app.feature.kanban.twig :refer $ project-partition session-partitions affected-partitions
             app.feature.kanban.updater :refer $ kanban-effects apply-cold-effects history-page card-detail-reply session-user-id
             app.sync.server :refer $ *initial-db *reader-reel *reel invalidate-sync-caches! mark-all-partitions-dirty! on-exit! persist-db! refresh-domain-reel render-loop! resolve-port run-server! sweep-idle-clients! updater-from-reel
+            calcit.std.time :refer $ set-timeout! set-interval!
     'app.sync.client $ %{} 'FileEntry
       :defs $ {}
         '*activity-cleanup $ %{} 'CodeEntry
@@ -4138,12 +4160,12 @@
                   url-parse (location :href) true
                   , 'app.sync.client/ParsedConnectionHost
                 query $ parsed :query
-                host $ option:unwrap-or
+                host $ .unwrap-or
                   js-nullish->option $ query :host
                   location :hostname
-                port $ option:unwrap-or
+                port $ .unwrap-or
                   js-nullish->option $ query :port
-                  str $ option:unwrap $ get config/site :port
+                  str $ .unwrap $ get config/site :port
               str |ws:// host |: port
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'String)
@@ -4256,8 +4278,8 @@
               (:some pair)
                 do (println "|Found storage.")
                   dispatch! $ %:: app.schema/Op :user/log-in
-                    option:unwrap $ nth pair 0
-                    option:unwrap $ nth pair 1
+                    .unwrap $ nth pair 0
+                    .unwrap $ nth pair 1
               (:none) (println "|Found no storage.")
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -4267,7 +4289,7 @@
             let
                 storage $ browser/window-local-storage
                 key $ assert-type
-                  option:unwrap $ get config/site :storage-key
+                  .unwrap $ get config/site :storage-key
                   , String
               match
                 js-nullish->option $ storage .get-item key
@@ -4401,6 +4423,10 @@
                     (:err error)
                       match error
                         (:invalid-result detail) (includes? detail |$.session.id)
+                        (:invalid-patch detail)
+                          = detail $ PatchError :type-mismatch
+                            [] (PatchPathSegment :field :session) (PatchPathSegment :field :id)
+                            , :field-value :enum
                         _ false
                     _ false
               :tags $ #{} :client
@@ -4462,7 +4488,7 @@
         '*initial-db $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *initial-db
             if
-              path-exists? $ w-log storage-file
+              path-exists? $ dbg storage-file
               do (println "|Found local EDN data")
                 match
                   read-persisted-database $ read-file storage-file
@@ -4586,16 +4612,16 @@
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn acknowledge-client! (sid revision)
             let
-                state $ option:unwrap $ get @*client-states sid
+                state $ .unwrap $ get @*client-states sid
               when
-                = revision $ option:unwrap-or (get state :sent-rev) -1
+                = revision $ .unwrap-or (get state :sent-rev) -1
                 let
-                    sent-store $ option:unwrap $ get state :sent-store
+                    sent-store $ .unwrap $ get state :sent-store
                   swap! *client-caches assoc sid sent-store
                 swap! *client-states update sid $ fn (current) (next-sync-ack-state current revision)
                 when
                   >
-                    option:unwrap-or (get state :dirty-rev) 0
+                    .unwrap-or (get state :dirty-rev) 0
                     , revision
                   swap! *dirty-clients include sid
                   request-sync!
@@ -4606,7 +4632,7 @@
         'assoc-client-state-field $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn assoc-client-state-field (states sid field value)
             assoc states sid $ assoc
-              option:unwrap-or (get states sid) ({})
+              .unwrap-or (get states sid) ({})
               , field value
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -4794,7 +4820,7 @@
         'ensure-partition! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ensure-partition! (db key)
             when
-              option:none? $ get @*partitions key
+              .none? $ get @*partitions key
               swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (hooks/project-partition db key)
             , &unit
           :examples $ []
@@ -4811,8 +4837,8 @@
             let
                 cached @*shared-twig-cache
               if
-                = revision $ option:unwrap $ get cached :revision
-                option:unwrap $ get cached :value
+                = revision $ .unwrap $ get cached :revision
+                .unwrap $ get cached :value
                 let
                     value $ hooks/shared-twig (reel-db reel) (reel-record-count reel)
                   reset! *shared-twig-cache $ {} (:revision revision) (:value value)
@@ -4892,8 +4918,8 @@
                     merge state $ {} (:needs-snapshot? true) (:in-flight? false)
                     , :sent-rev :sent-store
                 when
-                  = :active $ option:unwrap $ get
-                    option:unwrap $ get @*client-states sid
+                  = :active $ .unwrap $ get
+                    .unwrap $ get @*client-states sid
                     , :status
                   swap! *dirty-clients include sid
           :examples $ []
@@ -4909,9 +4935,9 @@
         'mark-client-active! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-active! (sid client-revision force-snapshot?)
             let
-                state $ option:unwrap-or (get @*client-states sid) ({})
+                state $ .unwrap-or (get @*client-states sid) ({})
                 resumed? $ or force-snapshot? $ not= :active
-                  option:unwrap-or (get state :status) :idle
+                  .unwrap-or (get state :status) :idle
                 next-state-base $ merge
                   {} (:status :active)
                     :last-heartbeat $ now-ms
@@ -4921,9 +4947,9 @@
                     :needs-snapshot? true
                   , state $ {} (:status :active)
                     :last-heartbeat $ now-ms
-                    :acked-rev $ if resumed? client-revision $ option:unwrap-or (get state :acked-rev) client-revision
-                    :in-flight? $ if resumed? false $ option:unwrap-or (get state :in-flight?) false
-                    :needs-snapshot? $ or resumed? $ option:unwrap-or (get state :needs-snapshot?) false
+                    :acked-rev $ if resumed? client-revision $ .unwrap-or (get state :acked-rev) client-revision
+                    :in-flight? $ if resumed? false $ .unwrap-or (get state :in-flight?) false
+                    :needs-snapshot? $ or resumed? $ .unwrap-or (get state :needs-snapshot?) false
                 next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
               swap! *client-states assoc sid next-state
               when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (release-partition-sends! sid) (request-sync!)
@@ -4934,7 +4960,7 @@
         'mark-client-idle! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-idle! (sid client-revision)
             when
-              option:some? $ get @*client-states sid
+              .some? $ get @*client-states sid
               swap! *client-states update sid $ fn (state)
                 dissoc
                   merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:needs-snapshot? true)
@@ -4950,10 +4976,10 @@
             each (keys @*client-states)
               fn (sid)
                 let
-                    state $ option:unwrap $ get @*client-states sid
+                    state $ .unwrap $ get @*client-states sid
                   swap! *client-states assoc-client-state-field sid :dirty-rev revision
                   when
-                    = :active $ option:unwrap $ get state :status
+                    = :active $ .unwrap $ get state :status
                     swap! *dirty-clients include sid
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
@@ -5057,7 +5083,7 @@
                 merge current $ {}
                   :dirty-rev $ let
                       current-dirty $ decode-map-as
-                        option:unwrap-or (get current :dirty-rev) 0
+                        .unwrap-or (get current :dirty-rev) 0
                         , 'Number
                     if (> revision current-dirty) revision current-dirty
                   :slow-client? true
@@ -5223,10 +5249,10 @@
                 states $ distinct-values @*client-states
                 pending-clients $ count $ filter states
                   fn (state)
-                    option:unwrap-or (get state :in-flight?) false
+                    .unwrap-or (get state :in-flight?) false
                 slow-clients $ count $ filter states
                   fn (state)
-                    option:unwrap-or (get state :slow-client?) false
+                    .unwrap-or (get state :slow-client?) false
               struct-with @*sync-metrics (:pending-clients pending-clients) (:slow-clients slow-clients)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.sync.server/SyncMetrics)
@@ -5448,7 +5474,7 @@
           :doc "|Request one bounded, coalesced server sync callback."
           :code $ quote $ defn request-sync! ()
             if @*sync-scheduled? &unit $ do (reset! *sync-scheduled? true)
-              set-timeout sync-coalesce-delay $ fn () (reset! *sync-scheduled? false) (render-loop!)
+              set-timeout! sync-coalesce-delay $ fn () (reset! *sync-scheduled? false) (render-loop!)
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
@@ -5456,7 +5482,7 @@
           :doc "|Request one slower retry without blocking new fast sync requests."
           :code $ quote $ defn request-sync-retry! ()
             if @*sync-retry-scheduled? &unit $ do (reset! *sync-retry-scheduled? true)
-              set-timeout sync-retry-delay $ fn () (reset! *sync-retry-scheduled? false)
+              set-timeout! sync-retry-delay $ fn () (reset! *sync-retry-scheduled? false)
                 when
                   not $ empty? @*dirty-clients
                   request-sync!
@@ -5626,24 +5652,24 @@
               each (keys @*client-states)
                 fn (sid)
                   let
-                      state $ option:unwrap $ get @*client-states sid
-                      last-heartbeat $ option:unwrap-or (get state :last-heartbeat) 0
+                      state $ .unwrap $ get @*client-states sid
+                      last-heartbeat $ .unwrap-or (get state :last-heartbeat) 0
                     when
                       and
-                        = :active $ option:unwrap $ get state :status
+                        = :active $ .unwrap $ get state :status
                         > (- current-time last-heartbeat) heartbeat-timeout
-                      mark-client-idle! sid $ option:unwrap-or (get state :acked-rev) 0
+                      mark-client-idle! sid $ .unwrap-or (get state :acked-rev) 0
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
         'sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sync-client! (sid reel revision) (swap! *dirty-clients remove-dirty-client sid)
             let
-                state $ option:unwrap $ get @*client-states sid
+                state $ .unwrap $ get @*client-states sid
               when
                 and
-                  = :active $ option:unwrap $ get state :status
-                  not $ option:unwrap-or (get state :in-flight?) false
+                  = :active $ .unwrap $ get state :status
+                  not $ .unwrap-or (get state :in-flight?) false
                 let
                     db $ reel-db reel
                   if-let
@@ -5654,21 +5680,21 @@
                         old-store-option $ get @*client-caches sid
                         new-store $ hooks/session-store db session-data shared
                         needs-snapshot? $ or
-                          option:unwrap-or (get state :needs-snapshot?) true
-                          option:none? old-store-option
+                          .unwrap-or (get state :needs-snapshot?) true
+                          .none? old-store-option
                         diff-start $ now-ms
                         diff-plan $ if needs-snapshot?
                           %:: SyncDiffPlan :snapshot empty-diff-stats $ Option :none
-                          select-sync-diff $ diff-twig-budgeted (option:unwrap old-store-option) new-store
+                          select-sync-diff $ diff-twig-budgeted (.unwrap old-store-option) new-store
                             {} $ :key :id
                             , sync-diff-budget
                         diff-latency $ - (now-ms) diff-start
-                        base-revision $ option:unwrap-or (get state :acked-rev) 0
+                        base-revision $ .unwrap-or (get state :acked-rev) 0
                       match diff-plan
                         (:snapshot stats budget-reason)
                           let
                               payload $ format-cirru-edn $ %:: schema/ServerMessage :snapshot revision new-store
-                            record-sync-send! :snapshot revision diff-latency payload stats $ option:some? budget-reason
+                            record-sync-send! :snapshot revision diff-latency payload stats $ .some? budget-reason
                             handle-sync-send! sid revision new-store $ wss-send! sid payload
                         (:patch changes stats)
                           let
@@ -5691,7 +5717,7 @@
                   clients @*dirty-clients
                 each clients $ fn (sid)
                   when
-                    option:some? $ get @*client-states sid
+                    .some? $ get @*client-states sid
                     sync-client! sid reel revision
               finish-twig-frame!
             , &unit
@@ -5736,9 +5762,9 @@
                   :args $ [] 'Number
                   :return 'Unit
                 let
-                    state $ option:unwrap $ get @*client-states sid
+                    state $ .unwrap $ get @*client-states sid
                   when
-                    = :active $ option:unwrap-or (get state :status) :idle
+                    = :active $ .unwrap-or (get state :status) :idle
                     match
                       get (:sessions db) sid
                       (:none) &unit
@@ -5772,9 +5798,9 @@
         'touch-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn touch-client! (sid client-revision)
             let
-                state $ option:unwrap $ get @*client-states sid
+                state $ .unwrap $ get @*client-states sid
               if
-                = :active $ option:unwrap $ get state :status
+                = :active $ .unwrap $ get state :status
                 swap! *client-states assoc-client-state-field sid :last-heartbeat $ now-ms
                 mark-client-active! sid client-revision true
           :examples $ []
@@ -5908,19 +5934,19 @@
             recollect.twig :refer $ clear-twig-caches!
             app.$meta :refer $ calcit-dirname
             calcit.std.fs :refer $ path-exists? check-write-file!
-            calcit.std.time :refer $ set-timeout set-interval
             calcit.std.date :refer $ Date get-time! get-timestamp extract-time
             calcit.std.path :refer $ join-path
             recollect.memo :refer $ begin-twig-frame! finish-twig-frame!
             cumulo-reel.partition :refer $ PartitionState PartitionProgress advance-partition new-partition connection-actions mark-partition-sent ack-partition-progress release-partition-send
             app.hooks.server :as hooks
+            calcit.std.time :refer $ set-timeout! set-interval!
     'app.twig.container $ %{} 'FileEntry
       :defs $ {}
         'twig-container $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-container (db session-data shared)
             let
                 user-id-option $ :user-id session-data
-                logged-in? $ option:some? user-id-option
+                logged-in? $ .some? user-id-option
                 router-data $ :router session-data
                 router-name $ :name router-data
                 router-view-data $ if logged-in?
@@ -6310,7 +6336,7 @@
                 raw-session $ get (:sessions db) sid
                 let
                     session-data $ assert-type raw-session app.schema/Session
-                  if (option:some? maybe-user)
+                  if (.some? maybe-user)
                     struct-with db $ :sessions $ assoc (:sessions db) sid
                       struct-with session-data $ :messages $ assoc (:messages session-data) op-id
                         %{} app.schema/Message (:id op-id)
@@ -6520,7 +6546,7 @@
             let
                 rows $ map (:order state)
                   fn (id)
-                    option:unwrap $ get (:entities state) id
+                    .unwrap $ get (:entities state) id
               %{} WorkloadStore (:rows rows)
                 :count $ count rows
           :examples $ []
@@ -6530,9 +6556,9 @@
         'replay-domain-ops $ %{} 'CodeEntry
           :doc "|Replay the same DomainOp sequence against a WorkloadState."
           :code $ quote $ defn replay-domain-ops (state ops)
-            list-match ops
-              () state
-              (op remaining)
+            match (destruct-list ops)
+              (:none) state
+              (:some op remaining)
                 recur (apply-domain-op state op) remaining
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'WorkloadState)

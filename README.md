@@ -6,9 +6,10 @@
 
 Install Node.js, Yarn, [Calcit](https://github.com/calcit-lang/calcit) to start.
 
-Clone dependencies into `~/.config/calcit/modules/` with `caps` command from Calcit.
+Install the dependencies declared in `deps.cirru` with `caps --strict --ci`.
+They are linked under `.calcit/modules/` from the immutable module cache.
 
-Code with [calcit-editor](https://github.com/calcit-lang/editor).
+Use Calcit's `query`, `tree`, and `edit` commands to inspect and edit the snapshot.
 
 Run frontend:
 
@@ -37,17 +38,21 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 固定已发布的 Calcit `0.29.0-alpha.16`，Respo 使用
-`0.16.114-alpha.8`，JS-FFI 使用 `0.2.1-alpha.13`，UI 使用 `0.7.32-alpha.5`。开发、构建与 CI 均使用
+当前 CLI 与 npm runtime 固定已发布的 Calcit `0.29.0`，Respo 使用
+`0.16.114`，JS-FFI 使用 `0.2.1`，UI 使用 `0.7.32`。开发、构建与 CI 均使用
 默认严格检查；客户端和服务端入口及原有回归已在真实发布依赖上通过本地验证。
 开放输入仍由既有边界验证，未使用本地开发模块覆盖。
 
-已升级发布的 Util `0.0.25`、Message `0.0.30`、Recollect `0.0.56`、ws-edn `0.0.35`、
-calcit-wss `0.2.33` 和 calcit.std `0.2.37`，传递 Value 为 `0.5.14`、Router 为 `0.8.28-alpha.6`。
-Reel 使用 `0.0.50`（含分区引擎 `cumulo-reel.partition`），与上述依赖保持一致，`caps --strict` 无冲突。
+已升级发布的 Util `0.0.27`、Message `0.0.33`、Recollect `0.0.58`、ws-edn `0.0.38`、
+calcit-wss `0.2.34` 和 calcit.std `0.2.41`，传递 Value 为 `0.5.16`、Router 为 `0.8.28`。
+Reel 使用 `0.0.52`（含分区引擎 `cumulo-reel.partition`），与上述依赖保持一致，`caps --strict` 无冲突。
 旧 Dynamic 数量 baseline 已退役，`yarn check-types`
 按 browser/native 检查全项目公开定义（156/238 个）。严格入口检查、
-dynamic-methods/deprecated 检查和全部既有原生、生成 JS 回归均保留。
+dynamic-method/deprecated-call 检查和全部既有原生、生成 JS 回归均保留。
+项目代码中的 Option helper 改为 `.unwrap`、`.unwrap-or`、`.some?`、`.none?`，
+旧 `list-match` 改为 `match (destruct-list ...)`，原生定时器使用带 `!` 的正式 API。
+组件状态的 key 类型由泛型保留，不能强制收窄为 Tag；业务输入仍经过原有具体类型解码。
+运行时会在非法 Struct 写入时提前拒绝，解码器和补丁原子性测试仍独立验证数据边界。
 CI 完整执行上述验证与原有运行回归，不以入口检查代替完整验收。详见
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
 [UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
