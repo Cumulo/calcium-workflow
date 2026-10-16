@@ -38,20 +38,25 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 固定已发布的 Calcit `0.29.0`，Respo 使用
-`0.16.114`，JS-FFI 使用 `0.2.1`，UI 使用 `0.7.32`。开发、构建与 CI 均使用
-默认严格检查；客户端和服务端入口及原有回归已在真实发布依赖上通过本地验证。
-开放输入仍由既有边界验证，未使用本地开发模块覆盖。
+当前 CLI 与 npm runtime 精确配对已发布的 Calcit `0.30.1-alpha.4`；
+0.30.1 尚无正式版，明确保留预发布风险。Respo `0.16.122`、JS-FFI `0.2.3`、
+UI `0.7.41`、Util `0.0.29`、Message `0.0.37`、Recollect `0.0.62`、
+ws-edn `0.0.41`、calcit-wss `0.2.35`、calcit.std `0.2.43`、Reel `0.0.55`
+均使用正式 Git 模块 tag，不使用 hash 或本地候选覆盖；CI fresh Caps 严格解析实际依赖图。
 
-已升级发布的 Util `0.0.27`、Message `0.0.33`、Recollect `0.0.58`、ws-edn `0.0.38`、
-calcit-wss `0.2.34` 和 calcit.std `0.2.41`，传递 Value 为 `0.5.16`、Router 为 `0.8.28`。
-Reel 使用 `0.0.52`（含分区引擎 `cumulo-reel.partition`），与上述依赖保持一致，`caps --strict` 无冲突。
+必填配置通过公开 `get` / Option 和具体边界解码读取，缺失仍拒绝，不新增兜底值。
+Kanban 操作参数直接用类型谓词验证；Map 遍历使用 `MapEntry` / `map-list-kv` /
+`filter-map-kv` 保留键值关系，不把异构 pair List 断言成业务类型。
+共享 Twig 的私有缓存改为具名 Struct + Option，避免热路径反复深度解码缓存值；
+它不进入数据库或线协议。effect 与 WSS callback 明确返回 Unit，保留原有副作用顺序。
+历史 Reel 的 base 仍先验证，再构造保留 records/merged? 的具体数据库类型 Reel。
 旧 Dynamic 数量 baseline 已退役，`yarn check-types`
-按 browser/native 检查全项目公开定义（156/238 个）。严格入口检查、
+按 browser/native 检查全项目公开定义（156/239 个）。严格入口检查、完整 strict、
 dynamic-method/deprecated-call 检查和全部既有原生、生成 JS 回归均保留。
 项目代码中的 Option helper 改为 `.unwrap`、`.unwrap-or`、`.some?`、`.none?`，
 旧 `list-match` 改为 `match (destruct-list ...)`，原生定时器使用带 `!` 的正式 API。
-组件状态的 key 类型由泛型保留，不能强制收窄为 Tag；业务输入仍经过原有具体类型解码。
+组件状态的 key 类型由泛型保留，不能强制收窄为 Tag 或扩大为 Dynamic；
+固定 `:cursor` / `:data` 元数据通过公开 `get-in` 读取，业务输入仍经过原有具体类型解码。
 运行时会在非法 Struct 写入时提前拒绝，解码器和补丁原子性测试仍独立验证数据边界。
 CI 完整执行上述验证与原有运行回归，不以入口检查代替完整验收。详见
 [发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
@@ -60,6 +65,33 @@ CI 完整执行上述验证与原有运行回归，不以入口检查代替完�
 [旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围；
 [冷热分区同步与 Kanban 模板](history/20261007-hot-cold-partitions.md)记录本次分区改造；
 [模板分层](history/20261007-template-layers.md)记录模板与业务代码的拆分。
+
+本轮原 client 44/44、server 68/68、全部既有 Node 回归与 100-entity workload smoke 通过。
+核对完整测试清单后，还发现原 tag 分组漏跑两项已有测试；CI 的 native server entry
+现直接执行全部 99 项（99/99），保留原 client 分组，不新增测试或单独 runner。
+真实浏览器运行原 diff/patch workload：六类操作、patched DOM 与 fresh render 相同，
+key/ref/listener/focus/selection 保持，no-op 无 DOM 修改；这不是整个 Kanban UI 的手工验收。
+隔离 native Kanban E2E 验证共享 board patch、冷详情与私有历史、匿名拒绝和退出分区清理；
+测试只使用临时合成数据库，不连接生产数据。完整性能 benchmark 不在本轮验收范围。
+源码及附带测试的旧 `%{}` / `%::` 构造器已迁移到直接具名构造器，原断言、
+variant、字段和执行顺序保持；用于解码兼容性测试的 EDN 字符串不作文本替换。
+完整 strict、附带区域 surface 预览均无诊断或迁移建议；开放状态/宿主边界仍存在，
+不宣称整个项目已静态化。
+
+前端监听使用 `calcit calcit.cirru js -w`。结构化 CLI 编辑保存后，使用
+`calcit edit inc --changed <namespace/definition>` 通知 watcher；忽略的
+`.compact-inc.cirru` 是临时通知，不是退役的 `compact.cirru` 源码格式。
+
+### CDN 与部署边界
+
+COS 仅上传 `dist/` 前端资源，生产 prefix 为 `Cumulo/calcium-workflow/`；
+PR prefix 隔离编号、run 和 attempt。构建使用 `VITE_BASE_URL`，本地默认 `./`。
+仅使用 COS Action 自带公共 URL verify，不维护额外探测脚本。
+
+原网页 rsync 和 `/servers/calcium-workflow/` 后端路径不变，只允许 main push 执行。
+服务端产物包含 Snapshot、`deps.cirru` 与 `package.json`；服务器须安装匹配工具与模块后，
+继续使用 `calcit calcit.cirru --entry server`。本轮不确认服务器已准备好，**不合并、不部署**；
+前后端应一起升级，页面完整刷新，不能让旧服务配新页面。
 
 ### Template layers
 
