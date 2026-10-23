@@ -1,8 +1,8 @@
 {
   "dependencies": {
-    "@calcit/procs": "0.30.1-alpha.4"
+    "@calcit/procs": "0.30.1"
   },
-  "packageManager": "yarn@4.12.0",
+  "packageManager": "yarn@4.18.0",
   "scripts": {
     "check-types": "calcit --check-only --ns app.client --ns app.comp.container --ns app.comp.login --ns app.comp.navigation --ns app.comp.profile --ns app.config --ns app.feature.kanban.client --ns app.feature.kanban.comp --ns app.feature.kanban.resource --ns app.feature.kanban.schema --ns app.feature.kanban.workload --ns app.hooks.client --ns app.schema --ns app.sync.client --summary-only --format edn && calcit --entry server --check-only --ns 'app.$meta' --ns app.config --ns app.feature.kanban.schema --ns app.feature.kanban.server --ns app.feature.kanban.twig --ns app.feature.kanban.updater --ns app.hooks.server --ns app.schema --ns app.server --ns app.sync.server --ns app.twig.container --ns app.twig.user --ns app.updater --ns app.updater.router --ns app.updater.session --ns app.updater.user --ns app.workload.diff-patch --summary-only --format edn",
     "compile-page": "calcit calcit.cirru js",
@@ -13,7 +13,7 @@
     "watch-page": "calcit calcit.cirru js -w"
   },
   "devDependencies": {
-    "bottom-tip": "^0.1.5",
+    "bottom-tip": "0.1.5",
     "url-parse": "^1.5.10",
     "vite": "^8.0.5"
   },

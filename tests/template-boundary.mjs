@@ -14,12 +14,22 @@
 // app.feature.* or an entry namespace, and reaches business code only through
 // app.hooks*. Feature code never depends on the wiring hooks or entries.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const snapshot = readFileSync(new URL("../calcit.cirru", import.meta.url), "utf8");
-const parts = snapshot.split(/\n    '(app\.[\w.\-$]+) \$ %\{\} 'FileEntry/);
+const snapshot = fileURLToPath(new URL("../calcit.cirru", import.meta.url));
+const run = (...args) => execFileSync(process.env.CALCIT_BIN ?? "calcit", [snapshot, ...args], {
+  encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
+});
+const query = (...args) => JSON.parse(run("query", ...args, "--format", "json")).data;
 const files = new Map();
-for (let index = 1; index < parts.length; index += 2) files.set(parts[index], parts[index + 1]);
+for (const ns of query("ns").namespaces) {
+  const namespace = query("ns", ns);
+  const listing = run("query", "defs", ns);
+  const definitions = listing.split("\n").map(line => line.match(/^  (\S+)(?:\s|$)/)?.[1]).filter(Boolean);
+  assert.equal(definitions.length, namespace.definition_count, `incomplete definition listing: ${ns}`);
+  files.set(ns, JSON.stringify([namespace.ns_code, ...definitions.map(name => query("def", `${ns}/${name}`))]));
+}
 
 const layerOf = (ns) => {
   if (ns.startsWith("app.sync.")) return "template";

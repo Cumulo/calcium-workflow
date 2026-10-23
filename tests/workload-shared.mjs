@@ -1,10 +1,12 @@
+import { listToArray } from "../js-out/calcit.core.mjs";
+
 export const allocationUnavailable = Object.freeze({
   status: "unavailable",
   reason: "no stable per-stage allocator API",
 });
 
 export function listValues(list) {
-  return list.value.slice(list.start, list.end);
+  return listToArray(list);
 }
 
 export function stats(samples) {
