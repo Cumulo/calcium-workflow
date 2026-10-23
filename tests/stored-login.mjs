@@ -5,7 +5,9 @@ import { pathToFileURL } from "node:url";
 const output = resolve(process.argv[2] ?? "js-out");
 let raw = null;
 let readError;
+let writeError;
 const keys = [];
+const writes = [];
 const storage = {
   length: 0,
   getItem(key) {
@@ -14,7 +16,10 @@ const storage = {
     return raw;
   },
   key() { return null; },
-  setItem() {},
+  setItem(key, value) {
+    if (writeError) throw writeError;
+    writes.push([key, value]);
+  },
   removeItem() {},
   clear() {},
 };
@@ -43,4 +48,22 @@ assert.throws(() => stored_login(), /expected list/i);
 readError = new Error("storage denied");
 assert.throws(() => stored_login(), error => error === readError);
 assert.ok(keys.every(key => key === "calcium-storage"));
-console.log("stored login: absence, String credentials, empty strings, invalid data and host exception propagation passed");
+
+const { on_submit } = await load("app.comp.login.mjs");
+const dispatched = [];
+const submit = on_submit("demo", "password", false);
+globalThis.localStorage = storage;
+submit(null, op => { dispatched.push(op); });
+assert.equal(dispatched.at(-1).tag.value, "user/log-in");
+assert.equal(writes[0][0], "calcium-storage");
+assert.deepEqual(c.to_js_data(c.parse_cirru_edn(writes[0][1])), ["demo", "password"]);
+writeError = new Error("storage quota denied");
+assert.throws(() => submit(null, op => { dispatched.push(op); }), error => error === writeError);
+assert.equal(dispatched.length, 2, "dispatch still precedes persistence failure");
+const denied = new Error("storage getter denied");
+Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw denied; } });
+assert.throws(() => submit(null, () => {}), error => error === denied);
+delete globalThis.localStorage;
+submit(null, () => {});
+assert.equal(writes.length, 1, "absent storage must not write");
+console.log("stored login: original reads, submit roundtrip, dispatch-before-error, getter/quota propagation and absence passed");
