@@ -50,7 +50,14 @@ tag、断言和执行顺序保留；业务函数代码与两处页面 `hud!` 不
 原模板边界检查改用官方 query 读取 imports、定义及附带区域，不再正则拆 Snapshot 文本；
 原三类边界规则保留，独立合成副本验证非法 import/附带测试/entry 依赖仍会被拒绝。
 已有 workload 的 List 转换改用公开 `listToArray`，不读取 runtime 私有数组布局。
-不增加测试脚本、验证框架或进程管理器；正式 Linux 与实际页面验收待完成。
+不增加测试脚本、验证框架或进程管理器。正式 Linux 验收已通过 browser 300/native 164、
+公开定义 156/239、双入口完整 strict、原 client 44/server 99 项测试、全部原 JS 回归及
+native Kanban E2E。原 100-entity DOM workload 在真实浏览器通过六类操作，patch/fresh
+一致且 key/ref/listener/focus/selection 保持、no-op 无 DOM 修改，控制台无 warning/error。
+这不是整个 Kanban UI 的手工验收，也未做完整性能 benchmark 或生产部署。
+类型覆盖为 285 full / 34 partial / 5 none，开放状态与宿主边界不因正式配对而视为清零。
+查询定义名仍需读取 CLI human 列表并核对计数，稳定 JSON 枚举需求见
+[Calcit #2301](https://github.com/calcit-lang/calcit/issues/2301)；不再解析 Snapshot 存储格式。
 
 ### 历史 alpha.4 迁移与验收
 
