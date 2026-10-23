@@ -64,6 +64,8 @@ const denied = new Error("storage getter denied");
 Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw denied; } });
 assert.throws(() => submit(null, () => {}), error => error === denied);
 delete globalThis.localStorage;
+globalThis.localStorage = undefined;
 submit(null, () => {});
 assert.equal(writes.length, 1, "absent storage must not write");
+delete globalThis.localStorage;
 console.log("stored login: original reads, submit roundtrip, dispatch-before-error, getter/quota propagation and absence passed");
