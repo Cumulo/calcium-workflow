@@ -19,21 +19,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@v6.5.0
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Enable Corepack
         run: |
           corepack enable
-          corepack prepare yarn@4.12.0 --activate
+          corepack prepare yarn@4.18.0 --activate
           yarn --version
 
-      - uses: calcit-lang/setup-calcit@ca701be5a471759e442aa053cd100720bbe1f09f # v1.5.0
+      - uses: calcit-lang/setup-calcit@v1.5.0
         with:
           tools: calcit,caps
           deps-file: deps.cirru
@@ -47,13 +48,18 @@ jobs:
           set -euo pipefail
           caps --strict --ci
           caps verify --toolchain
+          test -f calcit.cirru
+          test -f deps.cirru
+          test ! -e compact.cirru
+          test ! -e package.cirru
           calcit calcit.cirru edit format
           git diff --exit-code -- calcit.cirru
           calcit calcit.cirru --check-only
           calcit calcit.cirru analyze weak-types --only dynamic-method --summary-only --format json \
             | jq -e '.data.summary.findings == 0' > /dev/null
           calcit calcit.cirru --entry server --check-only
-          calcit calcit.cirru fix --workflow strict --verify --format edn
+          calcit calcit.cirru fix --workflow strict --verify --format json \
+            | jq -e '.data.workflow.status == "passed" and .diagnostics == []'
           calcit calcit.cirru --entry server analyze weak-types --only dynamic-method --summary-only --format json \
             | jq -e '.data.summary.findings == 0' > /dev/null
           calcit calcit.cirru analyze weak-types --only deprecated-call --summary-only --format json \

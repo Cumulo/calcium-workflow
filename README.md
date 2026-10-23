@@ -15,7 +15,7 @@ Run frontend:
 
 ```bash
 # dev mode
-corepack enable && corepack prepare yarn@4.12.0 --activate
+corepack enable && corepack prepare yarn@4.18.0 --activate
 yarn install --immutable
 caps
 yarn watch-page
@@ -38,11 +38,21 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 精确配对已发布的 Calcit `0.30.1-alpha.4`；
-0.30.1 尚无正式版，明确保留预发布风险。Respo `0.16.122`、JS-FFI `0.2.3`、
-UI `0.7.41`、Util `0.0.29`、Message `0.0.37`、Recollect `0.0.62`、
-ws-edn `0.0.41`、calcit-wss `0.2.35`、calcit.std `0.2.43`、Reel `0.0.55`
-均使用正式 Git 模块 tag，不使用 hash 或本地候选覆盖；CI fresh Caps 严格解析实际依赖图。
+当前 CLI 与 npm runtime 精确配对正式 Calcit **0.30.1**。升级后重新安装依赖、重启
+服务并刷新浏览器，不能混用旧 alpha runtime/native 库。Respo `0.16.124`、
+JS-FFI `0.2.5`、UI `0.8.0`、Util `0.0.31`、Message `0.0.38`、Recollect `0.0.67`、
+ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Reel `0.0.61`
+均使用已发布正式 Git tag，不使用 main/hash 或本地候选覆盖。UI 0.8 基础样式可能影响外观。
+
+本轮使用官方受保护事务清理原附带测试中的 23 处旧 Option helper，原 99 项测试的名称、
+tag、断言和执行顺序保留；业务函数代码与两处页面 `hud!` 不改。连接状态、同步 revision、
+只读 Reel 和同步 metrics 四个 Ref 补上真实具体类型合同，不增加强转或 Dynamic 预算。
+原模板边界检查改用官方 query 读取 imports、定义及附带区域，不再正则拆 Snapshot 文本；
+原三类边界规则保留，独立合成副本验证非法 import/附带测试/entry 依赖仍会被拒绝。
+已有 workload 的 List 转换改用公开 `listToArray`，不读取 runtime 私有数组布局。
+不增加测试脚本、验证框架或进程管理器；正式 Linux 与实际页面验收待完成。
+
+### 历史 alpha.4 迁移与验收
 
 必填配置通过公开 `get` / Option 和具体边界解码读取，缺失仍拒绝，不新增兜底值。
 Kanban 操作参数直接用类型谓词验证；Map 遍历使用 `MapEntry` / `map-list-kv` /

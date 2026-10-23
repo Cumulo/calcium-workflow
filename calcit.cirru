@@ -1691,7 +1691,7 @@
                     :args $ [] 'Number
                     :return 'app.schema/Session
                   assert-type
-                    option:unwrap $ get (:sessions db) sid
+                    .unwrap $ get (:sessions db) sid
                     , app.schema/Session
                 on-board $ fn (target)
                   hint-fn $ {}
@@ -1717,7 +1717,7 @@
                     assert=
                       {} $ |u1 |Ann
                       :online lobby
-                    assert= 0 $ :card-count $ option:unwrap
+                    assert= 0 $ :card-count $ .unwrap
                       get (:boards lobby) |b1
                 _ $ raise |Expected-lobby
               assert= (PartitionView :missing)
@@ -1864,13 +1864,13 @@
                   match (board-of db |b1)
                     (:some board)
                       assert-type
-                        option:unwrap $ get (:cards board) card-id
+                        .unwrap $ get (:cards board) card-id
                         , app.feature.kanban.schema/Card
                     (:none) (raise |Missing-board)
               assert= db0 anon
-              assert= |Plan $ :title $ option:unwrap (board-of db1 |b1)
+              assert= |Plan $ :title $ .unwrap (board-of db1 |b1)
               assert= 3 $ count $ :columns
-                option:unwrap $ board-of db1 |b1
+                .unwrap $ board-of db1 |b1
               assert= 1 $ :rank $ card-in db2 |c1
               assert= 2 $ :rank $ card-in db3 |c2
               assert= 2 $ :rank $ card-in db4 |c1
@@ -2191,17 +2191,17 @@
                 db4 $ apply-kanban db3 edit-op 1 |o5 5
                 edit-effects $ kanban-effects db3 db4 edit-op 1 |o5 5
                 cold $ apply-cold-effects (apply-cold-effects app.feature.kanban.schema/empty-cold-store move-effects 100) edit-effects 100
-              assert= "|moved A from Todo to Done" $ :summary $ option:unwrap
+              assert= "|moved A from Todo to Done" $ :summary $ .unwrap
                 first $ :history move-effects
               assert= ([]) (:history noop-effects)
               assert= 1 $ :detail-rev $ assert-type
-                option:unwrap $ get
-                  :cards $ option:unwrap $ board-of db4 |b1
+                .unwrap $ get
+                  :cards $ .unwrap $ board-of db4 |b1
                   , |c1
                 , app.feature.kanban.schema/Card
-              assert= 1 $ :rev $ option:unwrap
+              assert= 1 $ :rev $ .unwrap
                 first $ :details edit-effects
-              assert= 2 $ count $ option:unwrap
+              assert= 2 $ count $ .unwrap
                 get (:history cold) |u1
               match (card-detail-reply db4 cold |b1 |c1)
                 (:card-detail detail)
@@ -2932,10 +2932,10 @@
                     do
                       assert= true $ &struct:matches? db Db
                       assert= true $ &struct:matches?
-                        option:unwrap $ get (:sessions db) 1
+                        .unwrap $ get (:sessions db) 1
                         , Session
                       assert= true $ &struct:matches?
-                        option:unwrap $ get (:users db) |u1
+                        .unwrap $ get (:users db) |u1
                         , User
                   (:err error) (raise |Unexpected-decode-failure)
               :tags $ #{} :schema :server
@@ -3932,7 +3932,7 @@
         '*connected? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *connected? false
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'Bool
         '*partitions $ %{} 'CodeEntry
           :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
           :code $ quote $ defref *partitions
@@ -3953,7 +3953,7 @@
         '*sync-revision $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *sync-revision 0
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'Number
         '*ws-client $ %{} 'CodeEntry
           :doc "|Current nominal ws-edn client, retained across browser recovery events."
           :code $ quote $ defref *ws-client (Option :none)
@@ -4451,7 +4451,7 @@
         '*reader-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *reader-reel @*reel
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
         '*reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *reel
             %{} cumulo-reel.core/ReelState (:base @*initial-db) (:db @*initial-db)
@@ -4468,7 +4468,7 @@
           :code $ quote $ defref *sync-metrics
             SyncMetrics :last-diff-latency-ms 0 :last-patch-bytes 0 :last-snapshot-bytes 0 :last-visited-nodes 0 :last-emitted-ops 0 :budget-fallback-count 0 :pending-clients 0 :slow-clients 0 :resync-count 0 :patch-attempts 0 :snapshot-attempts 0 :last-revision 0
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Ref 'app.sync.server/SyncMetrics
         '*sync-retry-scheduled? $ %{} 'CodeEntry
           :doc "|Whether a slower backpressure retry callback is pending."
           :code $ quote $ defref *sync-retry-scheduled? false
@@ -5939,7 +5939,7 @@
                   store $ twig-container db session-data shared
                   decoded $ parse-cirru-edn $ format-cirru-edn store
                   session-view $ :session store
-                  raw-message $ option:unwrap $ get (:messages session-view) |m1
+                  raw-message $ .unwrap $ get (:messages session-view) |m1
                   typed-message $ assert-type raw-message app.schema/MessageView
                 assert= true $ &struct:matches? store Store
                 assert= true $ &struct:matches? decoded Store
@@ -6126,10 +6126,10 @@
                   {} $ sid session-data
                   , :users ({}) :boards ({}) :settings $ {}
                 result $ remove-message db (app.schema/RemoveMessage :id |m1) sid |op 0
-                raw-session $ option:unwrap $ get (:sessions result) sid
+                raw-session $ .unwrap $ get (:sessions result) sid
                 next-session $ assert-type raw-session app.schema/Session
                 next-message $ assert-type
-                  option:unwrap $ get (:messages next-session) |m2
+                  .unwrap $ get (:messages next-session) |m2
                   , app.schema/Message
               assert= (Option :none)
                 get (:messages next-session) |m1
@@ -6182,19 +6182,19 @@
                 wrong $ log-in db |demo |wrong sid |op-wrong 0
                 success $ log-in db |demo |secret sid |op-success 0
                 missing-session $ assert-type
-                  option:unwrap $ get (:sessions missing) sid
+                  .unwrap $ get (:sessions missing) sid
                   , app.schema/Session
                 wrong-session $ assert-type
-                  option:unwrap $ get (:sessions wrong) sid
+                  .unwrap $ get (:sessions wrong) sid
                   , app.schema/Session
                 success-session $ assert-type
-                  option:unwrap $ get (:sessions success) sid
+                  .unwrap $ get (:sessions success) sid
                   , app.schema/Session
                 missing-message $ assert-type
-                  option:unwrap $ get (:messages missing-session) |op-missing
+                  .unwrap $ get (:messages missing-session) |op-missing
                   , app.schema/Message
                 wrong-message $ assert-type
-                  option:unwrap $ get (:messages wrong-session) |op-wrong
+                  .unwrap $ get (:messages wrong-session) |op-wrong
                   , app.schema/Message
               assert= "|No user named: missing" $ :text missing-message
               assert= "|Wrong password for demo" $ :text wrong-message
@@ -6250,10 +6250,10 @@
                     , :boards ({}) :settings $ {}
                 result $ sign-up db |demo |secret sid |op-taken 0
                 next-session $ assert-type
-                  option:unwrap $ get (:sessions result) sid
+                  .unwrap $ get (:sessions result) sid
                   , app.schema/Session
                 next-message $ assert-type
-                  option:unwrap $ get (:messages next-session) |op-taken
+                  .unwrap $ get (:messages next-session) |op-taken
                   , app.schema/Message
               assert= "|Name is taken: demo" $ :text next-message
             :tags $ #{} :protocol :server
@@ -6435,7 +6435,7 @@
                 input-data $ make-workload-input 4 794
                 final-state $ replay-domain-ops (:base input-data) (:ops input-data)
                 final-store $ project-state final-state
-                raw-first-row $ option:unwrap $ nth (:rows final-store) 0
+                raw-first-row $ .unwrap $ nth (:rows final-store) 0
                 first-row $ assert-type raw-first-row Entity
               assert= 4 $ :count final-store
               assert= |entity-795-0 $ :id first-row

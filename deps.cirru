@@ -1,13 +1,13 @@
 
-{} (:calcit-version |0.30.1-alpha.4)
+{} (:calcit-version |0.30.1)
   :version |0.0.5
-  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.55)
-    |Cumulo/cumulo-util.calcit |0.0.29
-    |Respo/respo-message.calcit |0.0.37
-    |Respo/respo-ui.calcit |0.7.41
-    |Respo/respo.calcit |0.16.122
-    |calcit-lang/calcit-wss |0.2.35
-    |calcit-lang/calcit.std |0.2.43
-    |calcit-lang/js-ffi |0.2.3
-    |calcit-lang/recollect |0.0.62
-    |mvc-works/ws-edn.calcit |0.0.41
+  :dependencies $ {} (|Cumulo/cumulo-reel.calcit |0.0.61)
+    |Cumulo/cumulo-util.calcit |0.0.31
+    |Respo/respo-message.calcit |0.0.38
+    |Respo/respo-ui.calcit |0.8.0
+    |Respo/respo.calcit |0.16.124
+    |calcit-lang/calcit-wss |0.2.37
+    |calcit-lang/calcit.std |0.2.44
+    |calcit-lang/js-ffi |0.2.5
+    |calcit-lang/recollect |0.0.67
+    |mvc-works/ws-edn.calcit |0.0.47
