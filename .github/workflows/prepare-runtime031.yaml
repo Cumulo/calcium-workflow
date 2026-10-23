@@ -1,0 +1,96 @@
+name: Independent Calcium boundary acceptance
+on:
+  push:
+    branches: [prepare/calcium-boundary031]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: |
+          corepack enable
+          corepack prepare yarn@4.18.0 --activate
+      - uses: calcit-lang/setup-calcit@v1.5.0
+        with:
+          tools: calcit,caps
+          caps-version: '0.1.1'
+          deps-file: deps.cirru
+      - name: Resolve formal published graph
+        run: |
+          set -euo pipefail
+          mkdir -p acceptance
+          test "$(git hash-object calcit.cirru)" = 1a967eb92df3d5c83781196fcbe0a5cebb803f22
+          caps --strict --ci
+          yarn install --immutable
+          caps verify --toolchain
+      - name: Apply reviewed boundaries with the formal CLI
+        run: |
+          set -euo pipefail
+          node acceptance/prepare-boundaries.mjs
+          git hash-object calcit.cirru > acceptance/source-blob.txt
+      - name: Preserve original type and definition-test gates
+        run: |
+          set -euo pipefail
+          calcit calcit.cirru edit format
+          test "$(git hash-object calcit.cirru)" = "$(cat acceptance/source-blob.txt)"
+          calcit --check-only --keep-going --format json > acceptance/client.json
+          calcit --entry server --check-only --keep-going --format json > acceptance/server.json
+          calcit fix --workflow strict --verify --format json > acceptance/strict.json
+          jq -e '.data.workflow.status == "passed" and .diagnostics == []' acceptance/strict.json
+          jq -e '[.data.workflow.review_required.type_findings[] | select(.kind == "unsafe-coerce")] | length == 0' acceptance/strict.json
+          for entry in default server; do
+            calcit --entry "$entry" analyze weak-types --only dynamic-method --summary-only --format json | jq -e '.data.summary.findings == 0'
+            calcit --entry "$entry" analyze weak-types --only deprecated-call --summary-only --format json | jq -e '.data.summary.calls == 0'
+          done
+          calcit test --tag client --require-match --summary-only --format json > acceptance/client-tests.json
+          jq -e '.selected == 44 and .passed == 44 and .failed == 0' acceptance/client-tests.json
+          calcit --entry server test --require-match --summary-only --format json > acceptance/server-tests.json
+          jq -e '.selected == 99 and .passed == 99 and .failed == 0' acceptance/server-tests.json
+          yarn check-types > acceptance/public-types.edn
+          yarn node tests/template-boundary.mjs --list > acceptance/template-boundary.txt
+          calcit analyze weak-types --only coverage --format json > acceptance/coverage.json
+          calcit query defs --help > acceptance/query-defs-help.txt
+      - name: Build original frontend and run every original JS regression
+        run: |
+          set -euo pipefail
+          yarn compile-page
+          VITE_BASE_URL=./ yarn release-page
+          yarn node tests/session-option.mjs
+          for test_file in client-patch respo-client-boundaries mount-boundary stored-login connection-url; do
+            yarn node --import ./tests/register-node-resolution.mjs "tests/$test_file.mjs"
+          done
+          yarn node tests/diff-patch-workload.mjs --mode smoke > acceptance/workload-smoke.json
+      - name: Run original native Kanban end-to-end regression
+        run: |
+          set -euo pipefail
+          port=5099 calcit calcit.cirru --entry server > acceptance/kanban-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            grep -q "WebSocket server started" acceptance/kanban-server.log && break
+            sleep 0.5
+          done
+          yarn node tests/kanban-e2e.mjs ws://127.0.0.1:5099
+          test "$(git hash-object calcit.cirru)" = "$(cat acceptance/source-blob.txt)"
+          cp calcit.cirru acceptance/calcit.cirru
+      - name: Preserve original UI workload for actual browser acceptance
+        run: |
+          cp -R dist js-out acceptance/
+          mkdir -p acceptance/tests
+          cp tests/diff-patch-browser.html tests/diff-patch-browser.mjs tests/workload-shared.mjs acceptance/tests/
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: calcium-boundary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance
+          retention-days: 7
+          if-no-files-found: error
