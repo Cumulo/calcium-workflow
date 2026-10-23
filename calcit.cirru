@@ -28,7 +28,7 @@
             workload-entry!
             println "|App started!"
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
+          :schema $ :: 'Fn $ {} (:return 'Unit)
             :args $ []
             :features $ #{} :js-ffi
         'on-states-change! $ %{} 'CodeEntry (:doc |)
@@ -303,7 +303,7 @@
               dispatch! $ if signup? (app.schema/Op :user/sign-up username password) (app.schema/Op :user/log-in username password)
               when (js-present? js/localStorage)
                 let
-                    storage $ unsafe-coerce js/localStorage 'js-ffi.browser/StorageHost
+                    storage $ browser/window-local-storage
                   storage .set-item!
                     decode-map-as
                       .unwrap $ get config/site :storage-key
@@ -324,6 +324,7 @@
             respo-ui.css :as css
             app.schema :as schema
             app.config :as config
+            js-ffi.browser :as browser
     'app.comp.navigation $ %{} 'FileEntry
       :defs $ {}
         'comp-navigation $ %{} 'CodeEntry (:doc |)
@@ -452,7 +453,7 @@
           :code $ quote $ def dev?
             = |dev $ .unwrap-or (get-env |mode) |release
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Bool
         'site $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def site
             {} (:port 5021) (:title |Calcium) (:icon |https://cdn.tiye.me/logo/cumulo.png) (:theme |#eeeeff) (:storage-key |calcium-storage) (:storage-file |storage.cirru)
@@ -3968,18 +3969,6 @@
           :code $ quote $ defenum ClientState (:loading) (:offline) (:ready 'app.schema/Store)
           :examples $ []
           :schema $ :: 'EnumDef
-        'ConnectionQueryHost $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ deftrait ConnectionQueryHost
-            :host $ :: 'JsNullish 'String
-            :port $ :: 'JsNullish 'String
-          :examples $ []
-          :ffi $ {} (:backend :js) (:kind :external-object) (:target :browser)
-          :schema $ :: 'Trait
-        'ParsedConnectionHost $ %{} 'CodeEntry (:doc |)
-          :code $ quote $ deftrait ParsedConnectionHost (:query 'app.sync.client/ConnectionQueryHost)
-          :examples $ []
-          :ffi $ {} (:backend :js) (:kind :external-object) (:target :browser)
-          :schema $ :: 'Trait
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ack-sync! (revision)
             ws-send! $ schema/ClientMessage :sync/ack revision
@@ -4078,16 +4067,17 @@
           :code $ quote $ defn connection-url ()
             let
                 location $ browser/location-host
-                parsed $ unsafe-coerce
-                  url-parse (location :href) true
-                  , 'app.sync.client/ParsedConnectionHost
-                query $ parsed :query
-                host $ .unwrap-or
-                  js-nullish->option $ query :host
-                  location :hostname
-                port $ .unwrap-or
-                  js-nullish->option $ query :port
-                  str $ .unwrap $ get config/site :port
+                parsed $ url-parse (location :href) true
+                query $ contract/object-field "|parsed connection URL" parsed |query
+                host $ match
+                  js-nullish->option $ contract/object-field "|connection query" query |host
+                  (:none) (location :hostname)
+                  (:some value) (contract/expect-string "|connection host" value)
+                port $ match
+                  js-nullish->option $ contract/object-field "|connection query" query |port
+                  (:none)
+                    str $ .unwrap $ get config/site :port
+                  (:some value) (contract/expect-string "|connection port" value)
               str |ws:// host |: port
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'String)
@@ -4387,6 +4377,7 @@
             js-ffi.shared :refer $ console-error!
             cumulo-reel.partition :refer $ PartitionSlot apply-partition-deltas
             app.hooks.client :as hooks
+            js-ffi.contract :as contract
     'app.sync.server $ %{} 'FileEntry
       :defs $ {}
         '*client-caches $ %{} 'CodeEntry (:doc |)

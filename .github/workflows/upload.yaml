@@ -59,7 +59,7 @@ jobs:
             | jq -e '.data.summary.findings == 0' > /dev/null
           calcit calcit.cirru --entry server --check-only
           calcit calcit.cirru fix --workflow strict --verify --format json \
-            | jq -e '.data.workflow.status == "passed" and .diagnostics == []'
+            | jq -e '.data.workflow.status == "passed" and .diagnostics == [] and all(.data.workflow.review_required.type_findings[]; .kind != "unsafe-coerce")'
           calcit calcit.cirru --entry server analyze weak-types --only dynamic-method --summary-only --format json \
             | jq -e '.data.summary.findings == 0' > /dev/null
           calcit calcit.cirru analyze weak-types --only deprecated-call --summary-only --format json \
