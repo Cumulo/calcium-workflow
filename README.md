@@ -45,17 +45,23 @@ ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Reel `0.0.61`
 均使用已发布正式 Git tag，不使用 main/hash 或本地候选覆盖。UI 0.8 基础样式可能影响外观。
 
 本轮使用官方受保护事务清理原附带测试中的 23 处旧 Option helper，原 99 项测试的名称、
-tag、断言和执行顺序保留；业务函数代码与两处页面 `hud!` 不改。连接状态、同步 revision、
+tag、断言和执行顺序保留；两处页面 `hud!` 不改。连接状态、同步 revision、
 只读 Reel 和同步 metrics 四个 Ref 补上真实具体类型合同，不增加强转或 Dynamic 预算。
 原模板边界检查改用官方 query 读取 imports、定义及附带区域，不再正则拆 Snapshot 文本；
 原三类边界规则保留，独立合成副本验证非法 import/附带测试/entry 依赖仍会被拒绝。
 已有 workload 的 List 转换改用公开 `listToArray`，不读取 runtime 私有数组布局。
 不增加测试脚本、验证框架或进程管理器。正式 Linux 验收已通过 browser 300/native 164、
-公开定义 156/239、双入口完整 strict、原 client 44/server 99 项测试、全部原 JS 回归及
+公开定义 154/239、双入口完整 strict、原 client 44/server 99 项测试、全部原 JS 回归及
 native Kanban E2E。原 100-entity DOM workload 在真实浏览器通过六类操作，patch/fresh
 一致且 key/ref/listener/focus/selection 保持、no-op 无 DOM 修改，控制台无 warning/error。
 这不是整个 Kanban UI 的手工验收，也未做完整性能 benchmark 或生产部署。
-类型覆盖为 285 full / 34 partial / 5 none，开放状态与宿主边界不因正式配对而视为清零。
+后续收敛登录存储与 URL 边界：复用 js-ffi 已发布的 StorageHost getter 和 object-field /
+expect-string，应用 unsafe 2→0，移除两个只用于 URL 强转的本地 trait。保留原 url-parse、
+空参数/重复键/非法转义结果；存储仍先 dispatch 后写入，getter/quota 异常原样传播，
+不改用会吞掉 getter 异常的 availability 逻辑。`main!` 与 `dev?` 补齐 Unit/Bool 合同。
+已有存储测试补齐上述写入合同，原七项 URL 用例、44/99 项原测试及全部原回归通过；
+完整 strict 中增加应用 unsafe=0 门槛，不另建脚本或质量基线。
+类型覆盖为 285 full / 33 partial / 4 none，开放状态与宿主边界不因正式配对而视为清零。
 查询定义名仍需读取 CLI human 列表并核对计数，稳定 JSON 枚举需求见
 [Calcit #2301](https://github.com/calcit-lang/calcit/issues/2301)；不再解析 Snapshot 存储格式。
 
@@ -68,7 +74,7 @@ Kanban 操作参数直接用类型谓词验证；Map 遍历使用 `MapEntry` / `
 它不进入数据库或线协议。effect 与 WSS callback 明确返回 Unit，保留原有副作用顺序。
 历史 Reel 的 base 仍先验证，再构造保留 records/merged? 的具体数据库类型 Reel。
 旧 Dynamic 数量 baseline 已退役，`yarn check-types`
-按 browser/native 检查全项目公开定义（156/239 个）。严格入口检查、完整 strict、
+按 browser/native 检查全项目公开定义（154/239 个）。严格入口检查、完整 strict、
 dynamic-method/deprecated-call 检查和全部既有原生、生成 JS 回归均保留。
 项目代码中的 Option helper 改为 `.unwrap`、`.unwrap-or`、`.some?`、`.none?`，
 旧 `list-match` 改为 `match (destruct-list ...)`，原生定时器使用带 `!` 的正式 API。
