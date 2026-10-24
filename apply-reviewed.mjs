@@ -41,8 +41,16 @@ function walk(x,path,id,region){
         if(old==='count'){assert.ok(['calcit.core/&list:count','calcit.core/&map:count','calcit.core/&set:count'].includes(resolved.definition));assert.deepEqual(resolved.call_types,{parameters:[],rest:null,returns:"'Number"});}
         else assert.equal(resolved.definition,'calcit.core/foldl');proven++;
       }
-      const p='@'+[...path,0].join('.');assert.equal(JSON.parse(run('tree','show',id,'--path',p,'--format','json')).tree,old);
-      ops.push(['tree','replace',id,'--path',p,'--input-format','json-ast','--code',JSON.stringify(method),'--expect','quote '+old]);
+      const decoder=old==='foldl'&&['app.schema/decode-messages','app.schema/decode-sessions','app.schema/decode-users'].includes(id);
+      if(decoder){
+        const p='@'+path.join('.');assert.deepEqual(JSON.parse(run('tree','show',id,'--path',p,'--format','json')).tree,x);
+        const pairBinding=x[3][2][3][1];assert.equal(pairBinding[0],'let[]');assert.deepEqual(pairBinding[1],['id','value']);assert.equal(pairBinding[2],'pair');assert.equal(pairBinding.length,4);
+        x[0]=method;x[1]=['map-entries','data'];x[3][2][3][1]=['let',[['id',[':key','pair']],['value',[':value','pair']]],pairBinding[3]];
+        ops.push(['tree','replace',id,'--path',p,'--input-format','json-ast','--code',JSON.stringify(x)]);
+      }else{
+        const p='@'+[...path,0].join('.');assert.equal(JSON.parse(run('tree','show',id,'--path',p,'--format','json')).tree,old);
+        ops.push(['tree','replace',id,'--path',p,'--input-format','json-ast','--code',JSON.stringify(method),'--expect','quote '+old]);
+      }
     }
     counts[region+':'+old]=(counts[region+':'+old]||0)+1;x[0]=method;
   }
