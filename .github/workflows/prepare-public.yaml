@@ -29,13 +29,55 @@ jobs:
           yarn install --immutable
           caps --strict --ci
           caps verify --toolchain
-      - name: Inspect reviewed source and public receiver contracts
-        run: node prepare-public.mjs
+      - name: Apply reviewed public-method transaction
+        run: |
+          mkdir -p acceptance
+          node apply-reviewed.mjs
+      - name: Validate original entries and regressions
+        run: |
+          set -euo pipefail
+          prepared_blob=$(git hash-object calcit.cirru)
+          calcit calcit.cirru edit format
+          test "$prepared_blob" = "$(git hash-object calcit.cirru)"
+          calcit calcit.cirru --check-only
+          calcit calcit.cirru --entry server --check-only
+          calcit calcit.cirru fix --workflow strict --verify --format json | tee acceptance/strict.json | jq -e '.data.workflow.status == "passed" and .diagnostics == [] and all(.data.workflow.review_required.type_findings[]; .kind != "unsafe-coerce")'
+          calcit calcit.cirru --entry server fix --workflow strict --verify --format json | tee acceptance/strict-server.json | jq -e '.data.workflow.status == "passed" and .diagnostics == [] and all(.data.workflow.review_required.type_findings[]; .kind != "unsafe-coerce")'
+          for entry in browser server; do
+            args=()
+            if [[ "$entry" == server ]]; then args=(--entry server); fi
+            for kind in dynamic-method deprecated-call; do
+              calcit calcit.cirru "${args[@]}" analyze weak-types --only "$kind" --summary-only --format json | jq -e '(.data.summary.findings // .data.summary.calls) == 0'
+            done
+          done
+          calcit calcit.cirru test --tag client --require-match --summary-only --format json
+          calcit calcit.cirru --entry server test --require-match --summary-only --format json
+          yarn check-types
+          yarn node tests/template-boundary.mjs --list
+          yarn compile-page
+          yarn release-page
+          yarn node tests/session-option.mjs
+          for test_file in client-patch respo-client-boundaries mount-boundary stored-login connection-url; do
+            yarn node --import ./tests/register-node-resolution.mjs "tests/$test_file.mjs"
+          done
+          yarn node tests/diff-patch-workload.mjs --mode smoke
+          port=5099 calcit calcit.cirru --entry server > kanban-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if grep -q "WebSocket server started" kanban-server.log; then break; fi
+            sleep 0.5
+          done
+          yarn node tests/kanban-e2e.mjs ws://127.0.0.1:5099
       - name: Retain preparation evidence
         if: always()
         uses: actions/upload-artifact@v7.0.0
         with:
           name: public-method-preparation
-          path: acceptance/
+          path: |
+            acceptance/
+            calcit.cirru
+            js-out/
+            dist/
           if-no-files-found: error
           retention-days: 7
