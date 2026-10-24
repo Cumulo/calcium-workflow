@@ -24,7 +24,7 @@ function walk(x,path,id,region){
       const proof=evidence.find(e=>e.id===id&&JSON.stringify(e.path)===JSON.stringify(path));
       assert.ok(proof);assert.deepEqual(proof.tree,x);assert.equal(proof.status,0);
       const data=proof.evidence.data,diags=proof.evidence.diagnostics;
-      const resolved=data.static_methods.find(m=>m.name===method);
+      const resolved=data.static_methods?.find(m=>m.name===method);
       if(old==='merge'){
         if(id==='app.comp.container/comp-offline'){
           assert.equal(data.inferred_type,null);assert.equal(diags.length,1);assert.equal(diags[0].code,'W_TYPE_AT_UNRESOLVED');
