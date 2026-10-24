@@ -36,18 +36,16 @@ const c = await load("calcit.core.mjs");
 const client = await load("app.sync.client.mjs");
 const schema = await load("app.schema.mjs");
 const ws = await load("ws-edn.client.mjs");
-const { wrap_dispatch } = await load("respo.controller.client.mjs");
 const { comp_container, comp_offline } = await load("app.comp.container.mjs");
 const { comp_profile } = await load("app.comp.profile.mjs");
 const { twig_container, twig_shared } = await load("app.twig.container.mjs");
 const { twig_user } = await load("app.twig.user.mjs");
 const { make_string } = await load("respo.render.html.mjs");
 
-const wrapped = wrap_dispatch(c.ref(client.dispatch_from_respo_$x_));
-const payload = c.parse_cirru_edn("{} (:value |kept)");
-assert.equal(wrapped(c.parse_cirru_edn("[] :field"), payload), undefined);
+const dispatch = client.dispatch_from_respo_$x_;
+assert.equal(dispatch(c.parse_cirru_edn(":: :states ([] :field) ({} (:value |kept))")), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.field.data, { value: "kept" });
-assert.equal(wrapped(c.parse_cirru_edn("[] :mixed |id 7"), payload), undefined);
+assert.equal(dispatch(c.parse_cirru_edn(":: :states ([] :mixed |id 7) ({} (:value |kept))")), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.mixed.id["7"].data, { value: "kept" });
 const priorStates = c.deref(client._$s_states);
 for (const raw of [42, c.parse_cirru_edn("{}"), c.parse_cirru_edn(":: :states 42 $ {}")]) {
@@ -61,7 +59,7 @@ const socket = { readyState: 1, send(data) { sent.push(data); }, close() {} };
 const connection = ws.create_client_with_$x_("ws://test.invalid", c.parse_cirru_edn("{}"), () => socket);
 socket.onopen({});
 c.reset_$x_(ws._$s_global_client, c._PCT_some(connection));
-assert.equal(wrapped(c.init_tags(["user/log-out"])["user/log-out"], null), undefined);
+assert.equal(dispatch(c.parse_cirru_edn(":: :user/log-out")), undefined);
 const message = schema.decode_client_message(c.parse_cirru_edn(sent.at(-1)));
 assert.equal(message.tag.value, "ok");
 assert.equal(message.get(1).tag.value, "dispatch");
@@ -132,4 +130,4 @@ const clearedDraft = c.parse_cirru_edn("{} (:cursor ([])) (:detail-c1 $ {} (:cur
 assert.ok(make_string(comp_board(clearedDraft, boardView, detailResources, false)).includes("Cold-text"), "cleared draft shows cached detail");
 assert.ok(make_string(comp_history(emptyResources, userView)).includes(">Load<"));
 assert.ok(make_string(comp_settings(userView)).includes("Compact cards: off"));
-console.log("Respo client: legacy cursor/Tag dispatch, decoder rejection, lifecycle replacement/cleanup, three SSR views, Kanban board/history/settings SSR and member Option rendering passed without a network connection");
+console.log("Respo client: typed :states and Op dispatch, decoder rejection, lifecycle replacement/cleanup, three SSR views, Kanban board/history/settings SSR and member Option rendering passed without a network connection");

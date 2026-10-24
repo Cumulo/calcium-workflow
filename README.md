@@ -38,11 +38,12 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 精确配对正式 Calcit **0.30.1**。升级后重新安装依赖、重启
-服务并刷新浏览器，不能混用旧 alpha runtime/native 库。Respo `0.16.124`、
-JS-FFI `0.2.5`、UI `0.8.0`、Util `0.0.31`、Message `0.0.38`、Recollect `0.0.67`、
-ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Reel `0.0.61`
-均使用已发布正式 Git tag，不使用 main/hash 或本地候选覆盖。UI 0.8 基础样式可能影响外观。
+当前 CLI 与 npm runtime 精确配对预发布 Calcit **0.31.0-alpha.2**。升级后重新安装依赖、重启
+服务并刷新浏览器，不能混用旧 runtime/native 库。Respo `0.17.0-alpha.2`、
+JS-FFI `0.2.5`、UI `0.9.0-alpha.1`、Util `0.0.31`、Message `0.1.0-alpha.1`、Recollect `0.1.0-alpha.1`、
+ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Cumulo Reel `0.1.0-alpha.1`
+均使用已发布 Git tag，不使用 main/hash 或本地候选覆盖。Respo 0.17 不再包装两参数的
+`d! cursor state`，界面派发统一走带类型的 `app.schema/Op`。
 
 本轮使用官方受保护事务清理原附带测试中的 23 处旧 Option helper，原 99 项测试的名称、
 tag、断言和执行顺序保留；两处页面 `hud!` 不改。连接状态、同步 revision、
