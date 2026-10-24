@@ -145,7 +145,7 @@
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
-              {} $ :style $ merge ui/global ui/fullscreen ui/column-dispersive
+              {} $ :style $ .merge ui/global ui/fullscreen ui/column-dispersive
                 {} $ :background-color $ site-theme
               div $ {} $ :style
                 {} $ :height 0
@@ -593,7 +593,7 @@
                               :background-color $ hsl 220 20 96
                             div
                               {} $ :style $ {} (:font-weight :bold) (:margin-bottom 8)
-                              <> $ str (:title column) "| · " $ count
+                              <> $ str (:title column) "| · " $ .len
                                 column-cards board $ :id column
                             list-> ({})
                               map
@@ -1193,7 +1193,7 @@
               assert=
                 Query :history (Option :some 3) 20
                 :query h2
-              assert= 1 $ count $ :pending (:resources h2)
+              assert= 1 $ .len $ :pending (:resources h2)
             :tags $ #{} :client :kanban :server
         'stale-details $ %{} 'CodeEntry
           :doc "|Open card details whose hot detail-rev moved past the cached content revision; only these are refetched, unused content is never downloaded."
@@ -1606,8 +1606,8 @@
                   hint-fn $ {}
                     :args $ [] 'String 'app.feature.kanban.schema/Board
                     :return $ :: 'MapEntryDecision 'String 'app.feature.kanban.schema/BoardBrief
-                  MapEntryDecision :keep id $ BoardBrief :id id :title (:title board) :card-count $ count (:cards board)
-              , :online $ foldl
+                  MapEntryDecision :keep id $ BoardBrief :id id :title (:title board) :card-count $ .len (:cards board)
+              , :online $ .foldl
                 map-entries $ :sessions db
                 {}
                 fn (acc pair)
@@ -1654,7 +1654,7 @@
                           (:none) app.feature.kanban.schema/default-settings
                         , :history-rev $ match
                           get (:history cold) user-id
-                          (:some events) (count events)
+                          (:some events) (.len events)
                           (:none) 0
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
@@ -1769,7 +1769,7 @@
           :doc "|Append history and replace card details. Per-user history is bounded; trimming shifts cursors, so clients re-read the first page after history-rev changes."
           :code $ quote $ defn apply-cold-effects (cold effects history-limit)
             let
-                history $ foldl (:history effects) (:history cold)
+                history $ .foldl (:history effects) (:history cold)
                   fn (acc event)
                     hint-fn $ {}
                       :args $ []
@@ -1781,11 +1781,11 @@
                         events $ match (get acc user-id)
                           (:some existing) (conj existing event)
                           (:none) ([] event)
-                        size $ count events
+                        size $ .len events
                       assoc acc user-id $ if (> size history-limit)
                         slice events (- size history-limit) size
                         , events
-                details $ foldl (:details effects) (:details cold)
+                details $ .foldl (:details effects) (:details cold)
                   fn (acc detail)
                     hint-fn $ {}
                       :args $ [] (:: 'Map 'String 'app.feature.kanban.schema/CardDetail) 'app.feature.kanban.schema/CardDetail
@@ -1870,7 +1870,7 @@
                     (:none) (raise |Missing-board)
               assert= db0 anon
               assert= |Plan $ :title $ .unwrap (board-of db1 |b1)
-              assert= 3 $ count $ :columns
+              assert= 3 $ .len $ :columns
                 .unwrap $ board-of db1 |b1
               assert= 1 $ :rank $ card-in db2 |c1
               assert= 2 $ :rank $ card-in db3 |c2
@@ -2048,7 +2048,7 @@
                   (:some existing) existing
                   (:none)
                     assert-type ([]) (:: 'List 'app.feature.kanban.schema/HistoryEvent)
-                total $ count events
+                total $ .len events
                 page-size $ if (< limit 1) 1 $ if (> limit 50) 50 limit
                 end $ match cursor
                   (:some position)
@@ -2202,7 +2202,7 @@
                 , app.feature.kanban.schema/Card
               assert= 1 $ :rev $ .unwrap
                 first $ :details edit-effects
-              assert= 2 $ count $ .unwrap
+              assert= 2 $ .len $ .unwrap
                 get (:history cold) |u1
               match (card-detail-reply db4 cold |b1 |c1)
                 (:card-detail detail)
@@ -2235,7 +2235,7 @@
         'next-rank $ %{} 'CodeEntry
           :doc "|Rank after the current maximum; appending never rewrites sibling ranks."
           :code $ quote $ defn next-rank (ranks)
-            inc $ foldl ranks 0 $ fn (acc rank)
+            inc $ .foldl ranks 0 $ fn (acc rank)
               hint-fn $ {}
                 :args $ [] 'Number 'Number
                 :return 'Number
@@ -2463,7 +2463,7 @@
                   hint-fn $ {}
                     :args $ [] 'Tag
                     :return 'Number
-                  count $ filter @*sent $ fn (action)
+                  .len $ filter @*sent $ fn (action)
                     hint-fn $ {}
                       :args $ [] $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                       :return 'Bool
@@ -2475,7 +2475,7 @@
                   hint-fn $ {}
                     :args $ []
                     :return $ :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
-                  foldl @*sent
+                  .foldl @*sent
                     assert-type ([])
                       :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
                     fn (acc action)
@@ -2506,7 +2506,7 @@
               app.sync.server/sync-partitions-with! db1 record!
               let
                   initial-snapshots $ sends-of :snapshot
-                  initial-partitions $ count @app.sync.server/*partitions
+                  initial-partitions $ .len @app.sync.server/*partitions
                 reset! *sent $ assert-type ([])
                   :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
                 app.sync.server/mark-partitions-dirty! $ app.hooks.server/affected-partitions db1 add-op 1
@@ -2528,8 +2528,8 @@
                   assert= 3 $ :diffs metrics
                   assert= 0 snapshots
                   assert= 10 delta-sends
-                  assert= 5 $ count deltas
-                  assert= 1 $ count $ distinct deltas
+                  assert= 5 $ .len deltas
+                  assert= 1 $ .len $ distinct deltas
                   assert= 8 $ :reused-payloads metrics
             :tags $ #{} :partition :server
         'after-domain-op! $ %{} 'CodeEntry
@@ -3072,25 +3072,34 @@
           :code $ quote $ defn decode-messages (data path)
             if-not (map? data)
               Result :err $ DatabaseDecodeError :invalid path "|Expected message Map"
-              foldl (&map:to-list data)
+              .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
                   :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
+                  hint-fn $ {}
+                    :generics $ [] 'K 'V
+                    :args $ []
+                      :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
+                      :: 'MapEntry 'K 'V
+                    :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
                   match acc
                     (:err error) (Result :err error)
                     (:ok messages)
-                      let[] (id value) pair $ if-not (string? id)
-                        Result :err $ DatabaseDecodeError :invalid path "|Expected String message key"
-                        let
-                            decoded $ decode-message value $ str path |. id
-                          match decoded
-                            (:err error) (Result :err error)
-                            (:ok message)
-                              if
-                                = id $ :id message
-                                Result :ok $ assoc messages id message
-                                Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
+                      let
+                          id $ :key pair
+                          value $ :value pair
+                        if-not (string? id)
+                          Result :err $ DatabaseDecodeError :invalid path "|Expected String message key"
+                          let
+                              decoded $ decode-message value $ str path |. id
+                            match decoded
+                              (:err error) (Result :err error)
+                              (:ok message)
+                                if
+                                  = id $ :id message
+                                  Result :ok $ assoc messages id message
+                                  Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -3551,25 +3560,34 @@
           :code $ quote $ defn decode-sessions (data path)
             if-not (map? data)
               Result :err $ DatabaseDecodeError :invalid path "|Expected session Map"
-              foldl (&map:to-list data)
+              .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
                   :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
+                  hint-fn $ {}
+                    :generics $ [] 'K 'V
+                    :args $ []
+                      :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
+                      :: 'MapEntry 'K 'V
+                    :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
                   match acc
                     (:err error) (Result :err error)
                     (:ok sessions)
-                      let[] (id value) pair $ if-not (number? id)
-                        Result :err $ DatabaseDecodeError :invalid path "|Expected Number session key"
-                        let
-                            decoded $ decode-session value $ str path |. id
-                          match decoded
-                            (:err error) (Result :err error)
-                            (:ok session)
-                              if
-                                = id $ :id session
-                                Result :ok $ assoc sessions id session
-                                Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
+                      let
+                          id $ :key pair
+                          value $ :value pair
+                        if-not (number? id)
+                          Result :err $ DatabaseDecodeError :invalid path "|Expected Number session key"
+                          let
+                              decoded $ decode-session value $ str path |. id
+                            match decoded
+                              (:err error) (Result :err error)
+                              (:ok session)
+                                if
+                                  = id $ :id session
+                                  Result :ok $ assoc sessions id session
+                                  Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -3750,25 +3768,34 @@
           :code $ quote $ defn decode-users (data path)
             if-not (map? data)
               Result :err $ DatabaseDecodeError :invalid path "|Expected user Map"
-              foldl (&map:to-list data)
+              .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
                   :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
                 fn (acc pair)
+                  hint-fn $ {}
+                    :generics $ [] 'K 'V
+                    :args $ []
+                      :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
+                      :: 'MapEntry 'K 'V
+                    :return $ :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
                   match acc
                     (:err error) (Result :err error)
                     (:ok users)
-                      let[] (id value) pair $ if-not (string? id)
-                        Result :err $ DatabaseDecodeError :invalid path "|Expected String user key"
-                        let
-                            decoded $ decode-user value $ str path |. id
-                          match decoded
-                            (:err error) (Result :err error)
-                            (:ok user)
-                              if
-                                = id $ :id user
-                                Result :ok $ assoc users id user
-                                Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
+                      let
+                          id $ :key pair
+                          value $ :value pair
+                        if-not (string? id)
+                          Result :err $ DatabaseDecodeError :invalid path "|Expected String user key"
+                          let
+                              decoded $ decode-user value $ str path |. id
+                            match decoded
+                              (:err error) (Result :err error)
+                              (:ok user)
+                                if
+                                  = id $ :id user
+                                  Result :ok $ assoc users id user
+                                  Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
           :examples $ []
           :schema $ :: 'Fn $ {}
             :args $ [] 'T 'String
@@ -4056,7 +4083,7 @@
                     console-error! "|Lost connection!"
                   :on-data on-server-data
                   :heartbeat-timeout-ms 75000
-                  :class-mapper $ merge
+                  :class-mapper $ .merge
                     {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta cumulo-reel.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
                     , hooks/class-mapper
             , &unit
@@ -4586,7 +4613,7 @@
           :doc "|Reclaim partitions no connection subscribes to, bounding live partition count and memory; a later subscriber gets a fresh epoch."
           :code $ quote $ defn collect-partitions! ()
             let
-                live $ foldl (map-entries @*partition-progress)
+                live $ .foldl (map-entries @*partition-progress)
                   assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
                   fn (acc pair)
                     hint-fn $ {}
@@ -4836,7 +4863,7 @@
               fn (sid)
                 swap! *client-states update sid $ fn (state)
                   dissoc
-                    merge state $ {} (:needs-snapshot? true) (:in-flight? false)
+                    .merge state $ {} (:needs-snapshot? true) (:in-flight? false)
                     , :sent-rev :sent-store
                 when
                   = :active $ .unwrap $ get
@@ -4859,7 +4886,7 @@
                 state $ .unwrap-or (get @*client-states sid) ({})
                 resumed? $ or force-snapshot? $ not= :active
                   .unwrap-or (get state :status) :idle
-                next-state-base $ merge
+                next-state-base $ .merge
                   {} (:status :active)
                     :last-heartbeat $ now-ms
                     :acked-rev client-revision
@@ -4884,7 +4911,7 @@
               .some? $ get @*client-states sid
               swap! *client-states update sid $ fn (state)
                 dissoc
-                  merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:needs-snapshot? true)
+                  .merge state $ {} (:status :idle) (:acked-rev client-revision) (:in-flight? false) (:needs-snapshot? true)
                   , :sent-rev :sent-store
               swap! *client-caches remove-client-cache sid
               swap! *dirty-clients remove-dirty-client sid
@@ -4924,7 +4951,7 @@
         'next-sync-ack-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-sync-ack-state (current revision)
             dissoc
-              merge current $ {} (:acked-rev revision) (:in-flight? false)
+              .merge current $ {} (:acked-rev revision) (:in-flight? false)
               , :sent-rev :sent-store
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -4998,9 +5025,9 @@
           :code $ quote $ defn next-sync-send-state (current revision new-store outcome)
             match outcome
               (:accepted)
-                merge current $ {} (:sent-rev revision) (:sent-store new-store) (:in-flight? true) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
+                .merge current $ {} (:sent-rev revision) (:sent-store new-store) (:in-flight? true) (:needs-snapshot? false) (:slow-client? false) (:last-send-outcome :accepted)
               (:backpressured)
-                merge current $ {}
+                .merge current $ {}
                   :dirty-rev $ let
                       current-dirty $ decode-map-as
                         .unwrap-or (get current :dirty-rev) 0
@@ -5009,10 +5036,10 @@
                   :slow-client? true
                   :last-send-outcome :backpressured
               (:too-large)
-                merge current $ {} (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
+                .merge current $ {} (:needs-snapshot? true) (:slow-client? true) (:last-send-outcome :too-large)
               (:closed)
                 dissoc
-                  merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
+                  .merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                   , :sent-rev :sent-store
           :examples $ []
           :schema $ :: 'Fn $ {}
@@ -5097,14 +5124,14 @@
                   let
                       payload $ format-cirru-edn $ schema/ServerMessage :part/patch key (:epoch state) deltas
                     when
-                      = 1 $ count deltas
+                      = 1 $ .len deltas
                       swap! *partition-payloads assoc key $ CachedPayload :epoch (:epoch state) :revision (:revision state) :payload payload
                     , payload
               match (get @*partition-payloads key)
                 (:some cached)
                   if
                     and
-                      = 1 $ count deltas
+                      = 1 $ .len deltas
                       = (:epoch cached) (:epoch state)
                       = (:revision cached) (:revision state)
                     do (count-partition-event! :reuse) (:payload cached)
@@ -5142,7 +5169,7 @@
             :return $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
         'read-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-partition-metrics ()
-            struct-with @*partition-metrics $ :live-partitions $ count @*partitions
+            struct-with @*partition-metrics $ :live-partitions $ .len @*partitions
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.sync.server/PartitionMetrics)
             :args $ []
@@ -5166,12 +5193,12 @@
           :code $ quote $ defn read-sync-metrics ()
             let
                 states $ distinct-values @*client-states
-                pending-clients $ count $ filter states
+                pending-clients $ .len $ filter states
                   fn (state)
                     decode-map-as
                       .unwrap-or (get state :in-flight?) false
                       , 'Bool
-                slow-clients $ count $ filter states
+                slow-clients $ .len $ filter states
                   fn (state)
                     decode-map-as
                       .unwrap-or (get state :slow-client?) false
@@ -5486,7 +5513,7 @@
                 cond
                     empty? changes
                     SyncDiffPlan :idle stats
-                  (> (count changes) patch-operation-limit)
+                  (> (.len changes) patch-operation-limit)
                     SyncDiffPlan :snapshot stats $ Option :none
                   true $ SyncDiffPlan :patch changes stats
           :examples $ []
@@ -6019,7 +6046,7 @@
           :code $ quote $ defn twig-shared (db record-count)
             SharedTwig :reel-length record-count :attached (AttachedView :type :msg :content "|SOME data") :pages (Option :none) :members
               twig-members (:sessions db) (:users db)
-              , :session-count $ count $ :sessions db
+              , :session-count $ .len $ :sessions db
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
             :args $ [] 'app.schema/Db 'Number
@@ -6321,7 +6348,7 @@
           :tags $ #{} :scaffold
         'entities-by-id $ %{} 'CodeEntry (:doc "|Index an entity list by its stable identifier.")
           :code $ quote $ defn entities-by-id (entities)
-            foldl entities ({})
+            .foldl entities ({})
               fn (acc entity)
                 hint-fn $ {}
                   :args $ [] (:: 'Map 'String 'app.workload.diff-patch/Entity) 'app.workload.diff-patch/Entity
@@ -6395,8 +6422,8 @@
                 input-data $ make-workload-input 4 794
                 base-state $ :base input-data
                 operations $ :ops input-data
-              assert= 4 $ count $ :order base-state
-              assert= 6 $ count operations
+              assert= 4 $ .len $ :order base-state
+              assert= 6 $ .len operations
             :tags $ #{} :client
         'project-state $ %{} 'CodeEntry
           :doc "|Project ordered keyed entities into the client WorkloadStore."
@@ -6405,7 +6432,7 @@
                 rows $ map (:order state)
                   fn (id)
                     .unwrap $ get (:entities state) id
-              WorkloadStore :rows rows :count $ count rows
+              WorkloadStore :rows rows :count $ .len rows
           :examples $ []
           :schema $ :: 'Fn $ {} (:return 'WorkloadStore)
             :args $ [] 'WorkloadState
