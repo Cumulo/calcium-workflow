@@ -62,6 +62,14 @@ expect-string，应用 unsafe 2→0，移除两个只用于 URL 强转的本地 
 已有存储测试补齐上述写入合同，原七项 URL 用例、44/99 项原测试及全部原回归通过；
 完整 strict 中增加应用 unsafe=0 门槛，不另建脚本或质量基线。
 类型覆盖为 285 full / 33 partial / 4 none，开放状态与宿主边界不因正式配对而视为清零。
+后续源码写法维护使用公开 `.len`、`.merge`、`.foldl`，包括原附带测试中的对应调用；
+Map 合并仍从左到右以后值覆盖，左折叠仍按原顺序传入初值和 reducer，List/Map/Set
+计数单位不变。三个 Map 解码器以 `map-entries` / `MapEntry` 字段和自有回调的
+泛型 K/V、具体 Result 累积合同保留键值关系，
+不再用无类型 pair List 解构；原 Map/key/value/id 检查及错误 Result 保留。
+两处实际 `hud!`、协议、登录存储与所有原测试断言保留，
+不新增强转、Dynamic 预算、检查脚本或 COS 探测。开放 Map/List 边界仍按原合同审阅，
+不因改用方法拼写而宣称类型债务清零；本轮不改工具链、正式依赖图或部署条件。
 查询定义名仍需读取 CLI human 列表并核对计数，稳定 JSON 枚举需求见
 [Calcit #2301](https://github.com/calcit-lang/calcit/issues/2301)；不再解析 Snapshot 存储格式。
 
