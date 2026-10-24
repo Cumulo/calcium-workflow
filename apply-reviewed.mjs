@@ -46,6 +46,8 @@ function walk(x,path,id,region){
         const p='@'+path.join('.');assert.deepEqual(JSON.parse(run('tree','show',id,'--path',p,'--format','json')).tree,x);
         const pairBinding=x[3][2][3][1];assert.equal(pairBinding[0],'let[]');assert.deepEqual(pairBinding[1],['id','value']);assert.equal(pairBinding[2],'pair');assert.equal(pairBinding.length,4);
         x[0]=method;x[1]=['map-entries','data'];x[3][2][3][1]=['let',[['id',[':key','pair']],['value',[':value','pair']]],pairBinding[3]];
+        const resultType=structuredClone(before.find(d=>d.id===id).schema.find(field=>field[0]===':return')[1]);
+        x[3].splice(2,0,['hint-fn',['{}',[':generics',['[]',"'K","'V"]],[':args',['[]',resultType,['::',"'MapEntry","'K","'V"]]],[':return',structuredClone(resultType)]]]);
         ops.push(['tree','replace',id,'--path',p,'--input-format','json-ast','--code',JSON.stringify(x)]);
       }else{
         const p='@'+[...path,0].join('.');assert.equal(JSON.parse(run('tree','show',id,'--path',p,'--format','json')).tree,old);
@@ -72,5 +74,5 @@ writeFileSync('acceptance/transaction-applied.json',run(...args,'--expect-revisi
 const actual=[];for(const ns of namespaces){const names=run('query','defs',ns.namespace).split('\n').filter(x=>/^  \S/.test(x)).map(x=>x.trim().split(' ')[0]);assert.equal(names.length,ns.definition_count);for(const name of names)actual.push(q('def',`${ns.namespace}/${name}`));}
 assert.deepEqual(actual,expected);assert.deepEqual(q('config'),config);assert.deepEqual(q('ns').namespaces.map(ns=>q('ns',ns)),namespaces);
 writeFileSync('acceptance/after.json',JSON.stringify(actual,null,2));
-writeFileSync('acceptance/summary.json',JSON.stringify({definitions:324,originalTests:99,counts,proven,manual,namedTestsUpdated:tests,operations:37,preserved:'all operands/order/reducers/defaults/metadata/schemas/ns/config/FFI/HUD/storage/protocol/tests names/tags/assertions'},null,2));
+writeFileSync('acceptance/summary.json',JSON.stringify({definitions:324,originalTests:99,counts,proven,manual,namedTestsUpdated:tests,operations:37,ownedGenericCallbacks:3,preserved:'all definitionmetadata/schemas/ns/config/FFI/HUD/storage/protocol/tests names/tags/assertions;original reducer controlflow/defaults/errorresults,3decoder pairrepresentations replaced with typed MapEntry and universally generic ownedcallbackcontracts'},null,2));
 writeFileSync('acceptance/snapshot-after-blob.txt',execFileSync('git',['hash-object','calcit.cirru'],{encoding:'utf8'}));
