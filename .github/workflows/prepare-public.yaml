@@ -1,0 +1,38 @@
+name: Temporary public-method preparation
+on:
+  push:
+    branches: [prepare/public-methods-031]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: calcit-lang/setup-calcit@v1.5.0
+        with:
+          tools: calcit,caps
+          caps-version: "0.1.1"
+          deps-file: deps.cirru
+      - name: Resolve unchanged formal modules
+        run: |
+          set -euo pipefail
+          caps --strict --ci
+          caps verify --toolchain
+      - name: Inspect reviewed source and public receiver contracts
+        run: node prepare-public.mjs
+      - name: Retain preparation evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: public-method-preparation
+          path: acceptance/
+          if-no-files-found: error
+          retention-days: 7
