@@ -706,9 +706,9 @@
                   (:some detail) (:description detail)
                   (:none) |
                 text $ match draft-option
-                  (:some draft)
+                  (:ok draft)
                     if (string? draft) (assert-type draft String) cached-text
-                  (:none) cached-text
+                  (:err _e) cached-text
               div
                 {} $ :style $ {} (:position :fixed) (:right 16) (:top 64) (:width 320) (:padding 12) (:background-color :white) (:border-radius 8) (:z-index 10)
                   :box-shadow $ str "|0 2px 12px " $ hsl 0 0 0 0.15
@@ -1783,7 +1783,7 @@
                           (:none) ([] event)
                         size $ .len events
                       assoc acc user-id $ if (> size history-limit)
-                        slice events (- size history-limit) size
+                        slice events $ - size history-limit
                         , events
                 details $ .foldl (:details effects) (:details cold)
                   fn (acc detail)
@@ -2056,7 +2056,7 @@
                   (:none) total
                 start $ if (> end page-size) (- end page-size) 0
               app.feature.kanban.schema/HistoryPage :items
-                reverse $ slice events start end
+                reverse $ slice events start $ Option :some end
                 , :next-cursor
                   if (> start 0) (Option :some start) (Option :none)
                   , :history-rev total
@@ -5651,7 +5651,9 @@
                             {} $ :key :id
                             , sync-diff-budget
                         diff-latency $ - (now-ms) diff-start
-                        base-revision $ .unwrap-or (get state :acked-rev) 0
+                        base-revision $ decode-map-as
+                          .unwrap-or (get state :acked-rev) 0
+                          , 'Number
                       match diff-plan
                         (:snapshot stats budget-reason)
                           let
