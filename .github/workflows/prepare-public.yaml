@@ -24,6 +24,9 @@ jobs:
       - name: Resolve unchanged formal modules
         run: |
           set -euo pipefail
+          corepack enable
+          corepack prepare yarn@4.18.0 --activate
+          yarn install --immutable
           caps --strict --ci
           caps verify --toolchain
       - name: Inspect reviewed source and public receiver contracts
