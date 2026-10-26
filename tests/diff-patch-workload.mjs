@@ -33,9 +33,9 @@ const budgetTags = calcit.init_tags(["max-visited", "max-emitted"]);
 const diffBudget = calcit._$n__PCT__$M_(
   DiffBudget,
   budgetTags["max-visited"],
-  calcit._PCT_some(50_000),
+  calcit._PCT__$o__$o_(calcit.Option, calcit.newTag("some"), 50_000),
   budgetTags["max-emitted"],
-  calcit._PCT_some(80_000),
+  calcit._PCT__$o__$o_(calcit.Option, calcit.newTag("some"), 80_000),
 );
 const patchTags = calcit.init_tags(["pick", "missing"]);
 const wireTags = calcit.init_tags(["Entity", "WorkloadStore", "Option", "change-op"]);

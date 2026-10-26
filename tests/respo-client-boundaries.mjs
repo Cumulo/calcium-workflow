@@ -58,7 +58,7 @@ const sent = [];
 const socket = { readyState: 1, send(data) { sent.push(data); }, close() {} };
 const connection = ws.create_client_with_$x_("ws://test.invalid", c.parse_cirru_edn("{}"), () => socket);
 socket.onopen({});
-c.reset_$x_(ws._$s_global_client, c._PCT_some(connection));
+c.reset_$x_(ws._$s_global_client, c._PCT__$o__$o_(c.Option, c.newTag("some"), connection));
 assert.equal(dispatch(c.parse_cirru_edn(":: :user/log-out")), undefined);
 const message = schema.decode_client_message(c.parse_cirru_edn(sent.at(-1)));
 assert.equal(message.tag.value, "ok");
@@ -84,7 +84,7 @@ assert.equal(listeners.size, 0);
 assert.equal(intervals.size, 0);
 assert.equal(timeouts.size, 0);
 ws.client_close_$x_(connection);
-c.reset_$x_(ws._$s_global_client, c._PCT_none());
+c.reset_$x_(ws._$s_global_client, c._PCT__$o__$o_(c.Option, c.newTag("none")));
 
 for (const [tag, text] of [["loading", "Loading..."], ["offline", "No connection..."]]) {
   const html = make_string(comp_offline(c.parse_cirru_edn(`:: :${tag}`)));

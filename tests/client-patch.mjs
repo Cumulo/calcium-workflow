@@ -62,7 +62,7 @@ assert.ok(c._$n__$e_(store, unchanged.get(1)));
 const fields = c.init_tags(["count", "session", "id", "user", "some", "unknown", "snapshot"]);
 // The runtime now refuses a corrupt scalar field write before decoding.
 assert.throws(() => c._$n_struct_$o_assoc(store, fields.count, "not-a-number"), /field :count expects/);
-assert.throws(() => c._$n_struct_$o_assoc(c.get(store, fields.session).get(1), fields.id, c._PCT_some("bad-id")), /field :id expects/);
+assert.throws(() => c._$n_struct_$o_assoc(c.get(store, fields.session).get(1), fields.id, c._PCT__$o__$o_(c.Option, c.newTag("some"), "bad-id")), /field :id expects/);
 // Exercise decoder rejection separately, using wire data rather than an illegal typed write.
 const optionClasses = c.assoc(c.parse_cirru_edn("{}"), c.init_tags(["Option"]).Option, c.Option);
 const storeWire = c.format_cirru_edn(store);
@@ -76,7 +76,7 @@ assert.match(rejectedSession.get(1), /\$\.session\.id/);
 const rejectedSnapshot = decode_server_message(c._$o__$o_(fields.snapshot, 7, corruptSession));
 assert.equal(rejectedSnapshot.tag.value, "err");
 assert.match(rejectedSnapshot.get(1).get(1), /\$\.session\.id/);
-const invalidOption = c._$n_enum_$o_assoc(c._PCT_some("payload"), 0, fields.unknown);
+const invalidOption = c._$n_enum_$o_assoc(c._PCT__$o__$o_(c.Option, c.newTag("some"), "payload"), 0, fields.unknown);
 assert.throws(() => c._$n_struct_$o_assoc(store, fields.user, invalidOption), /field :user expects/);
 assert.throws(() => c._$n_struct_$o_assoc(store, fields.user, "bad-option"), /field :user expects/);
 assert.ok(c._$n__$e_(store, decode_store(store).get(1)));
@@ -86,7 +86,7 @@ const sent = [];
 const socket = { readyState: 1, send(data) { sent.push(data); }, close() {} };
 const connection = ws.create_client_with_$x_("ws://test.invalid", c.parse_cirru_edn("{}"), () => socket);
 socket.onopen({});
-c.reset_$x_(ws._$s_global_client, c._PCT_some(connection));
+c.reset_$x_(ws._$s_global_client, c._PCT__$o__$o_(c.Option, c.newTag("some"), connection));
 const consoleError = console.error;
 const consoleWarn = console.warn;
 console.error = () => {};
@@ -98,7 +98,7 @@ try {
   for (const changes of [
     list(op("replace", "different-type")),
     list(op("assoc", keys.count, 2), op("assoc", keys.color, 42)),
-    list(op("update", keys.session, op("assoc", keys.id, c._PCT_some("bad-id")))),
+    list(op("update", keys.session, op("assoc", keys.id, c._PCT__$o__$o_(c.Option, c.newTag("some"), "bad-id")))),
   ]) {
     sent.length = 0;
     assert.equal(client.apply_server_patch_$x_(9, 10, changes), undefined);
@@ -133,7 +133,7 @@ try {
   console.error = consoleError;
   console.warn = consoleWarn;
   ws.client_close_$x_(connection);
-  c.reset_$x_(ws._$s_global_client, c._PCT_none());
+  c.reset_$x_(ws._$s_global_client, c._PCT__$o__$o_(c.Option, c.newTag("none")));
 }
 console.log("client patch: valid update, atomic rejection, revision mismatch and nominal store passed");
 console.log("store decoder: corrupt scalar, nested Option and snapshot rejected before publication");
