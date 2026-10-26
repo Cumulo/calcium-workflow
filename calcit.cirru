@@ -3606,7 +3606,8 @@
         'decode-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-store (value)
             if
-              and (struct? value) (&struct:matches? value Store)
+              and (struct? value)
+                = :Store $ &struct:get-name value
               try-decode-map-as (store-struct-input value) 'app.schema/Store
               Result :err |Expected-nominal-Store
           :examples $ []
@@ -3866,11 +3867,11 @@
           :code $ quote $ defn store-struct-input (value)
             if (struct? value)
               cond
-                  &struct:matches? value Store
+                  = :Store $ &struct:get-name value
                   -> (&struct:to-map value) (update :session store-struct-input) (update :attached store-struct-input) (update :router store-struct-input) (update :user store-user-input)
-                (&struct:matches? value SessionView)
+                (= :SessionView (&struct:get-name value))
                   -> (&struct:to-map value) (update :router store-struct-input) (update :messages store-message-input)
-                (or (&struct:matches? value RouterView) (&struct:matches? value UserView) (&struct:matches? value AttachedView) (&struct:matches? value MessageView))
+                (or (= :RouterView (&struct:get-name value)) (= :UserView (&struct:get-name value)) (= :AttachedView (&struct:get-name value)) (= :MessageView (&struct:get-name value)))
                   &struct:to-map value
                 true value
               , value
@@ -5957,12 +5958,13 @@
                     , :users ({}) :boards ({}) :settings $ {}
                   shared $ twig-shared db 0
                   store $ twig-container db session-data shared
-                  decoded $ parse-cirru-edn $ format-cirru-edn store
+                  mapper $ {} (:Option Option) (:Store app.schema/Store) (:SessionView app.schema/SessionView) (:RouterView app.schema/RouterView) (:AttachedView app.schema/AttachedView) (:UserView app.schema/UserView) (:MessageView app.schema/MessageView)
+                  decoded $ parse-cirru-edn (format-cirru-edn store) mapper
                   session-view $ :session store
                   raw-message $ .unwrap $ get (:messages session-view) |m1
                   typed-message $ assert-type raw-message app.schema/MessageView
                 assert= true $ &struct:matches? store Store
-                assert= true $ &struct:matches? decoded Store
+                assert= (Result :ok store) (app.schema/decode-store decoded)
                 assert= true $ &struct:matches? typed-message MessageView
                 assert= 0 $ :count store
                 assert= |hello $ :text typed-message
