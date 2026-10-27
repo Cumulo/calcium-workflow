@@ -38,7 +38,7 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 精确配对预发布 Calcit **0.31.0-alpha.7**。升级后重新安装依赖、重启
+当前 CLI 与 npm runtime 精确配对正式 Calcit **0.31.0**。升级后重新安装依赖、重启
 服务并刷新浏览器，不能混用旧 runtime/native 库。Respo `0.17.0-alpha.2`、
 JS-FFI `0.2.5`、UI `0.9.0-alpha.1`、Util `0.0.31`、Message `0.1.0-alpha.1`、Recollect `0.1.0-alpha.1`、
 ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Cumulo Reel `0.1.0-alpha.1`
