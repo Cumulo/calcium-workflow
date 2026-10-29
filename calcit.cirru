@@ -296,7 +296,7 @@
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Map 'Tag 'String
         'on-submit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-submit (username password signup?)
             fn (e dispatch!)
@@ -435,7 +435,7 @@
               :border-radius |16px
               :margin "|0 4px"
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'String
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.profile
           :require
@@ -4855,7 +4855,7 @@
         'heartbeat-timeout $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def heartbeat-timeout 12000
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Number
         'invalidate-sync-caches! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn invalidate-sync-caches! ()
             reset! *shared-twig-cache $ SharedTwigCache :revision -1 :value $ Option :none
@@ -5144,7 +5144,7 @@
         'patch-operation-limit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def patch-operation-limit 64
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ :: 'Number
         'persist-db! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-db! ()
             let
