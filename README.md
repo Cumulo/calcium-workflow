@@ -28,7 +28,8 @@ selection保留，no-op无DOM改动，console warning/error=[]；这不等于整
 
 ### Usages
 
-Install Node.js, Yarn, [Calcit](https://github.com/calcit-lang/calcit) to start.
+Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.32.1](https://github.com/calcit-lang/calcit/releases/tag/0.32.1).
+The local CLI must stay at `0.32.1`, matching `deps.cirru` and `@calcit/procs`.
 
 Install the dependencies declared in `deps.cirru` with `caps --strict --ci`.
 They are linked under `.calcit/modules/` from the immutable module cache.
