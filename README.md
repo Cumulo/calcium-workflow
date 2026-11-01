@@ -2,6 +2,30 @@
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
+### 0.32.1 迁移候选：使用者影响
+
+CLI 与 `@calcit/procs` 成对升级为正式 **0.32.1**。前后端须一起安装完整依赖图、
+重启服务并完整刷新，不能让旧后端配新页面。本候选不确认生产服务器已准备好，
+**不合并、不部署、不发版**；原 `/servers/calcium-workflow/` 与前端 rsync 路径保持。
+
+依赖更新为已发布精确 Git tag：Cumulo Reel0.1.0、Util0.0.35、Message0.1.0、UI0.9.0、
+Respo0.17.1、WSS0.2.40、Std0.2.47、JS FFI0.2.9、Recollect0.1.0、WS-EDN0.0.51；
+间接 Value0.6.0 和 UI 固定的 Router0.9.0-alpha.4 保留，不单独覆盖配对图。
+
+Snapshot 类型语法通过官方事务规范化；322个完整定义视图只有 `mount-target` 增补真实
+`JsNullish respo.dom/DomElement` schema，执行代码及原99个附带测试和断言相同。
+挂载查询仍先检查可空 DOM，再用原 Respo 边界适配；缺少挂载节点的原拒绝行为保持。
+两个真实 `hud!`、wire/Store受检恢复、存储、同步协议、监听与失败顺序不变。
+
+官方release binary下，Caps12模块 strict/toolchain、immutable、双入口公开定义154/239、
+双份完整 strict（空 diagnostics、无 unsafe-coerce）、client44/44与server全99/99测试、
+全部既有JS边界及diff/patch smoke、真实回环 native Kanban E2E通过。
+原100-entity浏览器DOM workload六类操作通过，patched/fresh相同且key/ref/listener/focus/
+selection保留，no-op无DOM改动，console warning/error=[]；这不等于整个Kanban UI手工验收。
+本机原生E2E仅在忽略Snapshot副本追加公开WSS绑定参数127.0.0.1；最终源码默认监听未改，
+原默认路径仍须在原隔离Linux CI验证。精确PR CI/评审尚未执行，不把本地通过当作发布许可。
+保留全部原门禁、60分钟npm隔离与COS内置verify，不新增检查脚本、强转、预算或兼容开关。
+
 ### Usages
 
 Install Node.js, Yarn, [Calcit](https://github.com/calcit-lang/calcit) to start.
@@ -38,7 +62,9 @@ mode=dev calcit -w calcit.cirru --entry server
 calcit calcit.cirru --entry server
 ```
 
-当前 CLI 与 npm runtime 精确配对正式 Calcit **0.31.0**。升级后重新安装依赖、重启
+### 0.31.0 历史迁移记录
+
+上一轮 CLI 与 npm runtime 配对正式 Calcit **0.31.0**。升级后重新安装依赖、重启
 服务并刷新浏览器，不能混用旧 runtime/native 库。Respo `0.17.0-alpha.2`、
 JS-FFI `0.2.5`、UI `0.9.0-alpha.1`、Util `0.0.31`、Message `0.1.0-alpha.1`、Recollect `0.1.0-alpha.1`、
 ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Cumulo Reel `0.1.0-alpha.1`

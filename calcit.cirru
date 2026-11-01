@@ -28,28 +28,22 @@
             workload-entry!
             println "|App started!"
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
         'on-states-change! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-states-change! (states prev) (render-app!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Current 'Previous
-            :generics $ [] 'Current 'Previous
+          :schema $ quote $ Fn Current Previous (-> Unit) (:generics Current Previous)
         'on-store-change! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-store-change! (store prev) (render-app!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.sync.client/ClientState 'app.sync.client/ClientState
+          :schema $ quote $ Fn app.sync.client/ClientState app.sync.client/ClientState (-> Unit)
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (non-nil? client-errors) (hud! |error client-errors)
               do (hud! |inactive nil) (remove-watch! *store :changes) (remove-watch! *states :changes) (clear-cache!) (render-app!) (add-watch! *store :changes on-store-change!) (add-watch! *states :changes on-states-change!) (install-activity-lifecycle!) (ws-set-on-data! on-server-data) (println "|Code updated.")
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
             let
@@ -66,13 +60,11 @@
                   (:ready store) (comp-container states store @*partitions @*resources)
               render! mount-target app dispatch-from-respo!
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'workload-entry! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn workload-entry! () (workload/main!) (kanban-workload/main!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
       :ns $ %{} 'NsEntry
         :doc "|Browser entry (wiring): main!/reload!, root render and watchers. Runtime lives in app.sync.client; business hooks in app.hooks.client."
         :code $ quote $ ns app.client
@@ -137,11 +129,9 @@
                   comp-reel (:reel-length store) ({})
                   div $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'app.schema/Store
-              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
-              , 'app.feature.kanban.resource/Resources
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) app.schema/Store
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+            , app.feature.kanban.resource/Resources (-> respo.schema/Component) (:generics StateKey)
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (mark)
             div
@@ -167,17 +157,14 @@
                   {} (:font-family ui/font-fancy) (:font-size 16)
                     :color $ hsl 0 0 50
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'Dynamic
+          :schema $ quote $ Fn Dynamic (-> respo.schema/Component)
         'comp-session-messages $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-session-messages (messages)
             list->
               {} $ :style $ {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
               -> messages
                 filter-map-kv $ fn (id message)
-                  hint-fn $ {}
-                    :args $ [] 'String 'app.schema/MessageView
-                    :return $ :: 'MapEntryDecision 'String 'respo.schema/Element
+                  hint-fn $ Fn String app.schema/MessageView $ -> (MapEntryDecision String respo.schema/Element)
                   MapEntryDecision :keep id $ div
                     {}
                       :style $ {} (:padding 8) (:margin-bottom 8)
@@ -190,8 +177,7 @@
                     <> (:text message) nil
                 .to-list
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] $ :: 'Map 'String 'app.schema/MessageView
+          :schema $ quote $ Fn (Map String app.schema/MessageView) (-> respo.schema/Component)
         'comp-status-color $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-status-color (color)
             div $ {} (:class-name css-status-color)
@@ -199,29 +185,26 @@
                   size 24
                 {} (:width size) (:height size) (:background-color color)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'String
+          :schema $ quote $ Fn String (-> respo.schema/Component)
         'css-status-color $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-status-color
             {} $ |$0 $ {} (:position :absolute) (:bottom 60) (:left 8) (:border-radius |50%) (:opacity 0.6) (:pointer-events :none)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ quote Dynamic
         'site-icon $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-icon ()
             decode-map-as
               .unwrap $ get config/site :icon
               , 'String
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ []
+          :schema $ quote $ Fn (-> String)
         'site-theme $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-theme ()
             decode-map-as
               .unwrap $ get config/site :theme
               , 'String
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ []
+          :schema $ quote $ Fn (-> String)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.container
           :require
@@ -289,14 +272,12 @@
                         .unwrap-or (get state :password) |
                         , false
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] $ :: 'Map 'StateKey 'Dynamic
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) (-> respo.schema/Component) (:generics StateKey)
         'initial-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
           :examples $ []
-          :schema $ :: 'Map 'Tag 'String
+          :schema $ quote $ Map Tag String
         'on-submit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-submit (username password signup?)
             fn (e dispatch!)
@@ -310,9 +291,7 @@
                       , 'String
                     format-cirru-edn $ [] username password
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Fn)
-            :args $ [] 'String 'String 'Bool
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn String String Bool (-> Fn) (:features :js-ffi)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.login
           :require
@@ -359,15 +338,14 @@
                   =< 8 nil
                   <> $ str count-members
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'Bool 'Number
+          :schema $ quote $ Fn Bool Number (-> respo.schema/Component)
         'css-navigation $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-navigation
             {} $ |$0 $ {} (:height 48) (:justify-content :space-between) (:padding "|0 16px") (:font-size 16)
               :border-bottom $ str "|1px solid " $ hsl 0 0 0 0.1
               :font-family ui/font-fancy
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ quote Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.navigation
           :require
@@ -424,10 +402,7 @@
                       , &unit
                   <> "|Log out"
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'app.schema/UserView $ :: 'Map 'K 'V
-            :features $ #{} :js-ffi
-            :generics $ [] 'K 'V
+          :schema $ quote $ Fn app.schema/UserView (Map K V) (-> respo.schema/Component) (:generics K V) (:features :js-ffi)
         'css-member-label $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstyle css-member-label
             {} $ |$0 $ {} (:padding "|0 8px")
@@ -435,7 +410,7 @@
               :border-radius |16px
               :margin "|0 4px"
           :examples $ []
-          :schema $ :: 'String
+          :schema $ quote String
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.profile
           :require
@@ -453,12 +428,12 @@
           :code $ quote $ def dev?
             = |dev $ .unwrap-or (get-env |mode) |release
           :examples $ []
-          :schema $ :: 'Bool
+          :schema $ quote Bool
         'site $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def site
             {} (:port 5021) (:title |Calcium) (:icon |https://cdn.tiye.me/logo/cumulo.png) (:theme |#eeeeff) (:storage-key |calcium-storage) (:storage-file |storage.cirru)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ quote Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
     'app.feature.kanban.client $ %{} 'FileEntry
@@ -467,7 +442,7 @@
           :doc "|Cold callback cache: fetched history pages and open card details."
           :code $ quote $ defref *resources resource/empty-resources
           :examples $ []
-          :schema $ :: 'Ref 'app.feature.kanban.resource/Resources
+          :schema $ quote $ Ref app.feature.kanban.resource/Resources
         'dispatch-client! $ %{} 'CodeEntry
           :doc "|Handle Kanban client-local operations; returns false for operations that should go to the server."
           :code $ quote $ defn dispatch-client! (op)
@@ -486,8 +461,7 @@
                   , true
               _ false
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Bool)
-            :args $ [] 'app.schema/Op
+          :schema $ quote $ Fn app.schema/Op (-> Bool)
         'on-partition-drop! $ %{} 'CodeEntry
           :doc "|Dropping the private user partition (logout, revoked access) clears cached private cold data."
           :code $ quote $ defn on-partition-drop! (key)
@@ -496,19 +470,15 @@
               _ &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/PartitionKey (-> Unit)
         'receive-reply! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn receive-reply! (request-id reply)
             swap! *resources $ fn (resources)
-              hint-fn $ {}
-                :args $ [] 'app.feature.kanban.resource/Resources
-                :return 'app.feature.kanban.resource/Resources
+              hint-fn $ Fn app.feature.kanban.resource/Resources $ -> app.feature.kanban.resource/Resources
               resource/receive-reply resources request-id reply
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'String 'app.schema/QueryReply
+          :schema $ quote $ Fn String app.schema/QueryReply (-> Unit)
         'refresh-stale-details! $ %{} 'CodeEntry
           :doc "|After a board update, refetch only open card details whose hot detail-rev moved forward."
           :code $ quote $ defn refresh-stale-details! (key partitions)
@@ -517,28 +487,26 @@
                 match (get partitions key)
                   (:some raw-slot)
                     match
-                      :view $ assert-type raw-slot $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
+                      :view $ assert-type raw-slot $ quote (cumulo-reel.partition/PartitionSlot app.schema/PartitionView)
                       (:board board)
                         each (resource/stale-details @*resources board)
                           fn (card-id)
-                            hint-fn $ {}
-                              :args $ [] 'String
-                              :return 'Unit
+                            hint-fn $ Fn String $ -> Unit
                             send-query! $ resource/begin-detail-query @*resources (:id board) card-id
                       _ &unit
                   (:none) &unit
               _ &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
+          :schema $ quote $ Fn app.schema/PartitionKey
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+            -> Unit
         'send-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-query! (request)
             reset! *resources $ :resources request
             ws-send! $ schema/ClientMessage :query (:request-id request) (:query request)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.feature.kanban.resource/QueryRequest
+          :schema $ quote $ Fn app.feature.kanban.resource/QueryRequest (-> Unit)
       :ns $ %{} 'NsEntry
         :doc "|Kanban browser-side business state: the cold resource cache and client-local operations."
         :code $ quote $ ns app.feature.kanban.client
@@ -556,9 +524,8 @@
                   _ $ Option :none
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] $ :: 'Option 'app.schema/PartitionView
-            :return $ :: 'Option 'app.feature.kanban.schema/Board
+          :schema $ quote $ Fn (Option app.schema/PartitionView)
+            -> $ Option app.feature.kanban.schema/Board
         'comp-board $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-board (states view-option resources compact?)
             match (board-in view-option)
@@ -566,9 +533,7 @@
                 let
                     columns $ board-columns board
                     column-ids $ map columns $ fn (column)
-                      hint-fn $ {}
-                        :args $ [] 'app.feature.kanban.schema/Column
-                        :return 'String
+                      hint-fn $ Fn app.feature.kanban.schema/Column $ -> String
                       :id column
                   div
                     {} $ :style $ {} (:padding 16)
@@ -584,9 +549,7 @@
                     list->
                       {} $ :style $ {} (:display :flex) (:align-items :flex-start) (:gap 12) (:overflow-x :auto)
                       map-indexed columns $ fn (index column)
-                        hint-fn $ {}
-                          :args $ [] 'Number 'app.feature.kanban.schema/Column
-                          :return $ :: 'List 'Dynamic
+                        hint-fn $ Fn Number app.feature.kanban.schema/Column $ -> (List Dynamic)
                         [] (:id column)
                           div
                             {} $ :style $ {} (:width 240) (:flex-shrink 0) (:padding 8) (:border-radius 8)
@@ -599,9 +562,7 @@
                               map
                                 column-cards board $ :id column
                                 fn (card)
-                                  hint-fn $ {}
-                                    :args $ [] 'app.feature.kanban.schema/Card
-                                    :return $ :: 'List 'Dynamic
+                                  hint-fn $ Fn app.feature.kanban.schema/Card $ -> (List Dynamic)
                                   [] (:id card)
                                     comp-card board card
                                       nth column-ids $ - index 1
@@ -615,9 +576,8 @@
                       ->
                         map-entries $ :details resources
                         map $ fn (pair)
-                          hint-fn $ {}
-                            :args $ [] $ :: 'MapEntry 'String 'app.feature.kanban.resource/DetailResource
-                            :return $ :: 'List 'Dynamic
+                          hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource)
+                            -> $ List Dynamic
                           let
                               raw-card-id $ :key pair
                               raw-resource $ :value pair
@@ -633,18 +593,14 @@
                     if (missing-view? view-option) "|Board not found." "|Loading board..."
                     , nil
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'StateKey 'Dynamic) (:: 'Option 'app.schema/PartitionView) 'app.feature.kanban.resource/Resources 'Bool
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) (Option app.schema/PartitionView) app.feature.kanban.resource/Resources Bool (-> respo.schema/Component) (:generics StateKey)
         'comp-card $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-card (board card prev-column next-column compact?)
             let
                 board-id $ :id board
                 card-id $ :id card
                 tool $ fn (label op)
-                  hint-fn $ {}
-                    :args $ [] 'String 'app.schema/Op
-                    :return 'respo.schema/Element
+                  hint-fn $ Fn String app.schema/Op $ -> respo.schema/Element
                   span $ {} (:inner-text label) (:class-name css/link)
                     :style $ {} (:margin-left 6) (:font-size 12)
                     :on-click $ fn (e d!) (d! op)
@@ -681,8 +637,7 @@
                         :color $ hsl 0 0 65
                     span $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'app.feature.kanban.schema/Board 'app.feature.kanban.schema/Card (:: 'Option 'String) (:: 'Option 'String) 'Bool
+          :schema $ quote $ Fn app.feature.kanban.schema/Board app.feature.kanban.schema/Card (Option String) (Option String) Bool (-> respo.schema/Component)
         'comp-card-detail $ %{} 'CodeEntry
           :doc "|Card detail panel fed by the cold cache; shows cached content revision next to the hot detail-rev so staleness is visible."
           :code $ quote $ defcomp comp-card-detail (states board card-id resource)
@@ -741,9 +696,7 @@
                     d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :card/edit-detail (:id board) card-id text
                     d! $ schema/Op :states cursor nil
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'app.feature.kanban.schema/Board 'String 'app.feature.kanban.resource/DetailResource
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) app.feature.kanban.schema/Board String app.feature.kanban.resource/DetailResource (-> respo.schema/Component) (:generics StateKey)
         'comp-draft-input $ %{} 'CodeEntry
           :doc "|Small text input keeping its draft in Respo component state and submitting one domain operation."
           :code $ quote $ defcomp comp-draft-input (states placeholder on-submit)
@@ -772,11 +725,10 @@
                       d! $ on-submit draft
                       d! $ schema/Op :states cursor |
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'StateKey 'Dynamic) 'String $ :: 'Fn
-              {} (:return 'app.schema/Op)
-                :args $ [] 'String
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) String
+            Fn String $ -> app.schema/Op
+            -> respo.schema/Component
+            :generics StateKey
         'comp-history $ %{} 'CodeEntry
           :doc "|Personal history from cold pages. The private hot partition only announces history-rev, so new events show as a count until the user loads them."
           :code $ quote $ defcomp comp-history (resources user-option)
@@ -806,9 +758,7 @@
                   {} $ :class-name css/column
                   map (:items history)
                     fn (event)
-                      hint-fn $ {}
-                        :args $ [] 'app.feature.kanban.schema/HistoryEvent
-                        :return $ :: 'List 'Dynamic
+                      hint-fn $ Fn app.feature.kanban.schema/HistoryEvent $ -> (List Dynamic)
                       [] (:id event)
                         div
                           {} $ :style $ {} (:padding "|6px 0")
@@ -829,8 +779,7 @@
                   (:none)
                     span $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] 'app.feature.kanban.resource/Resources $ :: 'Option 'app.schema/PartitionView
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources (Option app.schema/PartitionView) (-> respo.schema/Component)
         'comp-lobby $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-lobby (states view-option)
             div
@@ -847,9 +796,8 @@
                       ->
                         map-entries $ :boards lobby
                         map $ fn (pair)
-                          hint-fn $ {}
-                            :args $ [] $ :: 'MapEntry 'String 'app.feature.kanban.schema/BoardBrief
-                            :return $ :: 'List 'Dynamic
+                          hint-fn $ Fn (MapEntry String app.feature.kanban.schema/BoardBrief)
+                            -> $ List Dynamic
                           let
                               raw-id $ :key pair
                               raw-brief $ :value pair
@@ -879,16 +827,12 @@
                       <> $ str "|Online: " $ join-string
                         map-list-kv (:online lobby)
                           fn (_id name)
-                            hint-fn $ {}
-                              :args $ [] 'String 'String
-                              :return 'String
+                            hint-fn $ Fn String String $ -> String
                             , name
                         , "|, "
                 (:none) (<> "|Loading lobby..." nil)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] (:: 'Map 'StateKey 'Dynamic) (:: 'Option 'app.schema/PartitionView)
-            :generics $ [] 'StateKey
+          :schema $ quote $ Fn (Map StateKey Dynamic) (Option app.schema/PartitionView) (-> respo.schema/Component) (:generics StateKey)
         'comp-settings $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-settings (user-option)
             match (user-in user-option)
@@ -921,13 +865,11 @@
               (:none)
                 span $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Component)
-            :args $ [] $ :: 'Option 'app.schema/PartitionView
+          :schema $ quote $ Fn (Option app.schema/PartitionView) (-> respo.schema/Component)
         'kanban-op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn kanban-op (op) (schema/Op :kanban op)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Op)
-            :args $ [] 'app.feature.kanban.schema/KanbanOp
+          :schema $ quote $ Fn app.feature.kanban.schema/KanbanOp (-> app.schema/Op)
         'lobby-in $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn lobby-in (view-option)
             match view-option
@@ -937,9 +879,8 @@
                   _ $ Option :none
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] $ :: 'Option 'app.schema/PartitionView
-            :return $ :: 'Option 'app.feature.kanban.schema/LobbyView
+          :schema $ quote $ Fn (Option app.schema/PartitionView)
+            -> $ Option app.feature.kanban.schema/LobbyView
         'missing-view? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn missing-view? (view-option)
             match view-option
@@ -949,26 +890,24 @@
                   _ false
               (:none) false
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Bool)
-            :args $ [] $ :: 'Option 'app.schema/PartitionView
+          :schema $ quote $ Fn (Option app.schema/PartitionView) (-> Bool)
         'partition-view $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn partition-view (partitions key)
             match (get partitions key)
               (:some raw-slot)
-                Option :some $ :view $ assert-type raw-slot (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
+                Option :some $ :view $ assert-type raw-slot
+                  quote $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ []
-              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
-              , 'app.schema/PartitionKey
-            :return $ :: 'Option 'app.schema/PartitionView
+          :schema $ quote $ Fn
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+            , app.schema/PartitionKey
+              -> $ Option app.schema/PartitionView
         'route-op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn route-op (name target)
             schema/Op :router/change $ schema/Router :name name :target target
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Op)
-            :args $ [] 'Tag $ :: 'Option 'String
+          :schema $ quote $ Fn Tag (Option String) (-> app.schema/Op)
         'user-in $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn user-in (view-option)
             match view-option
@@ -978,9 +917,8 @@
                   _ $ Option :none
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] $ :: 'Option 'app.schema/PartitionView
-            :return $ :: 'Option 'app.feature.kanban.schema/UserHotView
+          :schema $ quote $ Fn (Option app.schema/PartitionView)
+            -> $ Option app.feature.kanban.schema/UserHotView
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.comp
           :require
@@ -994,41 +932,41 @@
       :defs $ {}
         'DetailResource $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct DetailResource (:board-id 'String)
-            :detail $ :: 'Option 'app.feature.kanban.schema/CardDetail
+            :detail $ quote $ Option app.feature.kanban.schema/CardDetail
             :missing? 'Bool
             :loading? 'Bool
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'HistoryResource $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct HistoryResource
-            :items $ :: 'List 'app.feature.kanban.schema/HistoryEvent
-            :next-cursor $ :: 'Option 'Number
+            :items $ quote $ List app.feature.kanban.schema/HistoryEvent
+            :next-cursor $ quote $ Option Number
             :history-rev 'Number
             :loaded? 'Bool
             :loading? 'Bool
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'QueryRequest $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct QueryRequest
             :resources $ quote app.feature.kanban.resource/Resources
             :request-id 'String
             :query $ quote app.schema/Query
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'QueryTarget $ %{} 'CodeEntry
           :doc "|What a pending request id will update: the history list (append or replace) or one open card detail."
           :code $ quote $ defenum QueryTarget (:history 'Bool) (:detail 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Resources $ %{} 'CodeEntry
           :doc "|Cold data the browser has fetched. Only open card details are kept; history pages accumulate until history-rev announces newer events."
           :code $ quote $ defstruct Resources
             :history $ quote app.feature.kanban.resource/HistoryResource
-            :details $ :: 'Map 'String 'app.feature.kanban.resource/DetailResource
-            :pending $ :: 'Map 'String 'app.feature.kanban.resource/QueryTarget
+            :details $ quote $ Map String app.feature.kanban.resource/DetailResource
+            :pending $ quote $ Map String app.feature.kanban.resource/QueryTarget
             :counter 'Number
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'begin-detail-query $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn begin-detail-query (resources board-id card-id)
             let
@@ -1048,8 +986,7 @@
                 :pending $ assoc pending request-id $ QueryTarget :detail card-id
                 :details $ assoc (:details resources) card-id $ struct-with current (:loading? true)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.resource/QueryRequest)
-            :args $ [] 'app.feature.kanban.resource/Resources 'String 'String
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources String String (-> app.feature.kanban.resource/QueryRequest)
         'begin-history-query $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn begin-history-query (resources append?)
             let
@@ -1070,8 +1007,7 @@
                   :pending $ assoc pending request-id target
                   :history $ struct-with history $ :loading? true
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.resource/QueryRequest)
-            :args $ [] 'app.feature.kanban.resource/Resources 'Bool
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources Bool (-> app.feature.kanban.resource/QueryRequest)
         'close-detail $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn close-detail (resources card-id)
             struct-with resources
@@ -1082,15 +1018,14 @@
                     (:history _) false
                     (:detail id) (= id card-id)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.resource/Resources)
-            :args $ [] 'app.feature.kanban.resource/Resources 'String
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources String (-> app.feature.kanban.resource/Resources)
         'empty-resources $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def empty-resources
             Resources :history
               HistoryResource :items ([]) :next-cursor (Option :none) :history-rev 0 :loaded? false :loading? false
               , :details ({}) :pending ({}) :counter 0
           :examples $ []
-          :schema $ :: 'app.feature.kanban.resource/Resources
+          :schema $ quote app.feature.kanban.resource/Resources
         'receive-reply $ %{} 'CodeEntry
           :doc "|Apply a reply only if its request id is still pending; closed panels, superseded requests and older content revisions are ignored."
           :code $ quote $ defn receive-reply (resources request-id reply)
@@ -1124,9 +1059,7 @@
                         (:some current)
                           let
                               update! $ fn (next)
-                                hint-fn $ {}
-                                  :args $ [] 'app.feature.kanban.resource/DetailResource
-                                  :return 'app.feature.kanban.resource/Resources
+                                hint-fn $ Fn app.feature.kanban.resource/DetailResource $ -> app.feature.kanban.resource/Resources
                                 struct-with base $ :details $ assoc (:details base) card-id next
                             match reply
                               (:card-detail detail)
@@ -1144,14 +1077,11 @@
                                 update! $ struct-with current (:missing? true) (:loading? false)
                               _ $ update! $ struct-with current (:loading? false)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.resource/Resources)
-            :args $ [] 'app.feature.kanban.resource/Resources 'String 'app.schema/QueryReply
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources String app.schema/QueryReply (-> app.feature.kanban.resource/Resources)
           :tests $ [] $ %{} 'TestEntry (:name |stale-and-versioned-replies)
             :code $ quote $ let
                 detail $ fn (rev text)
-                  hint-fn $ {}
-                    :args $ [] 'Number 'String
-                    :return 'app.feature.kanban.schema/CardDetail
+                  hint-fn $ Fn Number String $ -> app.feature.kanban.schema/CardDetail
                   CardDetail :card-id |c1 :board-id |b1 :rev rev :description text :updated-at 0
                 r1 $ begin-detail-query empty-resources |b1 |c1
                 r2 $ begin-detail-query (:resources r1) |b1 |c1
@@ -1167,9 +1097,7 @@
                   :request-id r3
                   QueryReply :card-detail $ detail 3 |x
                 description $ fn (resources)
-                  hint-fn $ {}
-                    :args $ [] 'app.feature.kanban.resource/Resources
-                    :return $ :: 'Option 'String
+                  hint-fn $ Fn app.feature.kanban.resource/Resources $ -> (Option String)
                   match
                     get (:details resources) |c1
                     (:some resource)
@@ -1201,9 +1129,7 @@
             ->
               map-entries $ :details resources
               filter $ fn (pair)
-                hint-fn $ {}
-                  :args $ [] $ :: 'MapEntry 'String 'app.feature.kanban.resource/DetailResource
-                  :return 'Bool
+                hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource) (-> Bool)
                 let
                     raw-card-id $ :key pair
                     raw-resource $ :value pair
@@ -1224,28 +1150,21 @@
                                 > hot-rev $ :rev detail
                               (:none) false
               map $ fn (pair)
-                hint-fn $ {}
-                  :args $ [] $ :: 'MapEntry 'String 'app.feature.kanban.resource/DetailResource
-                  :return 'String
+                hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource) (-> String)
                 :key pair
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.feature.kanban.resource/Resources 'app.feature.kanban.schema/Board
-            :return $ :: 'List 'String
+          :schema $ quote $ Fn app.feature.kanban.resource/Resources app.feature.kanban.schema/Board
+            -> $ List String
         'without-target $ %{} 'CodeEntry
           :doc "|Forget older requests for the same target so their late replies are ignored."
           :code $ quote $ defn without-target (pending matches?)
             .filter-map-kv pending $ fn (id target)
-              hint-fn $ {}
-                :args $ [] 'String 'app.feature.kanban.resource/QueryTarget
-                :return $ :: 'MapEntryDecision 'String 'app.feature.kanban.resource/QueryTarget
+              hint-fn $ Fn String app.feature.kanban.resource/QueryTarget $ -> (MapEntryDecision String app.feature.kanban.resource/QueryTarget)
               if (matches? target) (MapEntryDecision :drop) (MapEntryDecision :keep id target)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'String 'app.feature.kanban.resource/QueryTarget)
-              :: 'Fn $ {} (:return 'Bool)
-                :args $ [] 'app.feature.kanban.resource/QueryTarget
-            :return $ :: 'Map 'String 'app.feature.kanban.resource/QueryTarget
+          :schema $ quote $ Fn (Map String app.feature.kanban.resource/QueryTarget)
+            Fn app.feature.kanban.resource/QueryTarget $ -> Bool
+            -> $ Map String app.feature.kanban.resource/QueryTarget
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.resource
           :require
@@ -1256,80 +1175,80 @@
         'Board $ %{} 'CodeEntry
           :doc "|Hot board state shared by every authorized subscriber of the board partition."
           :code $ quote $ defstruct Board (:id 'String) (:title 'String) (:created-at 'Number)
-            :columns $ :: 'Map 'String 'app.feature.kanban.schema/Column
-            :cards $ :: 'Map 'String 'app.feature.kanban.schema/Card
+            :columns $ quote $ Map String app.feature.kanban.schema/Column
+            :cards $ quote $ Map String app.feature.kanban.schema/Card
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'BoardBrief $ %{} 'CodeEntry (:doc "|Bounded lobby summary of one board.")
           :code $ quote $ defstruct BoardBrief (:id 'String) (:title 'String) (:card-count 'Number)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'Card $ %{} 'CodeEntry
           :doc "|Hot card summary. The description lives in cold storage; detail-rev tells clients when a cached detail is stale."
           :code $ quote $ defstruct Card (:id 'String) (:column-id 'String) (:rank 'Number) (:title 'String) (:detail-rev 'Number) (:updated-at 'Number) (:updated-by 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'CardDetail $ %{} 'CodeEntry
           :doc "|Cold card content. rev matches Card :detail-rev after the same committed operation."
           :code $ quote $ defstruct CardDetail (:card-id 'String) (:board-id 'String) (:rev 'Number) (:description 'String) (:updated-at 'Number)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'ColdEffects $ %{} 'CodeEntry
           :doc "|Cold writes derived purely from one committed domain operation."
           :code $ quote $ defstruct ColdEffects
-            :history $ :: 'List 'app.feature.kanban.schema/HistoryEvent
-            :details $ :: 'List 'app.feature.kanban.schema/CardDetail
+            :history $ quote $ List app.feature.kanban.schema/HistoryEvent
+            :details $ quote $ List app.feature.kanban.schema/CardDetail
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'ColdStore $ %{} 'CodeEntry
           :doc "|Cold data kept outside the hot Db and the Reel: append-only per-user history and versioned card details. Swap for a database-backed store without touching partition sync."
           :code $ quote $ defstruct ColdStore
-            :history $ :: 'Map 'String $ :: 'List 'app.feature.kanban.schema/HistoryEvent
-            :details $ :: 'Map 'String 'app.feature.kanban.schema/CardDetail
+            :history $ quote $ Map String (List app.feature.kanban.schema/HistoryEvent)
+            :details $ quote $ Map String app.feature.kanban.schema/CardDetail
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'Column $ %{} 'CodeEntry
           :doc "|One Kanban column ordered by a numeric rank field, so reordering changes leaves instead of list positions."
           :code $ quote $ defstruct Column (:id 'String) (:title 'String) (:rank 'Number)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'HistoryEvent $ %{} 'CodeEntry
           :doc "|Cold, append-only personal operation history entry."
           :code $ quote $ defstruct HistoryEvent (:id 'String) (:time 'Number) (:user-id 'String) (:kind 'Tag) (:board-id 'String) (:summary 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'HistoryPage $ %{} 'CodeEntry
           :doc "|Newest-first page of personal history. next-cursor is an exclusive index into the append-only log, stable under appends."
           :code $ quote $ defstruct HistoryPage
-            :items $ :: 'List 'app.feature.kanban.schema/HistoryEvent
-            :next-cursor $ :: 'Option 'Number
+            :items $ quote $ List app.feature.kanban.schema/HistoryEvent
+            :next-cursor $ quote $ Option Number
             :history-rev 'Number
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'KanbanOp $ %{} 'CodeEntry
           :doc "|Business operations of the Kanban demo. The acting user always comes from the session; payloads only name target ids and values."
           :code $ quote $ defenum KanbanOp (:board/create 'String) (:board/rename 'String 'String) (:column/add 'String 'String) (:card/add 'String 'String 'String) (:card/rename 'String 'String 'String) (:card/move 'String 'String 'String) (:card/shift 'String 'String 'Number) (:card/remove 'String 'String) (:card/edit-detail 'String 'String 'String) (:settings/toggle-compact) (:settings/set-accent 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'LobbyView $ %{} 'CodeEntry
           :doc "|Public hot partition: board briefs and online user names keyed by user id."
           :code $ quote $ defstruct LobbyView
-            :boards $ :: 'Map 'String 'app.feature.kanban.schema/BoardBrief
-            :online $ :: 'Map 'String 'String
+            :boards $ quote $ Map String app.feature.kanban.schema/BoardBrief
+            :online $ quote $ Map String String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'UserHotView $ %{} 'CodeEntry
           :doc "|Private hot partition of one user. history-rev only announces that cold history changed; events are fetched by query."
           :code $ quote $ defstruct UserHotView (:id 'String) (:name 'String)
             :settings $ quote app.feature.kanban.schema/UserSettings
             :history-rev 'Number
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'UserSettings $ %{} 'CodeEntry
           :doc "|Personal hot preferences synchronized to every connection of the same user."
           :code $ quote $ defstruct UserSettings (:compact? 'Bool) (:accent 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'decode-cold-store $ %{} 'CodeEntry
           :doc "|Validate persisted cold storage before it is used for queries."
           :code $ quote $ defn decode-cold-store (data)
@@ -1339,9 +1258,8 @@
               (:err detail)
                 Result :err $ DatabaseDecodeError :invalid |cold detail
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.feature.kanban.schema/ColdStore 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.feature.kanban.schema/ColdStore app.schema/DatabaseDecodeError
         'decode-kanban-op $ %{} 'CodeEntry
           :doc "|Validate one untrusted Kanban operation payload before it reaches the reducer."
           :code $ quote $ defn decode-kanban-op (data)
@@ -1406,9 +1324,8 @@
                   _ $ invalid-message $ str "|Unknown Kanban operation: " op
                 invalid-message $ str "|Expected-enum-kanban-op: " op
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.feature.kanban.schema/KanbanOp 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.feature.kanban.schema/KanbanOp app.schema/MessageDecodeError
           :tests $ [] $ %{} 'TestEntry (:name |accepts-typed-and-rejects-bad-payloads)
             :code $ quote $ do
               assert=
@@ -1432,12 +1349,12 @@
         'default-settings $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def default-settings (UserSettings :compact? false :accent |#2a8bd6)
           :examples $ []
-          :schema $ :: 'app.feature.kanban.schema/UserSettings
+          :schema $ quote app.feature.kanban.schema/UserSettings
         'empty-cold-store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def empty-cold-store
             ColdStore :history ({}) :details $ {}
           :examples $ []
-          :schema $ :: 'app.feature.kanban.schema/ColdStore
+          :schema $ quote app.feature.kanban.schema/ColdStore
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.schema
           :require
@@ -1456,51 +1373,45 @@
                   do (eprintln "|Invalid cold storage, starting empty:" error) app.feature.kanban.schema/empty-cold-store
               , app.feature.kanban.schema/empty-cold-store
           :examples $ []
-          :schema $ :: 'Ref 'app.feature.kanban.schema/ColdStore
+          :schema $ quote $ Ref app.feature.kanban.schema/ColdStore
         'after-domain-op! $ %{} 'CodeEntry
           :doc "|Append cold history and card details derived from one committed operation."
           :code $ quote $ defn after-domain-op! (db-before db-after op sid op-id op-time)
             match op
               (:kanban kanban-op)
                 swap! *cold-store $ fn (cold)
-                  hint-fn $ {}
-                    :args $ [] 'app.feature.kanban.schema/ColdStore
-                    :return 'app.feature.kanban.schema/ColdStore
+                  hint-fn $ Fn app.feature.kanban.schema/ColdStore $ -> app.feature.kanban.schema/ColdStore
                   apply-cold-effects cold (kanban-effects db-before db-after kanban-op sid op-id op-time) cold-history-limit
               _ &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/Db app.schema/DomainOp Number String Number (-> Unit)
         'answer-query $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn answer-query (db sid query) (query-reply db @*cold-store sid query)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
-            :args $ [] 'app.schema/Db 'Number 'app.schema/Query
+          :schema $ quote $ Fn app.schema/Db Number app.schema/Query (-> app.schema/QueryReply)
         'cold-history-limit $ %{} 'CodeEntry
           :doc "|Per-user bound of the in-process cold history log used by this template."
           :code $ quote $ def cold-history-limit 2000
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'cold-storage-file $ %{} 'CodeEntry
           :doc "|File holding cold history and card details, separate from the hot database snapshot."
           :code $ quote $ def cold-storage-file
             if (empty? calcit-dirname) |cold-storage.cirru $ str calcit-dirname |/cold-storage.cirru
           :examples $ []
-          :schema $ :: 'String
+          :schema $ quote String
         'persist-cold! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-cold! ()
             check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'project $ %{} 'CodeEntry
           :doc "|Project one partition with the current cold store (only history-rev is read from it)."
           :code $ quote $ defn project (db key) (project-partition db @*cold-store key)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
-            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/PartitionKey (-> app.schema/PartitionView)
         'query-reply $ %{} 'CodeEntry
           :doc "|Answer one cold read using the session identity; history is always the caller's own."
           :code $ quote $ defn query-reply (db cold sid query)
@@ -1512,8 +1423,7 @@
                     app.schema/QueryReply :history $ history-page cold user-id cursor limit
                   (:card-detail board-id card-id) (card-detail-reply db cold board-id card-id)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'Number 'app.schema/Query
+          :schema $ quote $ Fn app.schema/Db app.feature.kanban.schema/ColdStore Number app.schema/Query (-> app.schema/QueryReply)
           :tests $ [] $ %{} 'TestEntry (:name |identity-comes-from-session)
             :code $ quote $ let
                 db $ app.feature.kanban.updater/apply-kanban app.feature.kanban.updater/fixture-db (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
@@ -1535,9 +1445,8 @@
               fn (error)
                 Result :err $ schema/DatabaseDecodeError :invalid |cold $ str "|Malformed cold Cirru EDN: " error
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'String
-            :return $ :: 'Result 'app.feature.kanban.schema/ColdStore 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn String
+            -> $ Result app.feature.kanban.schema/ColdStore app.schema/DatabaseDecodeError
           :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-and-roundtrips)
             :code $ quote $ do
               assert= true $ match (read-cold-store "|{} (:history")
@@ -1564,14 +1473,13 @@
                   (:some user-id)
                     #{} $ PartitionKey :user user-id
                   (:none)
-                    assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                    assert-type (#{})
+                      quote $ Set app.schema/PartitionKey
               match op
                 (:kanban kanban-op)
                   let
                       board-key $ fn (board-id)
-                        hint-fn $ {}
-                          :args $ [] 'String
-                          :return $ :: 'Set 'app.schema/PartitionKey
+                        hint-fn $ Fn String $ -> (Set app.schema/PartitionKey)
                         include
                           include user-keys $ PartitionKey :lobby
                           PartitionKey :board board-id
@@ -1589,31 +1497,29 @@
                       (:settings/toggle-compact) user-keys
                       (:settings/set-accent _accent) user-keys
                 (:router/change _router)
-                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                  assert-type (#{})
+                    quote $ Set app.schema/PartitionKey
                 (:session/remove-message _message)
-                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                  assert-type (#{})
+                    quote $ Set app.schema/PartitionKey
                 _ $ include user-keys $ PartitionKey :lobby
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number
-            :return $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/DomainOp Number
+            -> $ Set app.schema/PartitionKey
         'project-lobby $ %{} 'CodeEntry
           :doc "|Bounded public lobby: board briefs and online user names. Passwords and per-session data never enter it."
           :code $ quote $ defn project-lobby (db)
             LobbyView :boards
               .filter-map-kv (:boards db)
                 fn (id board)
-                  hint-fn $ {}
-                    :args $ [] 'String 'app.feature.kanban.schema/Board
-                    :return $ :: 'MapEntryDecision 'String 'app.feature.kanban.schema/BoardBrief
+                  hint-fn $ Fn String app.feature.kanban.schema/Board $ -> (MapEntryDecision String app.feature.kanban.schema/BoardBrief)
                   MapEntryDecision :keep id $ BoardBrief :id id :title (:title board) :card-count $ .len (:cards board)
               , :online $ .foldl
                 map-entries $ :sessions db
                 {}
                 fn (acc pair)
-                  hint-fn $ {}
-                    :args $ [] (:: 'Map 'String 'String) (:: 'MapEntry 'Number 'app.schema/Session)
-                    :return $ :: 'Map 'String 'String
+                  hint-fn $ Fn (Map String String) (MapEntry Number app.schema/Session)
+                    -> $ Map String String
                   let
                       _sid $ :key pair
                       raw-session $ :value pair
@@ -1628,8 +1534,7 @@
                               assoc acc user-id $ :name $ assert-type raw-user app.schema/User
                             (:none) acc
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/LobbyView)
-            :args $ [] 'app.schema/Db
+          :schema $ quote $ Fn app.schema/Db (-> app.feature.kanban.schema/LobbyView)
         'project-partition $ %{} 'CodeEntry
           :doc "|Project one partition from hot state. The user partition only carries history-rev from cold storage, never the events themselves."
           :code $ quote $ defn project-partition (db cold key)
@@ -1657,8 +1562,7 @@
                           (:some events) (.len events)
                           (:none) 0
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.feature.kanban.schema/ColdStore app.schema/PartitionKey (-> app.schema/PartitionView)
         'session-partitions $ %{} 'CodeEntry
           :doc "|Server-side authorization: only signed-in sessions subscribe, only to their own user partition, and to the board they currently route to. Logging out drops every partition."
           :code $ quote $ defn session-partitions (db session)
@@ -1679,25 +1583,20 @@
                       (:none) base
                     , base
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'app.schema/Session
-            :return $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/Session
+            -> $ Set app.schema/PartitionKey
           :tests $ [] $ %{} 'TestEntry (:name |authorization-follows-session)
             :code $ quote $ let
                 db0 $ struct-with app.feature.kanban.updater/fixture-db $ :users
                   {} $ |u1 $ app.schema/User :id |u1 :name |Ann :nickname (Option :none) :avatar (Option :none) :password |hash
                 db $ app.feature.kanban.updater/apply-kanban db0 (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
                 session $ fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'app.schema/Session
+                  hint-fn $ Fn Number $ -> app.schema/Session
                   assert-type
                     .unwrap $ get (:sessions db) sid
                     , app.schema/Session
                 on-board $ fn (target)
-                  hint-fn $ {}
-                    :args $ [] 'String
-                    :return 'app.schema/Session
+                  hint-fn $ Fn String $ -> app.schema/Session
                   struct-with (session 1)
                     :router $ app.schema/Router :name :board :target $ Option :some target
               assert= (#{})
@@ -1763,19 +1662,17 @@
                   , :title title :detail-rev 0 :updated-at op-time :updated-by user-id
               , board
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/Board)
-            :args $ [] 'app.feature.kanban.schema/Board 'String 'String 'String 'String 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String String String String Number (-> app.feature.kanban.schema/Board)
         'apply-cold-effects $ %{} 'CodeEntry
           :doc "|Append history and replace card details. Per-user history is bounded; trimming shifts cursors, so clients re-read the first page after history-rev changes."
           :code $ quote $ defn apply-cold-effects (cold effects history-limit)
             let
                 history $ .foldl (:history effects) (:history cold)
                   fn (acc event)
-                    hint-fn $ {}
-                      :args $ []
-                        :: 'Map 'String $ :: 'List 'app.feature.kanban.schema/HistoryEvent
-                        , 'app.feature.kanban.schema/HistoryEvent
-                      :return $ :: 'Map 'String $ :: 'List 'app.feature.kanban.schema/HistoryEvent
+                    hint-fn $ Fn
+                      Map String $ List app.feature.kanban.schema/HistoryEvent
+                      , app.feature.kanban.schema/HistoryEvent $ ->
+                        Map String $ List app.feature.kanban.schema/HistoryEvent
                     let
                         user-id $ :user-id event
                         events $ match (get acc user-id)
@@ -1787,14 +1684,11 @@
                         , events
                 details $ .foldl (:details effects) (:details cold)
                   fn (acc detail)
-                    hint-fn $ {}
-                      :args $ [] (:: 'Map 'String 'app.feature.kanban.schema/CardDetail) 'app.feature.kanban.schema/CardDetail
-                      :return $ :: 'Map 'String 'app.feature.kanban.schema/CardDetail
+                    hint-fn $ Fn (Map String app.feature.kanban.schema/CardDetail) app.feature.kanban.schema/CardDetail $ -> (Map String app.feature.kanban.schema/CardDetail)
                     assoc acc (:card-id detail) detail
               struct-with cold (:history history) (:details details)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/ColdStore)
-            :args $ [] 'app.feature.kanban.schema/ColdStore 'app.feature.kanban.schema/ColdEffects 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/ColdStore app.feature.kanban.schema/ColdEffects Number (-> app.feature.kanban.schema/ColdStore)
         'apply-kanban $ %{} 'CodeEntry
           :doc "|Pure Kanban reducer. Anonymous sessions and invalid targets leave the database unchanged."
           :code $ quote $ defn apply-kanban (db op sid op-id op-time)
@@ -1812,9 +1706,7 @@
                       struct-with board $ :columns $ assoc (:columns board) op-id
                         Column :id op-id :title (trim title) :rank $ next-rank $ map (board-columns board)
                           fn (column)
-                            hint-fn $ {}
-                              :args $ [] 'app.feature.kanban.schema/Column
-                              :return 'Number
+                            hint-fn $ Fn app.feature.kanban.schema/Column $ -> Number
                             :rank column
                   (:card/add board-id column-id title)
                     if (blank? title) db $ update-board db board-id $ fn (board)
@@ -1845,8 +1737,7 @@
                     update-settings db user-id $ fn (settings)
                       struct-with settings $ :accent accent
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/KanbanOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.feature.kanban.schema/KanbanOp Number String Number (-> app.schema/Db)
           :tests $ [] $ %{} 'TestEntry (:name |board-card-lifecycle)
             :code $ quote $ let
                 db0 fixture-db
@@ -1859,9 +1750,7 @@
                 blank $ apply-kanban db5 (KanbanOp :card/add |b1 |b1-todo "|  ") 1 |o6 6
                 bad-column $ apply-kanban db5 (KanbanOp :card/move |b1 |c2 |missing) 1 |o7 7
                 card-in $ fn (db card-id)
-                  hint-fn $ {}
-                    :args $ [] 'app.schema/Db 'String
-                    :return 'app.feature.kanban.schema/Card
+                  hint-fn $ Fn app.schema/Db String $ -> app.feature.kanban.schema/Card
                   match (board-of db |b1)
                     (:some board)
                       assert-type
@@ -1886,32 +1775,24 @@
           :code $ quote $ defn board-cards (board)
             map-list-kv (:cards board)
               fn (_id value)
-                hint-fn $ {}
-                  :args $ [] 'String 'app.feature.kanban.schema/Card
-                  :return 'app.feature.kanban.schema/Card
+                hint-fn $ Fn String app.feature.kanban.schema/Card $ -> app.feature.kanban.schema/Card
                 , value
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.feature.kanban.schema/Board
-            :return $ :: 'List 'app.feature.kanban.schema/Card
+          :schema $ quote $ Fn app.feature.kanban.schema/Board
+            -> $ List app.feature.kanban.schema/Card
         'board-columns $ %{} 'CodeEntry (:doc "|Columns ordered by rank.")
           :code $ quote $ defn board-columns (board)
             .sort-by
               map-list-kv (:columns board)
                 fn (_id value)
-                  hint-fn $ {}
-                    :args $ [] 'String 'app.feature.kanban.schema/Column
-                    :return 'app.feature.kanban.schema/Column
+                  hint-fn $ Fn String app.feature.kanban.schema/Column $ -> app.feature.kanban.schema/Column
                   , value
               fn (column)
-                hint-fn $ {}
-                  :args $ [] 'app.feature.kanban.schema/Column
-                  :return 'Number
+                hint-fn $ Fn app.feature.kanban.schema/Column $ -> Number
                 :rank column
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.feature.kanban.schema/Board
-            :return $ :: 'List 'app.feature.kanban.schema/Column
+          :schema $ quote $ Fn app.feature.kanban.schema/Board
+            -> $ List app.feature.kanban.schema/Column
         'board-of $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn board-of (db board-id)
             match
@@ -1920,9 +1801,8 @@
                 Option :some $ assert-type raw app.feature.kanban.schema/Board
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'String
-            :return $ :: 'Option 'app.feature.kanban.schema/Board
+          :schema $ quote $ Fn app.schema/Db String
+            -> $ Option app.feature.kanban.schema/Board
         'card-column $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn card-column (board-option card-id)
             match board-option
@@ -1934,8 +1814,7 @@
                   (:none) |
               (:none) |
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] (:: 'Option 'app.feature.kanban.schema/Board) 'String
+          :schema $ quote $ Fn (Option app.feature.kanban.schema/Board) String (-> String)
         'card-detail-reply $ %{} 'CodeEntry
           :doc "|Read cold card content only while the hot card exists; the returned rev lets clients drop stale responses."
           :code $ quote $ defn card-detail-reply (db cold board-id card-id)
@@ -1952,8 +1831,7 @@
                       (:none)
                         CardDetail :card-id card-id :board-id board-id :rev 0 :description | :updated-at 0
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
-            :args $ [] 'app.schema/Db 'app.feature.kanban.schema/ColdStore 'String 'String
+          :schema $ quote $ Fn app.schema/Db app.feature.kanban.schema/ColdStore String String (-> app.schema/QueryReply)
         'card-title $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn card-title (board-option card-id)
             match board-option
@@ -1965,37 +1843,28 @@
                   (:none) card-id
               (:none) card-id
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] (:: 'Option 'app.feature.kanban.schema/Board) 'String
+          :schema $ quote $ Fn (Option app.feature.kanban.schema/Board) String (-> String)
         'column-card-ranks $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn column-card-ranks (board column-id)
             map (column-cards board column-id)
               fn (card)
-                hint-fn $ {}
-                  :args $ [] 'app.feature.kanban.schema/Card
-                  :return 'Number
+                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Number
                 :rank card
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.feature.kanban.schema/Board 'String
-            :return $ :: 'List 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String
+            -> $ List Number
         'column-cards $ %{} 'CodeEntry (:doc "|Cards of one column ordered by rank.")
           :code $ quote $ defn column-cards (board column-id)
             -> (board-cards board)
               filter $ fn (card)
-                hint-fn $ {}
-                  :args $ [] 'app.feature.kanban.schema/Card
-                  :return 'Bool
+                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Bool
                 = column-id $ :column-id card
               .sort-by $ fn (card)
-                hint-fn $ {}
-                  :args $ [] 'app.feature.kanban.schema/Card
-                  :return 'Number
+                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Number
                 :rank card
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.feature.kanban.schema/Board 'String
-            :return $ :: 'List 'app.feature.kanban.schema/Card
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String
+            -> $ List app.feature.kanban.schema/Card
         'column-title $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn column-title (board-option column-id)
             match board-option
@@ -2007,15 +1876,12 @@
                   (:none) column-id
               (:none) column-id
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] (:: 'Option 'app.feature.kanban.schema/Board) 'String
+          :schema $ quote $ Fn (Option app.feature.kanban.schema/Board) String (-> String)
         'create-board $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn create-board (db title op-id op-time)
             let
                 column $ fn (suffix label rank)
-                  hint-fn $ {}
-                    :args $ [] 'String 'String 'Number
-                    :return 'app.feature.kanban.schema/Column
+                  hint-fn $ Fn String String Number $ -> app.feature.kanban.schema/Column
                   let
                       id $ str op-id |- suffix
                     Column :id id :title label :rank rank
@@ -2027,8 +1893,7 @@
               struct-with db $ :boards $ assoc (:boards db) op-id
                 Board :id op-id :title title :created-at op-time :columns columns :cards $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'String 'String 'Number
+          :schema $ quote $ Fn app.schema/Db String String Number (-> app.schema/Db)
         'fixture-db $ %{} 'CodeEntry
           :doc "|Deterministic database with one signed-in session (1) and one anonymous session (2) for reducer tests."
           :code $ quote $ def fixture-db
@@ -2038,7 +1903,7 @@
                 2 $ app.schema/Session :id 2 :user-id (Option :none) :nickname (Option :none) :router app.schema/router :messages $ {}
               , :users ({}) :boards ({}) :settings $ {}
           :examples $ []
-          :schema $ :: 'app.schema/Db
+          :schema $ quote app.schema/Db
         'history-page $ %{} 'CodeEntry
           :doc "|Newest-first page ending before an exclusive cursor into the append-only log; page size is clamped to 1..50."
           :code $ quote $ defn history-page (cold user-id cursor limit)
@@ -2047,7 +1912,8 @@
                   get (:history cold) user-id
                   (:some existing) existing
                   (:none)
-                    assert-type ([]) (:: 'List 'app.feature.kanban.schema/HistoryEvent)
+                    assert-type ([])
+                      quote $ List app.feature.kanban.schema/HistoryEvent
                 total $ .len events
                 page-size $ if (< limit 1) 1 $ if (> limit 50) 50 limit
                 end $ match cursor
@@ -2061,14 +1927,11 @@
                   if (> start 0) (Option :some start) (Option :none)
                   , :history-rev total
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/HistoryPage)
-            :args $ [] 'app.feature.kanban.schema/ColdStore 'String (:: 'Option 'Number) 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/ColdStore String (Option Number) Number (-> app.feature.kanban.schema/HistoryPage)
           :tests $ [] $ %{} 'TestEntry (:name |stable-cursor-paging-and-bound)
             :code $ quote $ let
                 event $ fn (id)
-                  hint-fn $ {}
-                    :args $ [] 'String
-                    :return 'app.feature.kanban.schema/HistoryEvent
+                  hint-fn $ Fn String $ -> app.feature.kanban.schema/HistoryEvent
                   HistoryEvent :id id :time 0 :user-id |u1 :kind :card/add :board-id |b1 :summary id
                 effects $ ColdEffects :history
                   map ([] |e1 |e2 |e3 |e4) event
@@ -2077,14 +1940,10 @@
                 first-page $ history-page cold |u1 (Option :none) 2
                 second-page $ history-page cold |u1 (:next-cursor first-page) 2
                 ids $ fn (page)
-                  hint-fn $ {}
-                    :args $ [] 'app.feature.kanban.schema/HistoryPage
-                    :return $ :: 'List 'String
+                  hint-fn $ Fn app.feature.kanban.schema/HistoryPage $ -> (List String)
                   map (:items page)
                     fn (item)
-                      hint-fn $ {}
-                        :args $ [] 'app.feature.kanban.schema/HistoryEvent
-                        :return 'String
+                      hint-fn $ Fn app.feature.kanban.schema/HistoryEvent $ -> String
                       :id item
               assert= 3 $ :history-rev first-page
               assert= ([] |e4 |e3) (ids first-page)
@@ -2100,23 +1959,18 @@
             let
                 none $ ColdEffects :history ([]) :details $ []
                 event $ fn (user-id kind board-id summary)
-                  hint-fn $ {}
-                    :args $ [] 'String 'Tag 'String 'String
-                    :return 'app.feature.kanban.schema/HistoryEvent
+                  hint-fn $ Fn String Tag String String $ -> app.feature.kanban.schema/HistoryEvent
                   HistoryEvent :id op-id :time op-time :user-id user-id :kind kind :board-id board-id :summary summary
                 board-change $ fn (board-id)
-                  hint-fn $ {}
-                    :args $ [] 'String
-                    :return $ :: 'Option $ :: 'List 'app.feature.kanban.schema/Board
+                  hint-fn $ Fn String $ ->
+                    Option $ List app.feature.kanban.schema/Board
                   let
                       before $ board-of db-before board-id
                       after $ board-of db-after board-id
                     if (= before after) (Option :none)
                       Option :some $ []
                 only $ fn (user-id kind board-id summary)
-                  hint-fn $ {}
-                    :args $ [] 'String 'Tag 'String 'String
-                    :return 'app.feature.kanban.schema/ColdEffects
+                  hint-fn $ Fn String Tag String String $ -> app.feature.kanban.schema/ColdEffects
                   match (board-change board-id)
                     (:none) none
                     (:some _)
@@ -2128,14 +1982,10 @@
                 (:some user-id)
                   let
                       before-of $ fn (board-id)
-                        hint-fn $ {}
-                          :args $ [] 'String
-                          :return $ :: 'Option 'app.feature.kanban.schema/Board
+                        hint-fn $ Fn String $ -> (Option app.feature.kanban.schema/Board)
                         board-of db-before board-id
                       after-of $ fn (board-id)
-                        hint-fn $ {}
-                          :args $ [] 'String
-                          :return $ :: 'Option 'app.feature.kanban.schema/Board
+                        hint-fn $ Fn String $ -> (Option app.feature.kanban.schema/Board)
                         board-of db-after board-id
                     match op
                       (:board/create title)
@@ -2177,8 +2027,7 @@
                       (:settings/toggle-compact) none
                       (:settings/set-accent _accent) none
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/ColdEffects)
-            :args $ [] 'app.schema/Db 'app.schema/Db 'app.feature.kanban.schema/KanbanOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/Db app.feature.kanban.schema/KanbanOp Number String Number (-> app.feature.kanban.schema/ColdEffects)
           :tests $ [] $ %{} 'TestEntry (:name |history-and-versioned-detail)
             :code $ quote $ let
                 db1 $ apply-kanban fixture-db (KanbanOp :board/create |Plan) 1 |b1 1
@@ -2230,19 +2079,15 @@
                     :updated-by user-id
               , board
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/Board)
-            :args $ [] 'app.feature.kanban.schema/Board 'String 'String 'String 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String String String Number (-> app.feature.kanban.schema/Board)
         'next-rank $ %{} 'CodeEntry
           :doc "|Rank after the current maximum; appending never rewrites sibling ranks."
           :code $ quote $ defn next-rank (ranks)
             inc $ .foldl ranks 0 $ fn (acc rank)
-              hint-fn $ {}
-                :args $ [] 'Number 'Number
-                :return 'Number
+              hint-fn $ Fn Number Number $ -> Number
               if (> rank acc) rank acc
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ [] $ :: 'List 'Number
+          :schema $ quote $ Fn (List Number) (-> Number)
         'session-user-id $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn session-user-id (db sid)
             match
@@ -2251,9 +2096,8 @@
                 :user-id $ assert-type raw-session app.schema/Session
               (:none) (Option :none)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'Number
-            :return $ :: 'Option 'String
+          :schema $ quote $ Fn app.schema/Db Number
+            -> $ Option String
         'shift-card $ %{} 'CodeEntry
           :doc "|Swap ranks with the neighbor above or below inside the same column; only two rank leaves change."
           :code $ quote $ defn shift-card (board card-id step)
@@ -2266,9 +2110,7 @@
                     siblings $ column-cards board $ :column-id card
                   match
                     find-index siblings $ fn (item)
-                      hint-fn $ {}
-                        :args $ [] 'app.feature.kanban.schema/Card
-                        :return 'Bool
+                      hint-fn $ Fn app.feature.kanban.schema/Card $ -> Bool
                       = card-id $ :id item
                     (:none) board
                     (:some index)
@@ -2281,14 +2123,12 @@
                             assoc (:id neighbor)
                               struct-with neighbor $ :rank $ :rank card
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/Board)
-            :args $ [] 'app.feature.kanban.schema/Board 'String 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String Number (-> app.feature.kanban.schema/Board)
         'touch-card $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn touch-card (card user-id op-time)
             struct-with card (:updated-at op-time) (:updated-by user-id)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/Card)
-            :args $ [] 'app.feature.kanban.schema/Card 'String 'Number
+          :schema $ quote $ Fn app.feature.kanban.schema/Card String Number (-> app.feature.kanban.schema/Card)
         'update-board $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn update-board (db board-id f)
             match
@@ -2298,10 +2138,9 @@
                   f $ assert-type raw-board app.feature.kanban.schema/Board
               (:none) db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'String $ :: 'Fn
-              {} (:return 'app.feature.kanban.schema/Board)
-                :args $ [] 'app.feature.kanban.schema/Board
+          :schema $ quote $ Fn app.schema/Db String
+            Fn app.feature.kanban.schema/Board $ -> app.feature.kanban.schema/Board
+            -> app.schema/Db
         'update-card $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn update-card (board card-id f)
             match
@@ -2311,10 +2150,9 @@
                   f $ assert-type raw-card app.feature.kanban.schema/Card
               (:none) board
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.feature.kanban.schema/Board)
-            :args $ [] 'app.feature.kanban.schema/Board 'String $ :: 'Fn
-              {} (:return 'app.feature.kanban.schema/Card)
-                :args $ [] 'app.feature.kanban.schema/Card
+          :schema $ quote $ Fn app.feature.kanban.schema/Board String
+            Fn app.feature.kanban.schema/Card $ -> app.feature.kanban.schema/Card
+            -> app.feature.kanban.schema/Board
         'update-settings $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn update-settings (db user-id f)
             let
@@ -2324,10 +2162,9 @@
                   (:none) app.feature.kanban.schema/default-settings
               struct-with db $ :settings $ assoc (:settings db) user-id (f current)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'String $ :: 'Fn
-              {} (:return 'app.feature.kanban.schema/UserSettings)
-                :args $ [] 'app.feature.kanban.schema/UserSettings
+          :schema $ quote $ Fn app.schema/Db String
+            Fn app.feature.kanban.schema/UserSettings $ -> app.feature.kanban.schema/UserSettings
+            -> app.schema/Db
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.updater
           :require $ app.feature.kanban.schema :refer $ Board Card CardDetail ColdEffects Column HistoryEvent KanbanOp
@@ -2336,8 +2173,7 @@
         'main! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn main! () (view-fixture) &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'view-fixture $ %{} 'CodeEntry
           :doc "|Board, missing-board, open-detail resources, user view and empty resources for SSR checks of the Kanban views."
           :code $ quote $ defn view-fixture ()
@@ -2354,9 +2190,8 @@
                 Option :some $ schema/PartitionView :missing
                 , resources (Option :some user-view) resource/empty-resources
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ []
-            :return $ :: 'List 'Dynamic
+          :schema $ quote $ Fn
+            -> $ List Dynamic
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.workload
           :require (app.schema :as schema) (app.feature.kanban.updater :as kanban) (app.feature.kanban.resource :as resource)
@@ -2366,31 +2201,29 @@
           :doc "|Called after a partition snapshot or patch is published, e.g. to refetch stale cold content."
           :code $ quote $ defn after-partition-update! (key partitions) (kanban-client/refresh-stale-details! key partitions)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
+          :schema $ quote $ Fn app.schema/PartitionKey
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+            -> Unit
         'class-mapper $ %{} 'CodeEntry
           :doc "|Feature structs and enums that ws-edn must restore by name inside partition views and query replies."
           :code $ quote $ def class-mapper
             {} (:LobbyView kanban-schema/LobbyView) (:BoardBrief kanban-schema/BoardBrief) (:Board kanban-schema/Board) (:Column kanban-schema/Column) (:Card kanban-schema/Card) (:UserHotView kanban-schema/UserHotView) (:UserSettings kanban-schema/UserSettings) (:QueryReply app.schema/QueryReply) (:HistoryPage kanban-schema/HistoryPage) (:HistoryEvent kanban-schema/HistoryEvent) (:CardDetail kanban-schema/CardDetail)
           :examples $ []
-          :schema $ :: 'Map 'Tag 'Dynamic
+          :schema $ quote $ Map Tag Dynamic
         'dispatch-client! $ %{} 'CodeEntry
           :doc "|Handle feature client-local operations; return false to send the operation to the server."
           :code $ quote $ defn dispatch-client! (op) (kanban-client/dispatch-client! op)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Bool)
-            :args $ [] 'app.schema/Op
+          :schema $ quote $ Fn app.schema/Op (-> Bool)
         'on-partition-drop! $ %{} 'CodeEntry
           :doc "|Called when the server revokes a partition; clear private caches tied to it."
           :code $ quote $ defn on-partition-drop! (key) (kanban-client/on-partition-drop! key)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/PartitionKey (-> Unit)
         'on-query-reply! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-query-reply! (request-id reply) (kanban-client/receive-reply! request-id reply)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'String 'app.schema/QueryReply
+          :schema $ quote $ Fn String app.schema/QueryReply (-> Unit)
       :ns $ %{} 'NsEntry
         :doc "|Wiring layer for the browser entry: every call from app.sync.client into business code goes through these functions. Replace their bodies when swapping app.feature.*."
         :code $ quote $ ns app.hooks.client
@@ -2401,9 +2234,8 @@
           :doc "|Partitions an operation may change, computed from the database before the operation."
           :code $ quote $ defn affected-partitions (db op sid) (kanban-twig/affected-partitions db op sid)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number
-            :return $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/DomainOp Number
+            -> $ Set app.schema/PartitionKey
           :tests $ [] $ %{} 'TestEntry (:name |one-diff-for-many-subscribers)
             :code $ quote $ let
                 saved-partitions @app.sync.server/*partitions
@@ -2415,14 +2247,10 @@
                 saved-payloads @app.sync.server/*partition-payloads
                 sids $ [] 1 2 3 4 5
                 user $ fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'app.schema/User
+                  hint-fn $ Fn Number $ -> app.schema/User
                   schema/User :id (str |u sid) :name (str |user sid) :nickname (Option :none) :avatar (Option :none) :password |hash
                 session $ fn (sid)
-                  hint-fn $ {}
-                    :args $ [] 'Number
-                    :return 'app.schema/Session
+                  hint-fn $ Fn Number $ -> app.schema/Session
                   schema/Session :id sid :user-id
                     Option :some $ str |u sid
                     , :nickname (Option :none) :router
@@ -2432,22 +2260,20 @@
                   assert-type
                     pairs-map $ map sids $ fn (sid)
                       [] sid $ session sid
-                    :: 'Map 'Number 'app.schema/Session
+                    quote $ Map Number app.schema/Session
                   , :users
                     assert-type
                       pairs-map $ map sids $ fn (sid)
                         [] (str |u sid) (user sid)
-                      :: 'Map 'String 'app.schema/User
+                      quote $ Map String app.schema/User
                     , :boards ({}) :settings $ {}
                 db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
                 add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
                 db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
                 *sent $ ref $ assert-type ([])
-                  :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
+                  quote $ List $ cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
                 record! $ fn (sid action)
-                  hint-fn $ {}
-                    :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
-                    :return 'Unit
+                  hint-fn $ Fn Number (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
                   swap! *sent conj action
                   match action
                     (:drop _key) &unit
@@ -2460,30 +2286,24 @@
                         app.sync.server/handle-partition-send! sid state $ wss.core/WssSendOutcome :accepted
                         app.sync.server/ack-partition-progress-for! sid state
                 sends-of $ fn (tag)
-                  hint-fn $ {}
-                    :args $ [] 'Tag
-                    :return 'Number
+                  hint-fn $ Fn Tag $ -> Number
                   .len $ filter @*sent $ fn (action)
-                    hint-fn $ {}
-                      :args $ [] $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
-                      :return 'Bool
+                    hint-fn $ Fn (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Bool)
                     = tag $ match action
                       (:snapshot _state) :snapshot
                       (:deltas _state _deltas) :deltas
                       (:drop _key) :drop
                 board-deltas $ fn ()
-                  hint-fn $ {}
-                    :args $ []
-                    :return $ :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
+                  hint-fn $ Fn $ ->
+                    List $ List cumulo-reel.partition/PartitionDelta
                   .foldl @*sent
                     assert-type ([])
-                      :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
+                      quote $ List $ List cumulo-reel.partition/PartitionDelta
                     fn (acc action)
-                      hint-fn $ {}
-                        :args $ []
-                          :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
-                          :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
-                        :return $ :: 'List $ :: 'List 'cumulo-reel.partition/PartitionDelta
+                      hint-fn $ Fn
+                        List $ List cumulo-reel.partition/PartitionDelta
+                        cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
+                        -> $ List $ List cumulo-reel.partition/PartitionDelta
                       match action
                         (:deltas state deltas)
                           if
@@ -2492,23 +2312,25 @@
                             , acc
                         _ acc
               reset! app.sync.server/*partitions $ assert-type ({})
-                :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+                quote $ Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
               reset! app.sync.server/*partition-progress $ assert-type ({})
-                :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
-              reset! app.sync.server/*dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                quote $ Map Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
+              reset! app.sync.server/*dirty-partitions $ assert-type (#{})
+                quote $ Set app.schema/PartitionKey
               reset! app.sync.server/*partition-metrics app.sync.server/empty-partition-metrics
-              reset! app.sync.server/*partition-payloads $ assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
+              reset! app.sync.server/*partition-payloads $ assert-type ({})
+                quote $ Map app.schema/PartitionKey app.sync.server/CachedPayload
               reset! app.feature.kanban.server/*cold-store app.feature.kanban.schema/empty-cold-store
               reset! app.sync.server/*client-states $ assert-type
                 pairs-map $ map sids $ fn (sid)
                   [] sid $ {} $ :status :active
-                :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+                quote $ Map Number $ Map Tag Dynamic
               app.sync.server/sync-partitions-with! db1 record!
               let
                   initial-snapshots $ sends-of :snapshot
                   initial-partitions $ .len @app.sync.server/*partitions
                 reset! *sent $ assert-type ([])
-                  :: 'List $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
+                  quote $ List $ cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
                 app.sync.server/mark-partitions-dirty! $ app.hooks.server/affected-partitions db1 add-op 1
                 app.sync.server/sync-partitions-with! db2 record!
                 let
@@ -2536,49 +2358,41 @@
           :doc "|Side effects after a committed operation, such as appending cold data, before partitions are published."
           :code $ quote $ defn after-domain-op! (db-before db-after op sid op-id op-time) (kanban-server/after-domain-op! db-before db-after op sid op-id op-time)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/Db app.schema/DomainOp Number String Number (-> Unit)
         'answer-query $ %{} 'CodeEntry
           :doc "|Answer one cold read. Identity must come from the session, never from query parameters."
           :code $ quote $ defn answer-query (db sid query) (kanban-server/answer-query db sid query)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/QueryReply)
-            :args $ [] 'app.schema/Db 'Number 'app.schema/Query
+          :schema $ quote $ Fn app.schema/Db Number app.schema/Query (-> app.schema/QueryReply)
         'persist! $ %{} 'CodeEntry
           :doc "|Persist feature-owned state next to the hot database snapshot."
           :code $ quote $ defn persist! () (kanban-server/persist-cold!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'project-partition $ %{} 'CodeEntry
           :doc "|Project one partition. A partition is a visibility boundary: include only data every subscriber may see."
           :code $ quote $ defn project-partition (db key) (kanban-server/project db key)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/PartitionView)
-            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/PartitionKey (-> app.schema/PartitionView)
         'session-partitions $ %{} 'CodeEntry
           :doc "|Server-side authorization: the partitions this session may subscribe to."
           :code $ quote $ defn session-partitions (db session) (kanban-twig/session-partitions db session)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'app.schema/Db 'app.schema/Session
-            :return $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/Session
+            -> $ Set app.schema/PartitionKey
         'session-store $ %{} 'CodeEntry
           :doc "|Per-connection session Store (route, session messages, login state)."
           :code $ quote $ defn session-store (db session shared) (twig-container db session shared)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
-            :args $ [] 'app.schema/Db 'app.schema/Session 'app.schema/SharedTwig
+          :schema $ quote $ Fn app.schema/Db app.schema/Session app.schema/SharedTwig (-> app.schema/Store)
         'shared-twig $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn shared-twig (db record-count) (twig-shared db record-count)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
-            :args $ [] 'app.schema/Db 'Number
+          :schema $ quote $ Fn app.schema/Db Number (-> app.schema/SharedTwig)
         'updater $ %{} 'CodeEntry (:doc "|Pure domain reducer used by the Reel.")
           :code $ quote $ defn updater (db op sid op-id op-time) (domain/updater db op sid op-id op-time)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/DomainOp Number String Number (-> app.schema/Db)
       :ns $ %{} 'NsEntry
         :doc "|Wiring layer for the server entry: every call from app.sync.server into business code goes through these functions. Replace their bodies when swapping app.feature.*."
         :code $ quote $ ns app.hooks.server
@@ -2591,155 +2405,159 @@
         'AttachedView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct AttachedView (:type 'Tag) (:content 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'ClientMessage $ %{} 'CodeEntry
           :doc "|Typed messages accepted from a browser connection. part/ack names partition, epoch and revision; part/resync asks for a fresh partition snapshot."
           :code $ quote $ defenum ClientMessage (:sync/active 'Number) (:sync/heartbeat 'Number) (:sync/idle 'Number) (:sync/resume 'Number) (:sync/ack 'Number) (:dispatch 'app.schema/Op) (:part/ack 'app.schema/PartitionKey 'Number 'Number) (:part/resync 'app.schema/PartitionKey) (:query 'String 'app.schema/Query)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'DatabaseDecodeError $ %{} 'CodeEntry
           :doc "|A path-aware failure produced while decoding untrusted or legacy persisted database data."
           :code $ quote $ defenum DatabaseDecodeError (:invalid 'String 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Db $ %{} 'CodeEntry
           :doc "|The nominal hot application database used by reducers and partition projections. Cold history and card details live outside it."
           :code $ quote $ defstruct Db
-            :sessions $ :: 'Map 'Number 'app.schema/Session
-            :users $ :: 'Map 'String 'app.schema/User
-            :boards $ :: 'Map 'String 'app.feature.kanban.schema/Board
-            :settings $ :: 'Map 'String 'app.feature.kanban.schema/UserSettings
+            :sessions $ quote $ Map Number app.schema/Session
+            :users $ quote $ Map String app.schema/User
+            :boards $ quote $ Map String app.feature.kanban.schema/Board
+            :settings $ quote $ Map String app.feature.kanban.schema/UserSettings
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'DomainOp $ %{} 'CodeEntry
           :doc "|Pure business operations accepted by the database reducer; local and server effects stay outside this enum."
           :code $ quote $ defenum DomainOp (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:kanban 'app.feature.kanban.schema/KanbanOp)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Message $ %{} 'CodeEntry (:doc "|A persisted session message.")
           :code $ quote $ defstruct Message (:id 'String) (:text 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'MessageDecodeError $ %{} 'CodeEntry
           :doc "|Why an untrusted WebSocket value could not become a typed message envelope."
           :code $ quote $ defenum MessageDecodeError (:invalid 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'MessageView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct MessageView (:id 'String) (:text 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'Op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message 'app.schema/RemoveMessage) (:user/log-in 'String 'String) (:user/sign-up 'String 'String) (:user/log-out) (:router/change 'app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:kanban 'app.feature.kanban.schema/KanbanOp) (:client/open-card 'String 'String) (:client/close-card 'String) (:client/load-history 'Bool)
-            :states (:: 'List 'Dynamic) 'Dynamic
+            :states
+              quote $ List Dynamic
+              , 'Dynamic
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'PartitionKey $ %{} 'CodeEntry
           :doc "|Identity of one synchronization partition. A partition is a visibility boundary: everything inside is visible to all its subscribers."
           :code $ quote $ defenum PartitionKey (:lobby) (:board 'String) (:user 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'PartitionView $ %{} 'CodeEntry
           :doc "|Typed projection of one partition; :missing marks a deleted or unknown target."
           :code $ quote $ defenum PartitionView (:lobby 'app.feature.kanban.schema/LobbyView) (:board 'app.feature.kanban.schema/Board) (:user 'app.feature.kanban.schema/UserHotView) (:missing)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Query $ %{} 'CodeEntry
           :doc "|Cold read requests. Identity always comes from the server session, never from query parameters."
           :code $ quote $ defenum Query
-            :history (:: 'Option 'Number) 'Number
+            :history
+              quote $ Option Number
+              , 'Number
             :card-detail 'String 'String
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'QueryReply $ %{} 'CodeEntry
           :doc "|Typed cold read results, distinguishing missing content from denied access."
           :code $ quote $ defenum QueryReply (:history 'app.feature.kanban.schema/HistoryPage) (:card-detail 'app.feature.kanban.schema/CardDetail) (:missing 'String) (:denied 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'RemoveMessage $ %{} 'CodeEntry
           :doc "|Concrete payload for removing one session message."
           :code $ quote $ defstruct RemoveMessage (:id 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'Router $ %{} 'CodeEntry
           :doc "|The domain route stored for one session; target names the routed entity such as a board id."
           :code $ quote $ defstruct Router (:name 'Tag)
-            :target $ :: 'Option 'String
+            :target $ quote $ Option String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'RouterView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct RouterView (:name 'Tag)
-            :target $ :: 'Option 'String
-            :data $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
-            :router $ :: 'Option $ :: 'Map 'Dynamic 'Dynamic
+            :target $ quote $ Option String
+            :data $ quote $ Option (Map Dynamic Dynamic)
+            :router $ quote $ Option (Map Dynamic Dynamic)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'ServerMessage $ %{} 'CodeEntry
           :doc "|Typed synchronization and effect messages sent to a browser. part/* messages carry partition epoch and revisions; query/reply answers one cold read by request id."
           :code $ quote $ defenum ServerMessage (:snapshot 'Number 'app.schema/Store)
-            :patch 'Number 'Number $ :: 'List 'recollect.schema/change-op
+            :patch 'Number 'Number $ quote $ List recollect.schema/change-op
             :effect/pong
             :part/snapshot 'app.schema/PartitionKey 'Number 'Number 'app.schema/PartitionView
-            :part/patch 'app.schema/PartitionKey 'Number $ :: 'List 'cumulo-reel.partition/PartitionDelta
+            :part/patch 'app.schema/PartitionKey 'Number $ quote $ List cumulo-reel.partition/PartitionDelta
             :part/drop 'app.schema/PartitionKey
             :query/reply 'String 'app.schema/QueryReply
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Session $ %{} 'CodeEntry (:doc "|A connected session in the nominal database.")
           :code $ quote $ defstruct Session
-            :user-id $ :: 'Option 'String
+            :user-id $ quote $ Option String
             :id 'Number
-            :nickname $ :: 'Option 'String
+            :nickname $ quote $ Option String
             :router $ quote app.schema/Router
-            :messages $ :: 'Map 'String 'app.schema/Message
+            :messages $ quote $ Map String app.schema/Message
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'SessionView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct SessionView
-            :user-id $ :: 'Option 'String
-            :id $ :: 'Option 'Number
-            :nickname $ :: 'Option 'String
+            :user-id $ quote $ Option String
+            :id $ quote $ Option Number
+            :nickname $ quote $ Option String
             :router $ quote app.schema/RouterView
             :messages $ :: 'Map 'String $ quote app.schema/MessageView
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'SharedTwig $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct SharedTwig (:reel-length 'Number)
             :attached $ quote app.schema/AttachedView
-            :pages $ :: 'Option 'Map
-            :members $ :: 'Map 'Number $ :: 'Option 'String
+            :pages $ quote $ Option Map
+            :members $ quote $ Map Number (Option String)
             :session-count 'Number
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'Store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct Store (:logged-in? 'Bool)
             :session $ quote app.schema/SessionView
             :reel-length 'Number
             :attached $ quote app.schema/AttachedView
-            :user $ :: 'Option 'app.schema/UserView
+            :user $ quote $ Option app.schema/UserView
             :router $ quote app.schema/RouterView
             :count 'Number
             :color 'String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'User $ %{} 'CodeEntry (:doc "|A persisted application user.")
           :code $ quote $ defstruct User (:name 'String) (:id 'String)
-            :nickname $ :: 'Option 'String
-            :avatar $ :: 'Option 'String
+            :nickname $ quote $ Option String
+            :avatar $ quote $ Option String
             :password 'String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'UserView $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct UserView (:name 'String) (:id 'String)
-            :nickname $ :: 'Option 'String
-            :avatar $ :: 'Option 'String
+            :nickname $ quote $ Option String
+            :avatar $ quote $ Option String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'database $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def database
             Db :sessions ({}) :users ({}) :boards ({}) :settings $ {}
           :examples $ []
-          :schema $ :: 'app.schema/Db
+          :schema $ quote app.schema/Db
         'decode-client-message $ %{} 'CodeEntry
           :doc "|Validate one untrusted client value and reconstruct a nominal ClientMessage; direct legacy Op enums remain accepted."
           :code $ quote $ defn decode-client-message (data)
@@ -2800,9 +2618,8 @@
                     (:err error) (Result :err error)
                 invalid-message $ str "|Expected-enum-message: " message
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/ClientMessage 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/ClientMessage app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |decodes-sync-control)
               :code $ quote $ assert=
@@ -2912,10 +2729,9 @@
                                   Result :ok $ Db :sessions sessions :users users :boards boards :settings settings
                 Result :err $ DatabaseDecodeError :invalid |db "|Expected database map or struct"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T
-            :generics $ [] 'T
-            :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T
+            -> $ Result app.schema/Db app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
           :tests $ []
             %{} 'TestEntry (:name |decodes-legacy-bare-map)
@@ -3024,9 +2840,8 @@
                     _ $ invalid-message |Expected-domain-operation
               invalid-message |Expected-domain-operation
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/DomainOp 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/DomainOp app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
               :code $ quote $ assert=
@@ -3062,10 +2877,9 @@
                             Result :err $ DatabaseDecodeError :invalid (str path |.text) "|Expected String"
                 Result :err $ DatabaseDecodeError :invalid path "|Expected Message map or struct"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'app.schema/Message 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result app.schema/Message app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
         'decode-messages $ %{} 'CodeEntry
           :doc "|Decode a keyed message collection and validate every nested value."
@@ -3075,14 +2889,13 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
+                  quote $ Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
                 fn (acc pair)
-                  hint-fn $ {}
-                    :generics $ [] 'K 'V
-                    :args $ []
-                      :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
-                      :: 'MapEntry 'K 'V
-                    :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
+                  hint-fn $ Fn
+                    Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+                    MapEntry K V
+                    -> $ Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+                    :generics K V
                   match acc
                     (:err error) (Result :err error)
                     (:ok messages)
@@ -3101,10 +2914,9 @@
                                   Result :ok $ assoc messages id message
                                   Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Message id must match map key"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result (:: 'Map 'String 'app.schema/Message) 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-message-key)
             :code $ quote $ assert=
@@ -3195,9 +3007,8 @@
                   _ $ invalid-message $ str "|Unknown application operation: " op
                 invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/Op 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/Op app.schema/MessageDecodeError
           :tests $ []
             %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
               :code $ quote $ do
@@ -3251,10 +3062,9 @@
         'decode-optional-string $ %{} 'CodeEntry
           :doc "|Normalize a persisted optional string from missing, nil, legacy String, or nominal Option data."
           :code $ quote $ defn decode-optional-string (data path)
-            hint-fn $ {}
-              :generics $ [] 'T
-              :args $ [] 'T 'String
-              :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
+            hint-fn $ Fn T String
+              -> $ Result (Option String) app.schema/DatabaseDecodeError
+              :generics T
             match data
               (:none)
                 Result :ok $ Option :none
@@ -3275,10 +3085,9 @@
                         _ $ Result :err $ DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
                       Result :err $ DatabaseDecodeError :invalid path "|Expected nil, String, or Option<String>"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result (:: 'Option 'String) 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result (Option String) app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
         'decode-partition-key $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn decode-partition-key (data)
@@ -3301,17 +3110,15 @@
                   _ $ invalid-message $ str "|Unknown partition: " key
                 invalid-message $ str "|Expected-enum-partition: " key
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/PartitionKey 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/PartitionKey app.schema/MessageDecodeError
         'decode-partition-view $ %{} 'CodeEntry
           :doc "|Validate a patched partition view against the nominal PartitionView; passed to cumulo-reel.partition/apply-partition-deltas."
           :code $ quote $ defn decode-partition-view (value)
             try-decode-map-as (struct-tree-input value) 'app.schema/PartitionView
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/PartitionView 'String
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/PartitionView String
           :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
             :code $ quote $ let
                 mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board app.feature.kanban.schema/Board) (:Column app.feature.kanban.schema/Column) (:Card app.feature.kanban.schema/Card)
@@ -3368,9 +3175,8 @@
                   _ $ invalid-message $ str "|Unknown query: " query
                 invalid-message $ str "|Expected-enum-query: " query
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/Query 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/Query app.schema/MessageDecodeError
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
@@ -3389,10 +3195,9 @@
                       Result :err $ DatabaseDecodeError :invalid (str path |.name) "|Expected Tag"
                 Result :err $ DatabaseDecodeError :invalid path "|Expected Router map or struct"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'app.schema/Router 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result app.schema/Router app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
         'decode-server-message $ %{} 'CodeEntry
           :doc "|Validate one untrusted server value and reconstruct a nominal ServerMessage."
@@ -3435,10 +3240,9 @@
                   _ $ invalid-message $ str "|Unknown server message: " message
                 invalid-message $ str "|Unknown server message: " message
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :features $ #{} :js-ffi
-            :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/ServerMessage app.schema/MessageDecodeError
+            :features :js-ffi
           :tests $ []
             %{} 'TestEntry (:name |decodes-pong)
               :code $ quote $ assert=
@@ -3490,9 +3294,7 @@
                             includes? detail |$.session.id
                         _ false
                   fn (detail)
-                    hint-fn $ {}
-                      :args $ [] 'String
-                      :return 'Bool
+                    hint-fn $ Fn String $ -> Bool
                     includes? detail "|field :id expects type"
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-non-enum-envelope)
@@ -3550,10 +3352,9 @@
                                         Result :ok $ Session :user-id user-id :id id :nickname nickname :router typed-router :messages typed-messages
                 Result :err $ DatabaseDecodeError :invalid path "|Expected Session map or struct"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'app.schema/Session 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result app.schema/Session app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
         'decode-sessions $ %{} 'CodeEntry
           :doc "|Decode a keyed session collection and validate every nested value."
@@ -3563,14 +3364,13 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
+                  quote $ Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
                 fn (acc pair)
-                  hint-fn $ {}
-                    :generics $ [] 'K 'V
-                    :args $ []
-                      :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
-                      :: 'MapEntry 'K 'V
-                    :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
+                  hint-fn $ Fn
+                    Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+                    MapEntry K V
+                    -> $ Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+                    :generics K V
                   match acc
                     (:err error) (Result :err error)
                     (:ok sessions)
@@ -3589,10 +3389,9 @@
                                   Result :ok $ assoc sessions id session
                                   Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|Session id must match map key"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result (:: 'Map 'Number 'app.schema/Session) 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-session-key)
             :code $ quote $ assert=
@@ -3611,10 +3410,9 @@
               try-decode-map-as (store-struct-input value) 'app.schema/Store
               Result :err |Expected-nominal-Store
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Input
-            :generics $ [] 'Input
-            :return $ :: 'Result 'app.schema/Store 'String
+          :schema $ quote $ Fn Input
+            -> $ Result app.schema/Store String
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |accepts-complete-nominal-store)
               :code $ quote $ let
@@ -3651,9 +3449,7 @@
                         (:err detail) (includes? detail |$.session.id)
                         _ false
                   fn (detail)
-                    hint-fn $ {}
-                      :args $ [] 'String
-                      :return 'Bool
+                    hint-fn $ Fn String $ -> Bool
                     includes? detail "|field :id expects type"
               :tags $ #{} :client
             %{} 'TestEntry (:name |rejects-invalid-optional-user)
@@ -3721,9 +3517,8 @@
               (:err detail)
                 invalid-message $ str "|Invalid server message: " detail
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Dynamic
-            :return $ :: 'Result 'app.schema/ServerMessage 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn Dynamic
+            -> $ Result app.schema/ServerMessage app.schema/MessageDecodeError
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
@@ -3759,10 +3554,9 @@
                                             Result :err $ DatabaseDecodeError :invalid (str path |.password) "|Expected String"
                 Result :err $ DatabaseDecodeError :invalid path "|Expected User map or struct"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'app.schema/User 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result app.schema/User app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
         'decode-users $ %{} 'CodeEntry
           :doc "|Decode a keyed user collection and validate every nested value."
@@ -3772,14 +3566,13 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
+                  quote $ Result (Map String app.schema/User) app.schema/DatabaseDecodeError
                 fn (acc pair)
-                  hint-fn $ {}
-                    :generics $ [] 'K 'V
-                    :args $ []
-                      :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
-                      :: 'MapEntry 'K 'V
-                    :return $ :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
+                  hint-fn $ Fn
+                    Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+                    MapEntry K V
+                    -> $ Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+                    :generics K V
                   match acc
                     (:err error) (Result :err error)
                     (:ok users)
@@ -3798,10 +3591,9 @@
                                   Result :ok $ assoc users id user
                                   Result :err $ DatabaseDecodeError :invalid (str path |. id |.id) "|User id must match map key"
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result (:: 'Map 'String 'app.schema/User) 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn T String
+            -> $ Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+            :generics T
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |rejects-mismatched-user-key)
             :code $ quote $ assert=
@@ -3816,8 +3608,7 @@
               (:none) false
               (:some found) (= found target)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Bool)
-            :args $ [] 'Enum 'EnumDef
+          :schema $ quote $ Fn Enum EnumDef (-> Bool)
           :tests $ []
             %{} 'TestEntry (:name |matches-definition-across-option-variants)
               :code $ quote $ do
@@ -3835,34 +3626,30 @@
           :code $ quote $ defn invalid-message (detail)
             Result :err $ MessageDecodeError :invalid detail
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'T 'app.schema/MessageDecodeError
+          :schema $ quote $ Fn String
+            -> $ Result T app.schema/MessageDecodeError
+            :generics T
         'router $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def router
             Router :name :home :target $ Option :none
           :examples $ []
-          :schema $ :: 'app.schema/Router
+          :schema $ quote app.schema/Router
         'session $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def session
             Session :user-id (Option :none) :id 0 :nickname (Option :none) :router router :messages $ {}
           :examples $ []
-          :schema $ :: 'app.schema/Session
+          :schema $ quote app.schema/Session
         'store-message-input $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn store-message-input (value)
             if (map? value)
               filter-map-kv
                 decode-map-as value $ :: 'Map 'Dynamic 'Dynamic
                 fn (key item)
-                  hint-fn $ {}
-                    :args $ [] 'Dynamic 'Dynamic
-                    :return $ :: 'MapEntryDecision 'Dynamic 'Dynamic
+                  hint-fn $ Fn Dynamic Dynamic $ -> (MapEntryDecision Dynamic Dynamic)
                   MapEntryDecision :keep key $ store-struct-input item
               , value
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'Dynamic
+          :schema $ quote $ Fn Dynamic (-> Dynamic)
         'store-struct-input $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn store-struct-input (value)
             if (struct? value)
@@ -3876,8 +3663,7 @@
                 true value
               , value
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'Dynamic
+          :schema $ quote $ Fn Dynamic (-> Dynamic)
         'store-user-input $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn store-user-input (value)
             if
@@ -3889,13 +3675,12 @@
                 _ value
               , value
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'Dynamic
+          :schema $ quote $ Fn Dynamic (-> Dynamic)
         'user $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def user
             User :name || :id || :nickname (Option :none) :avatar (Option :none) :password ||
           :examples $ []
-          :schema $ :: 'app.schema/User
+          :schema $ quote app.schema/User
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.schema
           :require $ cumulo-reel.partition :refer $ struct-tree-input
@@ -3915,8 +3700,7 @@
             on-control-c on-exit!
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
             if (not config/dev?) (raise "|reloading only happens in dev mode")
@@ -3927,8 +3711,7 @@
             render-loop!
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
       :ns $ %{} 'NsEntry
         :doc "|Server entry (wiring): main!/reload!. Runtime lives in app.sync.server; business hooks in app.hooks.server."
         :code $ quote $ ns app.server
@@ -3957,53 +3740,52 @@
           :doc "|Cleanup capability for Calcium application-level browser activity signals."
           :code $ quote $ defref *activity-cleanup (Option :none)
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Option 'Fn
+          :schema $ quote $ Ref (Option Fn)
         '*connected? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *connected? false
           :examples $ []
-          :schema $ :: 'Ref 'Bool
+          :schema $ quote $ Ref Bool
         '*partitions $ %{} 'CodeEntry
           :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
           :code $ quote $ defref *partitions
             assert-type ({})
-              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView
+              quote $ Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionSlot 'app.schema/PartitionView)
+          :schema $ quote $ Ref
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
         '*states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *states
             {} $ :states $ {}
               :cursor $ []
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Tag 'Dynamic
+          :schema $ quote $ Ref (Map Tag Dynamic)
         '*store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *store (ClientState :loading)
           :examples $ []
-          :schema $ :: 'Ref 'app.sync.client/ClientState
+          :schema $ quote $ Ref app.sync.client/ClientState
         '*sync-revision $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *sync-revision 0
           :examples $ []
-          :schema $ :: 'Ref 'Number
+          :schema $ quote $ Ref Number
         '*ws-client $ %{} 'CodeEntry
           :doc "|Current nominal ws-edn client, retained across browser recovery events."
           :code $ quote $ defref *ws-client (Option :none)
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Option 'ws-edn.client/WsClient
+          :schema $ quote $ Ref (Option ws-edn.client/WsClient)
         'ClientPatchError $ %{} 'CodeEntry
           :doc "|Client-side reason for rejecting a revisioned patch before requesting a full snapshot."
           :code $ quote $ defenum ClientPatchError (:revision-mismatch 'Number 'Number) (:invalid-patch 'recollect.patch/PatchError) (:invalid-result 'String)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'ClientState $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defenum ClientState (:loading) (:offline) (:ready 'app.schema/Store)
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'ack-sync! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ack-sync! (revision)
             ws-send! $ schema/ClientMessage :sync/ack revision
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn Number (-> Unit) (:features :js-ffi)
         'apply-partition-message! $ %{} 'CodeEntry
           :doc "|Apply partition envelopes: snapshots replace the slot, delta chains apply atomically or trigger a partition resync, drops clear caches (dropping the user partition clears private cold data)."
           :code $ quote $ defn apply-partition-message! (message)
@@ -4033,9 +3815,7 @@
               _ &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/ServerMessage
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn app.schema/ServerMessage (-> Unit) (:features :js-ffi)
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn apply-server-patch! (base-revision revision changes)
             match @*store
@@ -4057,9 +3837,7 @@
               (:loading) (request-snapshot!)
               (:offline) (request-snapshot!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number $ :: 'List 'recollect.schema/change-op
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn Number Number (List recollect.schema/change-op) (-> Unit) (:features :js-ffi)
         'cleanup-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Run and clear the current application activity cleanup capability."
           :code $ quote $ defn cleanup-activity-lifecycle! ()
@@ -4069,8 +3847,7 @@
             reset! *activity-cleanup $ Option :none
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connect! ()
             let
@@ -4089,8 +3866,7 @@
                     , hooks/class-mapper
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'connection-url $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connection-url ()
             let
@@ -4108,9 +3884,7 @@
                   (:some value) (contract/expect-string "|connection port" value)
               str |ws:// host |: port
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ []
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn (-> String) (:features :js-ffi)
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (op)
             when
@@ -4125,8 +3899,7 @@
               _ $ if (hooks/dispatch-client! op) &unit $ ws-send! (schema/ClientMessage :dispatch op)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Op
+          :schema $ quote $ Fn app.schema/Op (-> Unit)
         'dispatch-from-respo! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-from-respo! (raw-op)
             match (schema/decode-operation raw-op)
@@ -4135,9 +3908,7 @@
                 raise $ str |Invalid-UI-operation: error
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Input
-            :generics $ [] 'Input
+          :schema $ quote $ Fn Input (-> Unit) (:generics Input)
         'install-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership."
           :code $ quote $ defn install-activity-lifecycle! () (cleanup-activity-lifecycle!)
@@ -4157,13 +3928,11 @@
               reset! *activity-cleanup $ Option :some cleanup
               , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
         'mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
-          :schema $ :: 'Dynamic
+          :schema $ quote $ JsNullish respo.dom/DomElement
         'on-server-data $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-server-data (data)
             match (schema/decode-server-message data)
@@ -4185,32 +3954,27 @@
                   (:query/reply request-id reply) (hooks/on-query-reply! request-id reply)
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Dynamic
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn Dynamic (-> Unit) (:features :js-ffi)
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
               (:none) nil
               (:some host-element) (narrow-element host-element)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ []
-            :return $ :: 'JsNullish 'respo.dom/DomElement
+          :schema $ quote $ Fn
+            -> $ JsNullish respo.dom/DomElement
         'request-snapshot! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn request-snapshot! ()
             ws-send! $ schema/ClientMessage :sync/resume @*sync-revision
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'send-activity! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-activity! ()
             if (page-visible?)
               ws-send! $ schema/ClientMessage :sync/active @*sync-revision
               ws-send! $ schema/ClientMessage :sync/idle @*sync-revision
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
             match (stored-login)
@@ -4221,8 +3985,7 @@
                     .unwrap $ nth pair 1
               (:none) (println "|Found no storage.")
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'stored-login $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn stored-login ()
             let
@@ -4236,10 +3999,9 @@
                 (:some raw)
                   Option :some $ parse-cirru-edn-as raw $ :: 'List 'String
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ []
-            :features $ #{} :js-ffi
-            :return $ :: 'Option $ :: 'List 'String
+          :schema $ quote $ Fn
+            -> $ Option $ List String
+            :features :js-ffi
         'validate-server-patch $ %{} 'CodeEntry
           :doc "|Validate base revision and apply one patch batch without mutating client state."
           :code $ quote $ defn validate-server-patch (store local-revision base-revision changes decode-result)
@@ -4255,20 +4017,16 @@
                   Result :err $ ClientPatchError :invalid-patch error
               Result :err $ ClientPatchError :revision-mismatch base-revision local-revision
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'T 'Number 'Number (:: 'List 'recollect.schema/change-op)
-              :: 'Fn $ {}
-                :args $ [] 'Dynamic
-                :return $ :: 'Result 'T 'String
-            :generics $ [] 'T
-            :return $ :: 'Result 'T 'app.sync.client/ClientPatchError
+          :schema $ quote $ Fn T Number Number (List recollect.schema/change-op)
+            Fn Dynamic $ -> $ Result T String
+            -> $ Result T app.sync.client/ClientPatchError
+            :generics T
           :tests $ []
             %{} 'TestEntry (:name |accepts-valid-revisioned-patch)
               :code $ quote $ let
                   decode-result $ fn (value)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    hint-fn $ Fn Dynamic $ ->
+                      Result (Map Tag Number) String
                     try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :value 1
                   changes $ [] $ %:: patch-schema/change-op :assoc :value 2
@@ -4279,12 +4037,12 @@
             %{} 'TestEntry (:name |rejects-revision-mismatch)
               :code $ quote $ let
                   decode-result $ fn (value)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    hint-fn $ Fn Dynamic $ ->
+                      Result (Map Tag Number) String
                     try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :value 1
-                  changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
+                  changes $ assert-type ([])
+                    quote $ List recollect.schema/change-op
                 assert=
                   Result :err $ ClientPatchError :revision-mismatch 8 7
                   validate-server-patch store 7 8 changes decode-result
@@ -4292,9 +4050,8 @@
             %{} 'TestEntry (:name |rejects-invalid-patch-atomically)
               :code $ quote $ let
                   decode-result $ fn (value)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return $ :: 'Result (:: 'Map 'Tag 'Number) 'String
+                    hint-fn $ Fn Dynamic $ ->
+                      Result (Map Tag Number) String
                     try-decode-map-as value $ :: 'Map 'Tag 'Number
                   store $ {} $ :stable 1
                   changes $ [] (%:: patch-schema/change-op :assoc :temporary 2)
@@ -4311,7 +4068,8 @@
                   db app.schema/database
                   shared $ app.twig.container/twig-shared db 0
                   store $ app.twig.container/twig-container db app.schema/session shared
-                  changes $ assert-type ([]) (:: 'List 'recollect.schema/change-op)
+                  changes $ assert-type ([])
+                    quote $ List recollect.schema/change-op
                   state $ match (validate-server-patch store 7 7 changes app.schema/decode-store)
                     (:ok next-store) (ClientState :ready next-store)
                     (:err error) (raise |Unexpected-patch-error)
@@ -4372,9 +4130,7 @@
             %{} 'TestEntry (:name |checks-generic-scalar-result)
               :code $ quote $ let
                   decode-number $ fn (value)
-                    hint-fn $ {}
-                      :args $ [] 'Dynamic
-                      :return $ :: 'Result 'Number 'String
+                    hint-fn $ Fn Dynamic $ -> (Result Number String)
                     try-decode-map-as value 'Number
                   changes $ [] $ patch-schema/change-op :replace |different-type
                 assert= true $ match (validate-server-patch 1 9 9 changes decode-number)
@@ -4411,20 +4167,22 @@
         '*client-caches $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *client-caches ({})
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Number 'Dynamic
+          :schema $ quote $ Ref (Map Number Dynamic)
         '*client-states $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *client-states ({})
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'Tag 'Dynamic)
+          :schema $ quote $ Ref
+            Map Number $ Map Tag Dynamic
         '*dirty-clients $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *dirty-clients (#{})
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Set 'Number
+          :schema $ quote $ Ref (Set Number)
         '*dirty-partitions $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *dirty-partitions
-            assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+            assert-type (#{})
+              quote $ Set app.schema/PartitionKey
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Ref (Set app.schema/PartitionKey)
         '*initial-db $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *initial-db
             if
@@ -4437,99 +4195,104 @@
                     do (eprintln "|Invalid persisted database, starting empty:" error) schema/database
               do (println "|Found no data") schema/database
           :examples $ []
-          :schema $ :: 'Ref 'app.schema/Db
+          :schema $ quote $ Ref app.schema/Db
         '*partition-epoch $ %{} 'CodeEntry
           :doc "|Monotonic epoch source seeded from process start; a recreated partition never reuses an old revision lineage."
           :code $ quote $ defref *partition-epoch (unix-time-ms)
           :examples $ []
-          :schema $ :: 'Ref 'Number
+          :schema $ quote $ Ref Number
         '*partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *partition-metrics empty-partition-metrics
           :examples $ []
-          :schema $ :: 'Ref 'app.sync.server/PartitionMetrics
+          :schema $ quote $ Ref app.sync.server/PartitionMetrics
         '*partition-payloads $ %{} 'CodeEntry
           :doc "|Encoded single-delta patch per partition, reused by every subscriber at the previous revision."
           :code $ quote $ defref *partition-payloads
-            assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload)
+            assert-type ({})
+              quote $ Map app.schema/PartitionKey app.sync.server/CachedPayload
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey 'app.sync.server/CachedPayload
+          :schema $ quote $ Ref (Map app.schema/PartitionKey app.sync.server/CachedPayload)
         '*partition-progress $ %{} 'CodeEntry
           :doc "|Per-connection subscription progress: acknowledged revision and pending send for each partition."
           :code $ quote $ defref *partition-progress
             assert-type ({})
-              :: 'Map 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+              quote $ Map Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'Number (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
+          :schema $ quote $ Ref
+            Map Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
         '*partitions $ %{} 'CodeEntry
           :doc "|Live partitions with at least one subscribed connection; each keeps one view, revision and bounded delta history."
           :code $ quote $ defref *partitions
             assert-type ({})
-              :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+              quote $ Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
           :examples $ []
-          :schema $ :: 'Ref $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView)
+          :schema $ quote $ Ref
+            Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
         '*reader-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *reader-reel @*reel
           :examples $ []
-          :schema $ :: 'Ref $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Ref (cumulo-reel.core/ReelState app.schema/Db)
         '*reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *reel
             %{} cumulo-reel.core/ReelState (:base @*initial-db) (:db @*initial-db)
               :records $ []
               :merged? false
           :examples $ []
-          :schema $ :: 'Ref $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Ref (cumulo-reel.core/ReelState app.schema/Db)
         '*shared-twig-cache $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *shared-twig-cache
             SharedTwigCache :revision -1 :value $ Option :none
           :examples $ []
-          :schema $ :: 'Ref 'app.sync.server/SharedTwigCache
+          :schema $ quote $ Ref app.sync.server/SharedTwigCache
         '*sync-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *sync-metrics
             SyncMetrics :last-diff-latency-ms 0 :last-patch-bytes 0 :last-snapshot-bytes 0 :last-visited-nodes 0 :last-emitted-ops 0 :budget-fallback-count 0 :pending-clients 0 :slow-clients 0 :resync-count 0 :patch-attempts 0 :snapshot-attempts 0 :last-revision 0
           :examples $ []
-          :schema $ :: 'Ref 'app.sync.server/SyncMetrics
+          :schema $ quote $ Ref app.sync.server/SyncMetrics
         '*sync-retry-scheduled? $ %{} 'CodeEntry
           :doc "|Whether a slower backpressure retry callback is pending."
           :code $ quote $ defref *sync-retry-scheduled? false
           :examples $ []
-          :schema $ :: 'Ref 'Bool
+          :schema $ quote $ Ref Bool
         '*sync-revision $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *sync-revision 0
           :examples $ []
-          :schema $ :: 'Ref 'Number
+          :schema $ quote $ Ref Number
         '*sync-scheduled? $ %{} 'CodeEntry
           :doc "|Whether a fast coalesced server sync callback is pending."
           :code $ quote $ defref *sync-scheduled? false
           :examples $ []
-          :schema $ :: 'Ref 'Bool
+          :schema $ quote $ Ref Bool
         'CachedPayload $ %{} 'CodeEntry
           :doc "|Encoded latest single-delta patch of one partition lineage and revision."
           :code $ quote $ defstruct CachedPayload (:epoch 'Number) (:revision 'Number) (:payload 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'PartitionMetrics $ %{} 'CodeEntry
           :doc "|Partition sync counters. diffs counts partition diff computations, independent of subscriber count; sends count per-connection fan-out."
           :code $ quote $ defstruct PartitionMetrics (:advances 'Number) (:diffs 'Number) (:resets 'Number) (:snapshot-sends 'Number) (:delta-sends 'Number) (:reused-payloads 'Number) (:drops 'Number) (:queries 'Number) (:live-partitions 'Number)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'SharedTwigCache $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct SharedTwigCache (:revision 'Number)
-            :value $ :: 'Option 'app.schema/SharedTwig
+            :value $ quote $ Option app.schema/SharedTwig
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'SyncDiffPlan $ %{} 'CodeEntry
           :doc "|Atomic server decision. Snapshot variants carry statistics and an optional budget reason but never partial changes."
           :code $ quote $ defenum SyncDiffPlan
-            :snapshot 'recollect.diff/DiffStats $ :: 'Option 'recollect.diff/DiffBudgetReason
-            :patch (:: 'List 'recollect.schema/change-op) 'recollect.diff/DiffStats
+            :snapshot 'recollect.diff/DiffStats $ quote $ Option recollect.diff/DiffBudgetReason
+            :patch
+              quote $ List recollect.schema/change-op
+              , 'recollect.diff/DiffStats
             :idle 'recollect.diff/DiffStats
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'SyncMetrics $ %{} 'CodeEntry
           :doc "|Application-level synchronization latency, wire-byte, deterministic diff-work, budget-fallback, revision, resync, pending-client, and slow-client metrics; pending and slow fields are gauges refreshed on read."
           :code $ quote $ defstruct SyncMetrics (:last-diff-latency-ms 'Number) (:last-patch-bytes 'Number) (:last-snapshot-bytes 'Number) (:last-visited-nodes 'Number) (:last-emitted-ops 'Number) (:budget-fallback-count 'Number) (:pending-clients 'Number) (:slow-clients 'Number) (:resync-count 'Number) (:patch-attempts 'Number) (:snapshot-attempts 'Number) (:last-revision 'Number)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'ack-partition! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ack-partition! (sid key epoch revision)
             update-progress! sid $ fn (progress)
@@ -4539,8 +4302,7 @@
                 (:none) progress
             request-sync!
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'app.schema/PartitionKey 'Number 'Number
+          :schema $ quote $ Fn Number app.schema/PartitionKey Number Number (-> Unit)
         'ack-partition-progress-for! $ %{} 'CodeEntry
           :doc "|Apply the acknowledgement a client sends after applying the given partition state's revision; used by ack-partition! and regression tests."
           :code $ quote $ defn ack-partition-progress-for! (sid state)
@@ -4552,8 +4314,7 @@
                     ack-partition-progress current (:epoch state) (:revision state)
                 (:none) progress
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+          :schema $ quote $ Fn Number (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn acknowledge-client! (sid revision)
             let
@@ -4574,19 +4335,17 @@
                   request-sync!
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> Unit)
         'assoc-client-state-field $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn assoc-client-state-field (states sid field value)
             assoc states sid $ assoc
               .unwrap-or (get states sid) ({})
               , field value
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ []
-              :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
-              , 'Number 'Tag 'Dynamic
-            :return $ :: 'Map 'Number $ :: 'Map 'Tag 'Dynamic
+          :schema $ quote $ Fn
+            Map Number $ Map Tag Dynamic
+            , Number Tag Dynamic
+              -> $ Map Number $ Map Tag Dynamic
           :tests $ []
             %{} 'TestEntry
               :name |updates-one-client-without-changing-other-fields
@@ -4615,35 +4374,32 @@
           :code $ quote $ defn collect-partitions! ()
             let
                 live $ .foldl (map-entries @*partition-progress)
-                  assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+                  assert-type (#{})
+                    quote $ Set app.schema/PartitionKey
                   fn (acc pair)
-                    hint-fn $ {}
-                      :args $ [] (:: 'Set 'app.schema/PartitionKey)
-                        :: 'MapEntry 'Number $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
-                      :return $ :: 'Set 'app.schema/PartitionKey
+                    hint-fn $ Fn (Set app.schema/PartitionKey)
+                      MapEntry Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
+                      -> $ Set app.schema/PartitionKey
                     let
                         _sid $ :key pair
                         raw-progress $ :value pair
-                      union acc $ keys $ assert-type raw-progress (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
+                      union acc $ keys $ assert-type raw-progress
+                        quote $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
               swap! *partitions $ fn (partitions)
-                hint-fn $ {}
-                  :args $ [] $ :: 'Map 'app.schema/PartitionKey (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView)
-                  :return $ :: 'Map 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+                hint-fn $ Fn
+                  Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+                  -> $ Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
                 .filter-map-kv partitions $ fn (key state)
-                  hint-fn $ {}
-                    :args $ [] 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
-                    :return $ :: 'MapEntryDecision 'app.schema/PartitionKey $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+                  hint-fn $ Fn app.schema/PartitionKey (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView)
+                    -> $ MapEntryDecision app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
                   if (includes? live key) (MapEntryDecision :keep key state) (MapEntryDecision :drop)
               , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'count-partition-event! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn count-partition-event! (kind)
             swap! *partition-metrics $ fn (m)
-              hint-fn $ {}
-                :args $ [] 'app.sync.server/PartitionMetrics
-                :return 'app.sync.server/PartitionMetrics
+              hint-fn $ Fn app.sync.server/PartitionMetrics $ -> app.sync.server/PartitionMetrics
               match kind
                 :advance $ struct-with m $ :advances
                   inc $ :advances m
@@ -4664,8 +4420,7 @@
                 _ m
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Tag
+          :schema $ quote $ Fn Tag (-> Unit)
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (op sid)
             let
@@ -4709,8 +4464,7 @@
                   dispatch-domain! (schema/DomainOp :kanban kanban-op) sid op-id op-time
                 _ $ do (eprintln "|Ignoring client-local operation on server:" op) &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ [] 'app.schema/Op 'Number
+          :schema $ quote $ Fn app.schema/Op Number (-> Dynamic)
           :tests $ [] $ %{} 'TestEntry (:name |reset-and-merge-preserve-reel-boundaries)
             :code $ quote $ let
                 saved-reel @*reel
@@ -4752,19 +4506,18 @@
               request-sync!
               , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/DomainOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/DomainOp Number String Number (-> Unit)
         'empty-diff-stats $ %{} 'CodeEntry
           :doc "|Zero work statistics used when an existing recovery state already requires a snapshot and no diff runs."
           :code $ quote $ def empty-diff-stats
             %{} DiffStats (:visited-nodes 0) (:emitted-ops 0)
           :examples $ []
-          :schema $ :: 'recollect.diff/DiffStats
+          :schema $ quote recollect.diff/DiffStats
         'empty-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def empty-partition-metrics
             PartitionMetrics :advances 0 :diffs 0 :resets 0 :snapshot-sends 0 :delta-sends 0 :reused-payloads 0 :drops 0 :queries 0 :live-partitions 0
           :examples $ []
-          :schema $ :: 'app.sync.server/PartitionMetrics
+          :schema $ quote app.sync.server/PartitionMetrics
         'ensure-partition! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn ensure-partition! (db key)
             when
@@ -4772,14 +4525,12 @@
               swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (hooks/project-partition db key)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db 'app.schema/PartitionKey
+          :schema $ quote $ Fn app.schema/Db app.schema/PartitionKey (-> Unit)
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-backup-path! ()
             join-path calcit-dirname |backups $ str (unix-time-ms) |-snapshot.cirru
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ []
+          :schema $ quote $ Fn (-> String)
         'get-shared-twig $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-shared-twig (reel revision)
             let
@@ -4792,8 +4543,7 @@
                   reset! *shared-twig-cache $ SharedTwigCache :revision revision :value $ Option :some value
                   , value
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
-            :args $ [] (:: 'cumulo-reel.core/ReelState 'app.schema/Db) 'Number
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState app.schema/Db) Number (-> app.schema/SharedTwig)
         'handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-client-message! (message sid)
             match message
@@ -4812,8 +4562,7 @@
               (:part/ack key epoch revision) (ack-partition! sid key epoch revision)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/ClientMessage 'Number
+          :schema $ quote $ Fn app.schema/ClientMessage Number (-> Unit)
         'handle-partition-send! $ %{} 'CodeEntry
           :doc "|Only an accepted send records a pending revision; backpressure retries later from the unchanged acknowledged baseline."
           :code $ quote $ defn handle-partition-send! (sid state outcome)
@@ -4830,16 +4579,14 @@
                   , &unit
               (:closed) &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView) 'wss.core/WssSendOutcome
+          :schema $ quote $ Fn Number (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView) wss.core/WssSendOutcome (-> Unit)
         'handle-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-query! (sid request-id query) (count-partition-event! :query)
             wss-send! sid $ format-cirru-edn $ schema/ServerMessage :query/reply request-id
               hooks/answer-query (reel-db @*reel) sid query
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'String 'app.schema/Query
+          :schema $ quote $ Fn Number String app.schema/Query (-> Unit)
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-sync-send! (sid revision new-store outcome)
             swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
@@ -4850,12 +4597,11 @@
               (:too-large) (println "|WebSocket sync payload is too large for client:" sid)
               (:closed) &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number 'app.schema/Store 'wss.core/WssSendOutcome
+          :schema $ quote $ Fn Number Number app.schema/Store wss.core/WssSendOutcome (-> Unit)
         'heartbeat-timeout $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def heartbeat-timeout 12000
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'invalidate-sync-caches! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn invalidate-sync-caches! ()
             reset! *shared-twig-cache $ SharedTwigCache :revision -1 :value $ Option :none
@@ -4872,15 +4618,13 @@
                     , :status
                   swap! *dirty-clients include sid
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'mark-all-partitions-dirty! $ %{} 'CodeEntry
           :doc "|Used when the whole database may have changed (reel reset/merge, hot reload)."
           :code $ quote $ defn mark-all-partitions-dirty! ()
             mark-partitions-dirty! $ keys @*partitions
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'mark-client-active! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-active! (sid client-revision force-snapshot?)
             let
@@ -4904,8 +4648,7 @@
               when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (release-partition-sends! sid) (request-sync!)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number 'Bool
+          :schema $ quote $ Fn Number Number Bool (-> Unit)
         'mark-client-idle! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-idle! (sid client-revision)
             when
@@ -4918,8 +4661,7 @@
               swap! *dirty-clients remove-dirty-client sid
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> Unit)
         'mark-clients-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-clients-dirty! (revision)
             each (keys @*client-states)
@@ -4931,33 +4673,28 @@
                     = :active $ .unwrap $ get state :status
                     swap! *dirty-clients include sid
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number
+          :schema $ quote $ Fn Number (-> Unit)
         'mark-partitions-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-partitions-dirty! (partition-keys)
             swap! *dirty-partitions $ fn (dirty)
-              hint-fn $ {}
-                :args $ [] $ :: 'Set 'app.schema/PartitionKey
-                :return $ :: 'Set 'app.schema/PartitionKey
+              hint-fn $ Fn (Set app.schema/PartitionKey)
+                -> $ Set app.schema/PartitionKey
               union dirty partition-keys
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] $ :: 'Set 'app.schema/PartitionKey
+          :schema $ quote $ Fn (Set app.schema/PartitionKey) (-> Unit)
         'next-partition-epoch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-partition-epoch! () (swap! *partition-epoch inc) @*partition-epoch
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ []
+          :schema $ quote $ Fn (-> Number)
         'next-sync-ack-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-sync-ack-state (current revision)
             dissoc
               .merge current $ {} (:acked-rev revision) (:in-flight? false)
               , :sent-rev :sent-store
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'Number
-            :return $ :: 'Map 'Tag 'Dynamic
+          :schema $ quote $ Fn (Map Tag Dynamic) Number
+            -> $ Map Tag Dynamic
           :tests $ []
             %{} 'TestEntry
               :name |repeated-backpressure-converges-to-latest-revision
@@ -5006,8 +4743,7 @@
                 :snapshot-attempts metrics
               :last-revision revision
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.server/SyncMetrics)
-            :args $ [] 'app.sync.server/SyncMetrics 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
+          :schema $ quote $ Fn app.sync.server/SyncMetrics Tag Number Number String recollect.diff/DiffStats Bool (-> app.sync.server/SyncMetrics)
           :tests $ [] $ %{} 'TestEntry (:name |advances-patch-and-snapshot-counters)
             :code $ quote $ let
                 initial $ SyncMetrics :last-diff-latency-ms 0 :last-patch-bytes 0 :last-snapshot-bytes 0 :last-visited-nodes 0 :last-emitted-ops 0 :budget-fallback-count 0 :pending-clients 0 :slow-clients 0 :resync-count 0 :patch-attempts 0 :snapshot-attempts 0 :last-revision 0
@@ -5043,10 +4779,9 @@
                   .merge current $ {} (:status :idle) (:in-flight? false) (:last-send-outcome :closed)
                   , :sent-rev :sent-store
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'Tag 'Dynamic) 'Number 'U 'wss.core/WssSendOutcome
-            :generics $ [] 'U
-            :return $ :: 'Map 'Tag 'Dynamic
+          :schema $ quote $ Fn (Map Tag Dynamic) Number U wss.core/WssSendOutcome
+            -> $ Map Tag Dynamic
+            :generics U
           :tests $ []
             %{} 'TestEntry (:name |accepted-records-pending-store)
               :code $ quote $ assert=
@@ -5101,27 +4836,23 @@
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn now-ms () (unix-time-ms)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ []
+          :schema $ quote $ Fn (-> Number)
         'on-exit! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-exit! () (persist-db!) (; println "|exit code is...") (quit! 0)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Dynamic)
-            :args $ []
+          :schema $ quote $ Fn (-> Dynamic)
         'partition-history-limit $ %{} 'CodeEntry
           :doc "|Retained deltas per partition; slower subscribers fall back to one bounded partition snapshot."
           :code $ quote $ def partition-history-limit 32
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'partition-patch-payload $ %{} 'CodeEntry
           :doc "|Encode the latest single-delta patch once per partition revision; longer catch-up chains are encoded per send."
           :code $ quote $ defn partition-patch-payload (state deltas)
             let
                 key $ :key state
                 encode! $ fn ()
-                  hint-fn $ {}
-                    :args $ []
-                    :return 'String
+                  hint-fn $ Fn $ -> String
                   let
                       payload $ format-cirru-edn $ schema/ServerMessage :part/patch key (:epoch state) deltas
                     when
@@ -5139,12 +4870,11 @@
                     encode!
                 (:none) (encode!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] (:: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView) (:: 'List 'cumulo-reel.partition/PartitionDelta)
+          :schema $ quote $ Fn (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView) (List cumulo-reel.partition/PartitionDelta) (-> String)
         'patch-operation-limit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def patch-operation-limit 64
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'persist-db! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn persist-db! ()
             let
@@ -5156,24 +4886,22 @@
               check-write-file! backup-path file-content
               hooks/persist!
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'progress-of $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn progress-of (sid)
             match (get @*partition-progress sid)
               (:some progress) progress
               (:none)
-                assert-type ({}) (:: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress)
+                assert-type ({})
+                  quote $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'Number
-            :return $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+          :schema $ quote $ Fn Number
+            -> $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
         'read-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-partition-metrics ()
             struct-with @*partition-metrics $ :live-partitions $ .len @*partitions
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.server/PartitionMetrics)
-            :args $ []
+          :schema $ quote $ Fn (-> app.sync.server/PartitionMetrics)
         'read-persisted-database $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-persisted-database (content)
             try
@@ -5181,9 +4909,8 @@
               fn (error)
                 Result :err $ schema/DatabaseDecodeError :invalid |db $ str "|Malformed persisted Cirru EDN: " error
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] 'String
-            :return $ :: 'Result 'app.schema/Db 'app.schema/DatabaseDecodeError
+          :schema $ quote $ Fn String
+            -> $ Result app.schema/Db app.schema/DatabaseDecodeError
           :tests $ [] $ %{} 'TestEntry (:name |rejects-malformed-cirru-edn)
             :code $ quote $ match (read-persisted-database "|{} (:sessions")
               (:ok _) (raise |Expected-malformed-storage-error)
@@ -5206,8 +4933,7 @@
                       , 'Bool
               struct-with @*sync-metrics (:pending-clients pending-clients) (:slow-clients slow-clients)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.server/SyncMetrics)
-            :args $ []
+          :schema $ quote $ Fn (-> app.sync.server/SyncMetrics)
           :tests $ [] $ %{} 'TestEntry
             :name |preserves-counters-and-derives-connection-gauges
             :code $ quote $ let
@@ -5233,13 +4959,11 @@
           :doc "|Count one explicit client request for a full synchronization snapshot."
           :code $ quote $ defn record-resync! ()
             swap! *sync-metrics $ fn (metrics)
-              hint-fn $ {} (:return 'app.sync.server/SyncMetrics)
-                :args $ [] 'app.sync.server/SyncMetrics
+              hint-fn $ Fn app.sync.server/SyncMetrics $ -> app.sync.server/SyncMetrics
               struct-with metrics $ :resync-count $ inc (:resync-count metrics)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
           :tests $ [] $ %{} 'TestEntry
             :name |increments-resync-without-changing-other-counters
             :code $ quote $ let
@@ -5256,27 +4980,23 @@
           :doc "|Record metrics for one synchronization send attempt before transport admission."
           :code $ quote $ defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
             swap! *sync-metrics $ fn (metrics)
-              hint-fn $ {}
-                :args $ [] 'app.sync.server/SyncMetrics
-                :return 'app.sync.server/SyncMetrics
+              hint-fn $ Fn app.sync.server/SyncMetrics $ -> app.sync.server/SyncMetrics
               next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Tag 'Number 'Number 'String 'recollect.diff/DiffStats 'Bool
+          :schema $ quote $ Fn Tag Number Number String recollect.diff/DiffStats Bool (-> Unit)
         'reel-db $ %{} 'CodeEntry
           :doc "|Named adapter for the legacy generic ReelState database slot."
           :code $ quote $ defn reel-db (reel) (:db reel)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState app.schema/Db) (-> app.schema/Db)
           :tests $ [] $ %{} 'TestEntry (:name |decodes-generic-reel-slot)
             :code $ quote $ let
                 reel $ assert-type
                   %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                     :records $ []
                     :merged? false
-                  :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                  quote $ cumulo-reel.core/ReelState app.schema/Db
               assert= schema/database $ reel-db reel
               assert= 0 $ reel-record-count reel
             :tags $ #{} :server
@@ -5284,8 +5004,7 @@
           :code $ quote $ defn reel-record-count (reel)
             &list:count $ :records reel
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ [] $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState app.schema/Db) (-> Number)
           :tests $ []
             %{} 'TestEntry (:name |counts-heterogeneous-records)
               :code $ quote $ let
@@ -5293,7 +5012,7 @@
                     %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                       :records $ [] ([] :first 1 |op-1 10) ([] :second 2 |op-2 20)
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                 assert= 2 $ reel-record-count reel
               :tags $ #{} :server
             %{} 'TestEntry (:name |rejects-non-list-record-slot)
@@ -5302,7 +5021,7 @@
                     %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                 assert= true $ try
                   do
                     reel-record-count $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
@@ -5325,12 +5044,10 @@
                 :records $ :records reel
                 :merged? $ :merged? reel
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'cumulo-reel.core/ReelState 'LegacyDb) 'app.schema/Db $ :: 'Fn
-              {} (:return 'app.schema/Db)
-                :args $ [] 'app.schema/Db 'Dynamic 'Dynamic 'Dynamic 'Dynamic
-            :generics $ [] 'LegacyDb
-            :return $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState LegacyDb) app.schema/Db
+            Fn app.schema/Db Dynamic Dynamic Dynamic Dynamic $ -> app.schema/Db
+            -> $ cumulo-reel.core/ReelState app.schema/Db
+            :generics LegacyDb
           :tests $ []
             %{} 'TestEntry (:name |rejects-invalid-merged-base)
               :code $ quote $ assert= true
@@ -5365,16 +5082,15 @@
           :code $ quote $ defn refresh-partitions! (db)
             let
                 dirty @*dirty-partitions
-              reset! *dirty-partitions $ assert-type (#{}) (:: 'Set 'app.schema/PartitionKey)
+              reset! *dirty-partitions $ assert-type (#{})
+                quote $ Set app.schema/PartitionKey
               each dirty $ fn (key)
-                hint-fn $ {}
-                  :args $ [] 'app.schema/PartitionKey
-                  :return 'Unit
+                hint-fn $ Fn app.schema/PartitionKey $ -> Unit
                 match (get @*partitions key)
                   (:none) &unit
                   (:some raw-state)
                     let
-                        state $ assert-type raw-state $ :: 'cumulo-reel.partition/PartitionState 'app.schema/PartitionKey 'app.schema/PartitionView
+                        state $ assert-type raw-state $ quote (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView)
                         step $ advance-partition state (hooks/project-partition db key) sync-diff-budget partition-history-limit patch-operation-limit
                       swap! *partitions assoc key $ :state step
                       count-partition-event! :diff
@@ -5384,33 +5100,27 @@
                         (:reset _stats) (count-partition-event! :reset)
               , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db
+          :schema $ quote $ Fn app.schema/Db (-> Unit)
         'release-partition-sends! $ %{} 'CodeEntry
           :doc "|When a connection resumes after idling, forget sends whose ACK may have been lost; clients reject mismatched bases and resync."
           :code $ quote $ defn release-partition-sends! (sid)
             update-progress! sid $ fn (progress)
               .filter-map-kv progress $ fn (key item)
-                hint-fn $ {}
-                  :args $ [] 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
-                  :return $ :: 'MapEntryDecision 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+                hint-fn $ Fn app.schema/PartitionKey cumulo-reel.partition/PartitionProgress $ -> (MapEntryDecision app.schema/PartitionKey cumulo-reel.partition/PartitionProgress)
                 MapEntryDecision :keep key $ release-partition-send item
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number
+          :schema $ quote $ Fn Number (-> Unit)
         'remove-client-cache $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn remove-client-cache (caches sid) (dissoc caches sid)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'Number 'T) 'Number
-            :generics $ [] 'T
-            :return $ :: 'Map 'Number 'T
+          :schema $ quote $ Fn (Map Number T) Number
+            -> $ Map Number T
+            :generics T
         'remove-dirty-client $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn remove-dirty-client (clients sid) (exclude clients sid)
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Set 'Number) 'Number
-            :return $ :: 'Set 'Number
+          :schema $ quote $ Fn (Set Number) Number
+            -> $ Set Number
         'render-loop! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-loop! ()
             when
@@ -5421,8 +5131,7 @@
             sync-clients! @*reader-reel
             sync-partitions! $ reel-db @*reader-reel
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'request-sync! $ %{} 'CodeEntry
           :doc "|Request one bounded, coalesced server sync callback."
           :code $ quote $ defn request-sync! ()
@@ -5430,8 +5139,7 @@
               set-timeout! sync-coalesce-delay $ fn () (reset! *sync-scheduled? false) (render-loop!)
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'request-sync-retry! $ %{} 'CodeEntry
           :doc "|Request one slower retry without blocking new fast sync requests."
           :code $ quote $ defn request-sync-retry! ()
@@ -5443,13 +5151,10 @@
                 , &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'resolve-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn resolve-port ()
-            hint-fn $ {}
-              :args $ []
-              :return 'Number
+            hint-fn $ Fn $ -> Number
             match (get-env |port)
               (:some value)
                 match (parse-float value)
@@ -5457,24 +5162,20 @@
                   (:err _) (site-port)
               (:none) (site-port)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ []
+          :schema $ quote $ Fn (-> Number)
         'resync-partition! $ %{} 'CodeEntry
           :doc "|Forget progress for one partition so the next flush sends a fresh snapshot."
           :code $ quote $ defn resync-partition! (sid key)
             update-progress! sid $ fn (progress) (dissoc progress key)
             request-sync!
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'app.schema/PartitionKey
+          :schema $ quote $ Fn Number app.schema/PartitionKey (-> Unit)
         'run-server! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn run-server! (port)
             wss-serve!
               {} $ :port port
               fn (data)
-                hint-fn $ {}
-                  :args $ [] 'wss.core/WssEvent
-                  :return 'Unit
+                hint-fn $ Fn wss.core/WssEvent $ -> Unit
                 match data
                   (:connect sid)
                     do
@@ -5502,8 +5203,7 @@
                 , &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number
+          :schema $ quote $ Fn Number (-> Unit)
         'select-sync-diff $ %{} 'CodeEntry
           :doc "|Convert one atomic Recollect outcome into patch, snapshot, or idle policy while retaining the existing top-level patch-operation limit."
           :code $ quote $ defn select-sync-diff (outcome)
@@ -5518,8 +5218,7 @@
                     SyncDiffPlan :snapshot stats $ Option :none
                   true $ SyncDiffPlan :patch changes stats
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.sync.server/SyncDiffPlan)
-            :args $ [] 'recollect.diff/DiffOutcome
+          :schema $ quote $ Fn recollect.diff/DiffOutcome (-> app.sync.server/SyncDiffPlan)
           :tests $ []
             %{} 'TestEntry (:name |budget-exceeded-discards-partial-path)
               :code $ quote $ let
@@ -5579,31 +5278,28 @@
                 do (count-partition-event! :delta)
                   handle-partition-send! sid state $ wss-send! sid $ partition-patch-payload state deltas
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
+          :schema $ quote $ Fn Number (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
         'site-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-port ()
             decode-map-as
               .unwrap $ get config/site :port
               , 'Number
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Number)
-            :args $ []
+          :schema $ quote $ Fn (-> Number)
         'site-storage-file $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-storage-file ()
             decode-map-as
               .unwrap $ get config/site :storage-file
               , 'String
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ []
+          :schema $ quote $ Fn (-> String)
         'storage-file $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def storage-file
             if (empty? calcit-dirname)
               str calcit-dirname $ site-storage-file
               str calcit-dirname |/ $ site-storage-file
           :examples $ []
-          :schema $ :: 'String
+          :schema $ quote String
         'sweep-idle-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sweep-idle-clients! ()
             let
@@ -5623,8 +5319,7 @@
                         .unwrap-or (get state :acked-rev) 0
                         , 'Number
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
         'sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sync-client! (sid reel revision) (swap! *dirty-clients remove-dirty-client sid)
             let
@@ -5670,8 +5365,7 @@
                     do (eprintln |Missing-typed-session-during-sync: sid) &unit
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number (:: 'cumulo-reel.core/ReelState 'app.schema/Db) 'Number
+          :schema $ quote $ Fn Number (cumulo-reel.core/ReelState app.schema/Db) Number (-> Unit)
         'sync-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sync-clients! (reel)
             when
@@ -5687,13 +5381,12 @@
               finish-twig-frame!
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] $ :: 'cumulo-reel.core/ReelState 'app.schema/Db
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState app.schema/Db) (-> Unit)
         'sync-coalesce-delay $ %{} 'CodeEntry
           :doc "|Maximum coalescing delay in milliseconds for ordinary state updates."
           :code $ quote $ def sync-coalesce-delay 16
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'sync-diff-budget $ %{} 'CodeEntry
           :doc "|Deterministic per-client diff budget; snapshot size and transport admission remain independent limits."
           :code $ quote $ def sync-diff-budget
@@ -5701,31 +5394,28 @@
               :max-visited $ Option :some sync-diff-visited-limit
               :max-emitted $ Option :some sync-diff-emitted-limit
           :examples $ []
-          :schema $ :: 'recollect.diff/DiffBudget
+          :schema $ quote recollect.diff/DiffBudget
         'sync-diff-emitted-limit $ %{} 'CodeEntry
           :doc "|Operation-construction ceiling selected above the measured 10k workload maximum of 70001."
           :code $ quote $ def sync-diff-emitted-limit 80000
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'sync-diff-visited-limit $ %{} 'CodeEntry
           :doc "|Visited-node ceiling selected above the measured 10k workload maximum of 40002."
           :code $ quote $ def sync-diff-visited-limit 50000
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'sync-partitions! $ %{} 'CodeEntry
           :doc "|Partition synchronization over the WebSocket transport."
           :code $ quote $ defn sync-partitions! (db) (sync-partitions-with! db send-partition-action!)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db
+          :schema $ quote $ Fn app.schema/Db (-> Unit)
         'sync-partitions-with! $ %{} 'CodeEntry
           :doc "|Advance dirty partitions once, then plan each active connection from its authorized partition set through an injectable transport; diff count is independent of subscriber count."
           :code $ quote $ defn sync-partitions-with! (db send!) (refresh-partitions! db)
             each (keys @*client-states)
               fn (sid)
-                hint-fn $ {}
-                  :args $ [] 'Number
-                  :return 'Unit
+                hint-fn $ Fn Number $ -> Unit
                 let
                     state $ .unwrap $ get @*client-states sid
                   when
@@ -5737,29 +5427,24 @@
                         let
                             desired $ hooks/session-partitions db $ assert-type raw-session app.schema/Session
                           each desired $ fn (key)
-                            hint-fn $ {}
-                              :args $ [] 'app.schema/PartitionKey
-                              :return 'Unit
+                            hint-fn $ Fn app.schema/PartitionKey $ -> Unit
                             ensure-partition! db key
                           each
                             connection-actions @*partitions (progress-of sid) desired
                             fn (action)
-                              hint-fn $ {}
-                                :args $ [] $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
-                                :return 'Unit
+                              hint-fn $ Fn (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
                               send! sid action
                   , &unit
             collect-partitions!
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'app.schema/Db $ :: 'Fn
-              {} (:return 'Unit)
-                :args $ [] 'Number $ :: 'cumulo-reel.partition/PartitionAction 'app.schema/PartitionKey 'app.schema/PartitionView
+          :schema $ quote $ Fn app.schema/Db
+            Fn Number (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
+            -> Unit
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200
           :examples $ []
-          :schema $ :: 'Number
+          :schema $ quote Number
         'touch-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn touch-client! (sid client-revision)
             let
@@ -5770,18 +5455,16 @@
                 mark-client-active! sid client-revision true
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> Unit)
         'update-progress! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn update-progress! (sid f)
             swap! *partition-progress assoc sid $ f $ progress-of sid
             , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'Number $ :: 'Fn
-              {}
-                :args $ [] $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
-                :return $ :: 'Map 'app.schema/PartitionKey 'cumulo-reel.partition/PartitionProgress
+          :schema $ quote $ Fn Number
+            Fn (Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress)
+              -> $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
+            -> Unit
         'updater-from-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn updater-from-reel (db op sid op-id op-time)
             let
@@ -5793,9 +5476,7 @@
                   raise $ str |Invalid-reel-operation: error
                 (:ok typed-op) (hooks/updater db typed-op typed-sid typed-op-id typed-op-time)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'Input 'Sid 'OpId 'Time
-            :generics $ [] 'Sid 'OpId 'Time 'Input
+          :schema $ quote $ Fn app.schema/Db Input Sid OpId Time (-> app.schema/Db) (:generics Sid OpId Time Input)
           :tests $ []
             %{} 'TestEntry (:name |live-reducer-matches-business-updater)
               :code $ quote $ let
@@ -5805,7 +5486,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                   updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
                 assert= (hooks/updater base connect-op 1 |op-1 10) (:db updated)
                 assert=
@@ -5820,7 +5501,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                   router $ schema/Router :name :profile :target $ Option :none
                   expected $ hooks/updater (hooks/updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
                   records $ []
@@ -5840,12 +5521,10 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                   updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
                   control-updater $ fn (db op sid op-id op-time)
-                    hint-fn $ {}
-                      :args $ [] 'app.schema/Db 'app.schema/Op 'Number 'String 'Number
-                      :return 'app.schema/Db
+                    hint-fn $ Fn app.schema/Db app.schema/Op Number String Number $ -> app.schema/Db
                     raise |Updater-must-not-run
                   reset $ reel-reducer updated control-updater (schema/Op :reel/reset) 1 |reset 20 true
                   merged $ reel-reducer updated control-updater (schema/Op :reel/merge) 1 |merge 30 true
@@ -5864,7 +5543,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                   records $ [] $ [] (:: :effect/persist) 1 |op-1 10
                 assert= true $ try
                   do
@@ -5879,7 +5558,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    :: 'cumulo-reel.core/ReelState 'app.schema/Db
+                    quote $ cumulo-reel.core/ReelState app.schema/Db
                   records $ [] $ [] (:: :session/connect) |not-a-number |op-1 10
                 assert= true $ try
                   do
@@ -5923,9 +5602,7 @@
                 router-view $ RouterView :name router-name :target (:target router-data) :data router-view-data :router $ Option :none
                 messages-view $ .filter-map-kv (:messages session-data)
                   fn (id message)
-                    hint-fn $ {}
-                      :args $ [] 'String 'app.schema/Message
-                      :return $ :: 'MapEntryDecision 'String 'app.schema/MessageView
+                    hint-fn $ Fn String app.schema/Message $ -> (MapEntryDecision String app.schema/MessageView)
                     MapEntryDecision :keep id $ app.schema/MessageView :id (:id message) :text $ :text message
                 session-view $ SessionView :user-id user-id-option :id
                   Option :some $ :id session-data
@@ -5944,8 +5621,7 @@
                 if logged-in? (:session-count shared) 0
                 , :color $ if logged-in? |#aaa |transparent
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Store)
-            :args $ [] 'app.schema/Db 'app.schema/Session 'app.schema/SharedTwig
+          :schema $ quote $ Fn app.schema/Db app.schema/Session app.schema/SharedTwig (-> app.schema/Store)
           :tests $ []
             %{} 'TestEntry (:name |typed-store-roundtrip)
               :code $ quote $ let
@@ -6028,9 +5704,8 @@
         'twig-members $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-members (sessions users)
             filter-map-kv sessions $ fn (sid raw-session)
-              hint-fn $ {}
-                :args $ [] 'Number 'app.schema/Session
-                :return $ :: 'MapEntryDecision 'Number $ :: 'Option 'String
+              hint-fn $ Fn Number app.schema/Session $ ->
+                MapEntryDecision Number $ Option String
               let
                   session-data $ assert-type raw-session app.schema/Session
                 MapEntryDecision :keep sid $ match (:user-id session-data)
@@ -6043,17 +5718,15 @@
                         Option :some $ :name user-data
                       Option :none
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] (:: 'Map 'Number 'app.schema/Session) (:: 'Map 'String 'app.schema/User)
-            :return $ :: 'Map 'Number $ :: 'Option 'String
+          :schema $ quote $ Fn (Map Number app.schema/Session) (Map String app.schema/User)
+            -> $ Map Number $ Option String
         'twig-shared $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn twig-shared (db record-count)
             SharedTwig :reel-length record-count :attached (AttachedView :type :msg :content "|SOME data") :pages (Option :none) :members
               twig-members (:sessions db) (:users db)
               , :session-count $ .len $ :sessions db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/SharedTwig)
-            :args $ [] 'app.schema/Db 'Number
+          :schema $ quote $ Fn app.schema/Db Number (-> app.schema/SharedTwig)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.twig.container
           :require
@@ -6066,8 +5739,7 @@
           :code $ quote $ defn twig-user (user-data)
             UserView :name (:name user-data) :id (:id user-data) :nickname (:nickname user-data) :avatar $ :avatar user-data
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/UserView)
-            :args $ [] 'app.schema/User
+          :schema $ quote $ Fn app.schema/User (-> app.schema/UserView)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.twig.user
           :require $ app.schema :refer $ UserView
@@ -6085,8 +5757,7 @@
               (:router/change data) (router/change db data sid op-id op-time)
               (:kanban kanban-op) (kanban/apply-kanban db kanban-op sid op-id op-time)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'app.schema/DomainOp 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/DomainOp Number String Number (-> app.schema/Db)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.updater
           :require (app.updater.session :as session) (app.updater.user :as user) (app.updater.router :as router) (app.schema :as schema)
@@ -6105,8 +5776,7 @@
                   struct-with session-data $ :router op-data
               , db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'app.schema/Router 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/Router Number String Number (-> app.schema/Db)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.updater.router
     'app.updater.session $ %{} 'FileEntry
@@ -6116,14 +5786,12 @@
             struct-with db $ :sessions $ assoc (:sessions db) sid
               schema/Session :user-id (Option :none) :id sid :nickname (Option :none) :router schema/router :messages $ {}
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db Number String Number (-> app.schema/Db)
         'disconnect $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn disconnect (db sid op-id op-time)
             struct-with db $ :sessions $ dissoc (:sessions db) sid
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db Number String Number (-> app.schema/Db)
         'remove-message $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn remove-message (db op-data sid op-id op-time)
             if-let
@@ -6134,8 +5802,7 @@
                   struct-with session-data $ :messages $ dissoc (:messages session-data) (:id op-data)
               , db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'app.schema/RemoveMessage 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db app.schema/RemoveMessage Number String Number (-> app.schema/Db)
           :tests $ [] $ %{} 'TestEntry (:name |existing-message-map-callback)
             :code $ quote $ let
                 sid 1
@@ -6188,8 +5855,7 @@
                         app.schema/Message :id op-id :text $ str "|No user named: " username
                 , db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db String String Number String Number (-> app.schema/Db)
           :tests $ [] $ %{} 'TestEntry (:name |existing-session-callbacks)
             :code $ quote $ let
                 sid 1
@@ -6232,8 +5898,7 @@
                   struct-with session-data $ :user-id $ Option :none
               , db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db Number String Number (-> app.schema/Db)
         'sign-up $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sign-up (db username password sid op-id op-time)
             let
@@ -6258,8 +5923,7 @@
                         app.schema/User :id op-id :name username :nickname (Option :some username) :password (md5 password) :avatar $ Option :none
                 , db
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'app.schema/Db)
-            :args $ [] 'app.schema/Db 'String 'String 'Number 'String 'Number
+          :schema $ quote $ Fn app.schema/Db String String Number String Number (-> app.schema/Db)
           :tests $ [] $ %{} 'TestEntry (:name |duplicate-user-message-callback)
             :code $ quote $ let
                 sid 1
@@ -6287,35 +5951,35 @@
         'DomainOp $ %{} 'CodeEntry
           :doc "|A replayable state transition covering no-op, leaf, insert, remove, reorder, and replacement cases."
           :code $ quote $ defenum DomainOp (:noop) (:set-label 'String 'String) (:insert 'Entity) (:remove 'String)
-            :reorder $ :: 'List 'String
-            :replace $ :: 'List 'Entity
+            :reorder $ quote $ List String
+            :replace $ quote $ List Entity
           :examples $ []
-          :schema $ :: 'EnumDef
+          :schema $ quote EnumDef
         'Entity $ %{} 'CodeEntry
           :doc "|One deterministic keyed entity used by the workload."
           :code $ quote $ defstruct Entity (:id 'String) (:rank 'Number) (:label 'String)
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'WorkloadInput $ %{} 'CodeEntry
           :doc "|A fixed seed, base state, and deterministic DomainOp sequence."
           :code $ quote $ defstruct WorkloadInput (:seed 'Number) (:base 'WorkloadState)
-            :ops $ :: 'List 'DomainOp
+            :ops $ quote $ List DomainOp
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'WorkloadState $ %{} 'CodeEntry
           :doc "|Server-side keyed entities plus their explicit presentation order."
           :code $ quote $ defstruct WorkloadState
-            :entities $ :: 'Map 'String 'Entity
-            :order $ :: 'List 'String
+            :entities $ quote $ Map String Entity
+            :order $ quote $ List String
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'WorkloadStore $ %{} 'CodeEntry
           :doc "|Client projection consumed by data diff and browser rendering."
           :code $ quote $ defstruct WorkloadStore
-            :rows $ :: 'List 'Entity
+            :rows $ quote $ List Entity
             :count 'Number
           :examples $ []
-          :schema $ :: 'StructDef
+          :schema $ quote StructDef
         'apply-domain-op $ %{} 'CodeEntry
           :doc "|Apply one DomainOp without mutating the previous WorkloadState."
           :code $ quote $ defn apply-domain-op (state op)
@@ -6347,28 +6011,23 @@
                       entity $ assert-type raw-entity Entity
                     :id entity
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'WorkloadState)
-            :args $ [] 'WorkloadState 'DomainOp
+          :schema $ quote $ Fn WorkloadState DomainOp (-> WorkloadState)
           :tags $ #{} :scaffold
         'entities-by-id $ %{} 'CodeEntry (:doc "|Index an entity list by its stable identifier.")
           :code $ quote $ defn entities-by-id (entities)
             .foldl entities ({})
               fn (acc entity)
-                hint-fn $ {}
-                  :args $ [] (:: 'Map 'String 'app.workload.diff-patch/Entity) 'app.workload.diff-patch/Entity
-                  :return $ :: 'Map 'String 'app.workload.diff-patch/Entity
+                hint-fn $ Fn (Map String app.workload.diff-patch/Entity) app.workload.diff-patch/Entity $ -> (Map String app.workload.diff-patch/Entity)
                 assoc acc (:id entity) entity
           :examples $ []
-          :schema $ :: 'Fn $ {}
-            :args $ [] $ :: 'List 'Entity
-            :return $ :: 'Map 'String 'Entity
+          :schema $ quote $ Fn (List Entity)
+            -> $ Map String Entity
           :tags $ #{} :scaffold
         'entity-id $ %{} 'CodeEntry
           :doc "|Derive a stable entity key from the fixed seed and index."
           :code $ quote $ defn entity-id (seed index) (str |entity- seed |- index)
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'String)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> String)
           :tags $ #{} :scaffold
         'main! $ %{} 'CodeEntry
           :doc "|Provide a side-effect-free entry for deterministic workload code generation."
@@ -6380,15 +6039,13 @@
               workload-view next-store
               , &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ []
+          :schema $ quote $ Fn (-> Unit)
           :tags $ #{} :scaffold
         'make-entity $ %{} 'CodeEntry (:doc "|Construct one deterministic typed entity.")
           :code $ quote $ defn make-entity (seed index)
             Entity :id (entity-id seed index) :rank index :label $ str |item- seed |- index
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Entity)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> Entity)
           :tags $ #{} :scaffold
         'make-workload-input $ %{} 'CodeEntry
           :doc "|Construct a deterministic workload of the requested size and seed."
@@ -6418,8 +6075,7 @@
                   DomainOp :replace replacement
               WorkloadInput :seed seed :base base :ops ops
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'WorkloadInput)
-            :args $ [] 'Number 'Number
+          :schema $ quote $ Fn Number Number (-> WorkloadInput)
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |deterministic-shape)
             :code $ quote $ let
@@ -6438,8 +6094,7 @@
                     .unwrap $ get (:entities state) id
               WorkloadStore :rows rows :count $ .len rows
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'WorkloadStore)
-            :args $ [] 'WorkloadState
+          :schema $ quote $ Fn WorkloadState (-> WorkloadStore)
           :tags $ #{} :scaffold
         'replay-domain-ops $ %{} 'CodeEntry
           :doc "|Replay the same DomainOp sequence against a WorkloadState."
@@ -6449,8 +6104,7 @@
               (:some op remaining)
                 recur (apply-domain-op state op) remaining
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'WorkloadState)
-            :args $ [] 'WorkloadState $ :: 'List 'DomainOp
+          :schema $ quote $ Fn WorkloadState (List DomainOp) (-> WorkloadState)
           :tags $ #{} :scaffold
           :tests $ [] $ %{} 'TestEntry (:name |deterministic-replay)
             :code $ quote $ let
@@ -6466,9 +6120,7 @@
           :doc "|Stable no-op ref callback used to detect unexpected ref churn at the browser FFI boundary."
           :code $ quote $ defn workload-ref! (_target) &unit
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'Unit)
-            :args $ [] 'respo.dom/DomElement
-            :features $ #{} :js-ffi
+          :schema $ quote $ Fn respo.dom/DomElement (-> Unit) (:features :js-ffi)
           :tags $ #{} :scaffold
         'workload-view $ %{} 'CodeEntry
           :doc "|Render keyed rows plus stable focus and listener probes for browser checks."
@@ -6488,8 +6140,7 @@
                           :data-name $ :id entity
                           :inner-text $ str (:rank entity) |: $ :label entity
           :examples $ []
-          :schema $ :: 'Fn $ {} (:return 'respo.schema/Element)
-            :args $ [] 'WorkloadStore
+          :schema $ quote $ Fn WorkloadStore (-> respo.schema/Element)
           :tags $ #{} :scaffold
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.workload.diff-patch
