@@ -2,15 +2,20 @@
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
-### 0.32.1 迁移候选：使用者影响
+### Calcit 0.34.3：使用者影响
 
-CLI 与 `@calcit/procs` 成对升级为正式 **0.32.1**。前后端须一起安装完整依赖图、
-重启服务并完整刷新，不能让旧后端配新页面。本候选不确认生产服务器已准备好，
-**不合并、不部署、不发版**；原 `/servers/calcium-workflow/` 与前端 rsync 路径保持。
+CLI 与 `@calcit/procs` 成对升级为正式 **0.34.3**。前后端须一起安装完整依赖图、
+重启服务并完整刷新，不能让旧后端配新页面；原 `/servers/calcium-workflow/` 与前端 rsync 路径保持。
 
-依赖更新为已发布精确 Git tag：Cumulo Reel0.1.0、Util0.0.35、Message0.1.0、UI0.9.0、
-Respo0.17.1、WSS0.2.40、Std0.2.47、JS FFI0.2.9、Recollect0.1.0、WS-EDN0.0.51；
-间接 Value0.6.0 和 UI 固定的 Router0.9.0-alpha.4 保留，不单独覆盖配对图。
+依赖走 Respo 0.18 兼容线，均为已发布精确 Git tag：Cumulo Reel 0.1.1、Util 0.0.37、Message 0.1.4、
+UI 0.12.1、Respo 0.18.1、WSS 0.2.42、Std 0.2.50、JS FFI 0.2.9、Recollect 0.2.1、WS-EDN 0.0.53；
+间接 Value 0.6.3 和 Router 0.10.1。
+
+0.34 的源码改动只有 `comp-session-messages`：不再把 `Map.to-list` 的 tuple 交给 `list->`，
+改为生成 `[] id element`。`tests/client-patch.mjs` 里故意构造的坏 op 改为不经 `%::` 校验直接构造，
+因为 0.34 的 `%::` 会检查 payload 类型。
+
+以下为 0.32.1 迁移时的记录：
 
 Snapshot 类型语法通过官方事务规范化；322个完整定义视图只有 `mount-target` 增补真实
 `JsNullish respo.dom/DomElement` schema，执行代码及原99个附带测试和断言相同。
@@ -28,8 +33,8 @@ selection保留，no-op无DOM改动，console warning/error=[]；这不等于整
 
 ### Usages
 
-Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.32.1](https://github.com/calcit-lang/calcit/releases/tag/0.32.1).
-The local CLI must stay at `0.32.1`, matching `deps.cirru` and `@calcit/procs`.
+Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.34.3](https://github.com/calcit-lang/calcit/releases/tag/0.34.3).
+The local CLI must stay at `0.34.3`, matching `deps.cirru` and `@calcit/procs`.
 
 Install the dependencies declared in `deps.cirru` with `caps --strict --ci`.
 They are linked under `.calcit/modules/` from the immutable module cache.

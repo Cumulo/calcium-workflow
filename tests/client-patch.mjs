@@ -29,7 +29,8 @@ for (const envelope of [
   42,
   c._$o__$o_(patchTag, 1, 2, list(42)),
   c._$o__$o_(patchTag, 1, 2, list(corruptDrop)),
-  c._$o__$o_(patchTag, 1, 2, list(op("update", "field", corruptDrop))),
+  // Calcit 0.34 `%::` checks payloads, so build the corrupt nested op without validation.
+  c._$o__$o_(patchTag, 1, 2, list(new corruptDrop.constructor(tags.update, ["field", corruptDrop], change_op))),
 ]) {
   assert.equal(decode_server_message(envelope).tag.value, "err");
 }
