@@ -1,639 +1,87 @@
-# Cumulo Development Guide for LLM Agents
+# Calcium 模板维护指南
 
-**🤖 This guide helps LLM agents add features to Cumulo applications based on [calcium-workflow](https://github.com/Cumulo/calcium-workflow) template.**
+本仓库是 Calcit 原生服务端与 Respo 浏览器端的实时应用模板。工具链精确版本以
+`deps.cirru` 和 `package.json` 为准；CLI 与 `@calcit/procs` 必须配对。
 
-Respo 的权威模块指南通过下面的 CLI 命令读取，不使用仓库中已不存在的 `llms/Respo.md`。
+## 先读当前合同
 
-查看 Calcit 命令行工具的用法:
-
-```bash
-calcit docs agents
-```
-
-查看 Respo 模块的具体用法
-
-```bash
+```sh
+calcit --version
+calcit docs agents --contract
+calcit query config
 calcit docs read Respo-Agent.md --full --module respo.calcit
 ```
 
----
-
-## Quick Reference
-
-**What is Cumulo?** Realtime fullstack framework using **diff/patch** for server-client sync.
-
-**Core Architecture** (already in template):
-
-- **Server**: `*reel` ref (`defref`) → `updater` (pure fn) → `twig-container` → `diff-twig` → patches
-- **Client**: WebSocket → `patch-twig` → `*store` ref (`defref *store`) → Respo render
-- **Key libs**: `recollect` (diff/patch), `cumulo-reel` (time-travel; `cumulo-reel.partition` partition engine), `ws-edn` (WebSocket)
-- **Partitions** (hot/cold split, see `docs/hot-cold-sync-plan.md`):
-  `app.hooks.server/project-partition` → `cumulo-reel.partition/advance-partition`
-  (one diff per partition revision) → per-connection `connection-actions`;
-  cold data goes through `ClientMessage :query` and `app.hooks.client`
-
-**Project layers** (see `docs/template-layers.md`; enforced by `tests/template-boundary.mjs`):
-
-```
-app.sync.*            # TEMPLATE runtime: do not edit per app
-app.schema            # WIRING: protocol enums; lists the current Op/DomainOp,
-                      #   PartitionKey/PartitionView, Query/QueryReply variants
-app.hooks.server      # WIRING: every call from app.sync.server into business code
-app.hooks.client      # WIRING: every call from app.sync.client into business code
-app.updater           # WIRING: routes DomainOp to reducers
-app.client/server     # WIRING: entry points (main!, reload!, root render)
-app.comp.container    # WIRING: routes pages to feature components
-app.twig.*, app.updater.{session,user,router}, app.comp.{login,navigation,profile}
-                      # BASE: account/session scaffold most apps keep
-app.feature.<name>.*  # FEATURE: replaceable business code (Kanban demo here)
-```
-
-### Step 0: choose the data tier before adding a field
-
-| Question | Tier | Where |
-|---|---|---|
-| Visible to every subscriber, bounded size? | shared hot partition | a `PartitionView` variant + projection in `app.feature.<name>.twig` |
-| Belongs to one user, must be live? | private `(:user id)` partition | the user view in the feature projection |
-| Grows over time or only needed when a view opens? | cold | feature cold store + a `Query`/`QueryReply` variant in `app.schema`; keep only an id/summary/`*-rev` hot |
-| Per-tab UI or route state? | session Store | `twig-container` |
-
-Rules: a partition is a visibility boundary (never ship private fields for the
-client to filter); authorization lives in `session-partitions`; when an
-operation can change a partition, list it in `affected-partitions`; cold reads
-take identity from the session, never from query parameters. Template code in
-`app.sync.*` never names `app.feature.*`: add or change behaviour through the
-hook bodies in `app.hooks*`.
-
----
-
-## Development Workflow - Adding Features
-
----
-
-## Development Workflow - Adding Features
-
-### Standard Process (5 Steps)
-
-**Example**: Add a "tasks" feature where users can create/manage tasks.
-
-#### 1. **Update Schema** (Define data structure)
-
-```bash
-calcit query def app.schema/user
-calcit tree append-child app.schema/user -p "1" -e ":tasks (noted task ({}))"
-```
-
-Add to `app.schema` namespace if needed:
-
-```cirru
-def task
-  {}
-    :id nil
-    :title |
-    :done false
-    :created-at nil
-```
-
-#### 2. **Create Updater** (Business logic - pure function)
-
-```bash
-calcit edit def app.updater.task/add-task -e \
-  'defn add-task (db title sid op-id op-time)
-    let
-        user-id $ get-in db ([] :sessions sid :user-id)
-        task $ {}
-          :id op-id
-          :title title
-          :done false
-          :created-at op-time
-      assoc-in db ([] :users user-id :tasks op-id) task'
-```
-
-**Key pattern**: `(db ...) → new-db` (pure function, returns new state)
-
-#### 3. **Wire Updater** (Connect to main dispatcher)
-
-```bash
-# Find insertion point
-calcit query def app.updater/updater
-calcit tree show app.updater/updater -p "2"
-
-# Add new branch
-calcit tree insert-before app.updater/updater -p "2,8" -e \
-  '(:task/add title) (task/add-task db title sid op-id op-time)'
-```
-
-#### 4. **Update Twig** (Control what clients see)
-
-```bash
-calcit query def app.twig.container/twig-container
-# Then add/modify twig logic
-```
-
-Example: Include tasks in user twig
-
-```cirru
-defn twig-user (user)
-  -> user
-    dissoc :password
-    update :tasks $ fn (tasks)
-      ; Only send recent 20 tasks
-      -> tasks vals
-        sort-by :created-at
-        reverse
-        take 20
-```
-
----
-
-## Key Patterns for Development
-
-### 1. **Updater Pattern** (Most Common Changes)
-
-**Template**:
-
-```cirru
-defn your-updater (db data sid op-id op-time)
-  ; 1. Extract user context
-  let
-      user-id $ get-in db ([] :sessions sid :user-id)
-      ; 2. Validate if needed
-    if (valid? data)
-      ; 3. Return new db (pure!)
-      assoc-in db ([] :users user-id :new-field) data
-      ; 4. Or add error message
-      add-error-message db sid "|Validation failed"
-```
-
-**Constraints**:
-
-- ✅ Pure function (no I/O, no side effects)
-- ✅ Always return `db`
-- ✅ Use `get-in`, `assoc-in`, `update-in` for nested updates
-- ❌ No `println`, `wss-send!`, file operations inside updater
-
-### 2. **Twig Pattern** (Control Data Visibility)
-
-**Template**:
-
-```cirru
-defn twig-your-feature (db session)
-  let
-      user-id $ :user-id session
-    if (non-nil? user-id)
-      ; Return only what this client should see
-      {}
-        :my-data $ get-in db ([] :users user-id :my-data)
-        :shared-data $ compute-shared-data db user-id
-      ; Not logged in - return minimal data
-      {}
-```
-
-**Constraints**:
-
-- ✅ Filter by `session` (never send all users' data)
-- ✅ Remove sensitive fields (`:password`, etc.)
-- ✅ Use Recollect's typed Twig memo helpers for expensive pure projections
-- ❌ Don't return entire `db`
-
-### 3. **Wiring Pattern** (Connect to Dispatcher)
-
-**Find location**:
-
-```bash
-calcit query def app.updater/updater
-calcit tree show app.updater/updater -p "2"  # tag-match cases
-```
-
-**Add case** (use same structure as existing ones):
-
-```cirru
-tag-match op
-  ; Existing cases...
-  (:your-op/action arg1 arg2)
-    your-updater db arg1 arg2 sid op-id op-time
-```
-
----
-
-## Common Modification Scenarios
-
-### A. Add Field to Existing Schema
-
-```bash
-calcit tree append-child app.schema/user -p "1" -e ":new-field default-value"
-```
-
-### B. Modify Updater Logic
-
-```bash
-# 1. Find and read current code
-calcit query def app.updater.user/log-in
-
-# 2. Locate exact position
-calcit tree show app.updater.user/log-in -p "2"
-
-# 3. Replace specific node
-calcit tree replace app.updater.user/log-in -p "2,1,0" -e 'new-logic here'
-```
-
-### C. Add New Twig Projection
-
-```bash
-calcit edit def app.twig.user/twig-user-profile -e \
-  'defn twig-user-profile (user)
-    {}
-      :id $ :id user
-      :name $ :name user
-      :stats $ compute-user-stats user'
-```
-
-### D. Wire New Operation
-
-```bash
-calcit tree insert-after app.updater/updater -p "2,5" -e \
-  '(:new/operation data) (new-updater db data sid op-id op-time)'
-```
-
----
-
-## Critical Constraints
-
-### ⚠️ **Never Do These in Updaters**
-
-```cirru
-; ❌ BAD: Side effects
-defn bad-updater (db sid)
-  println |Debug message        ; Side effect!
-  wss-send! sid data            ; Side effect!
-  check-write-file! ...         ; I/O!
-  assoc-in db ...
-
-; ✅ GOOD: Pure function
-defn good-updater (db sid)
-  assoc-in db ([] :sessions sid :data) new-value
-
-; ✅ Side effects in dispatch! (OK)
-defn dispatch! (op sid)
-  println |Logging              ; OK here
-  reset! *reel $ reel-reducer @*reel updater op sid op-id op-time
-```
-
-### ⚠️ **Never Expose Sensitive Data in Twigs**
-
-```cirru
-; ❌ BAD: Leaks passwords
-defn bad-twig (user)
-  user  ; Contains :password!
-
-; ✅ GOOD: Filter sensitive data
-defn good-twig (user)
-  dissoc user :password
-
-; ✅ BETTER: Explicit whitelist
-defn safe-twig (user)
-  {}
-    :id $ :id user
-    :name $ :name user
-```
-
-### ⚠️ **Never Send All Data to All Clients**
-
-```cirru
-; ❌ BAD: Privacy violation
-defn bad-twig-container (db session)
-  {}
-    :all-users (:users db)      ; Everyone sees everyone!
-
-; ✅ GOOD: Session-filtered
-defn good-twig-container (db session)
-  if-let (user-id (:user-id session))
-    {}
-      :current-user $ twig-user $ get-in db ([] :users user-id)
-      :public-data $ get-public-data db
-    {}
-```
-
----
-
-## Debugging Workflow
-
-### Check Current State
-
-```bash
-# View schema
-calcit query def app.schema/database
-
-# Trace updater flow
-calcit query usages app.updater/updater
-
-# Find where something is defined
-calcit query find your-function-name
-
-# See all operations
-calcit query search app.updater/updater -p "tag-match" -l
-```
-
-### Test Changes
-
-```bash
-# Syntax check only (fast)
+遇到不熟悉的操作先查 live `--help`、`calcit docs` 和所属模块的 query 视图。
+不用旧 `calcit libs`、`-p`/`-e`、`tree append-child` 或已删除的宏当作当前命令。
+Snapshot 只通过官方 `query` / `tree` / `edit` / `config` 操作；先查真实节点，
+多步写入先 transaction dry-run，再带返回的 scoped revision 应用。
+不要直接读写或正则修改 `calcit.cirru`，不恢复 `compact.cirru` / `package.cirru`。
+
+## 修改所属层
+
+详见 `docs/template-layers.md`、`docs/hot-cold-sync-plan.md` 和既有
+`tests/template-boundary.mjs`：
+
+- `app.sync.*` 是模板同步运行时。业务应用不向其中加入 feature 分支；模板自身的
+  运行时维护须保留原协议、生命周期和全部边界验收。
+- `app.schema` 声明 Op/DomainOp、分区和 query/reply 合同；`app.hooks.client/server`
+  是同步运行时调用业务逻辑的接线层。
+- `app.client/server` 接线入口与根渲染；`app.comp.container` 接线页面。
+- `app.twig.*`、`app.updater.{session,user,router}`、账户组件是基础脚手架。
+- `app.feature.<name>.*` 放可替换业务逻辑，当前示例是 Kanban。
+
+新增字段前先决定其范围：有界共享数据进入 shared hot partition；单用户实时数据
+进入 private user partition；增长数据或按需加载内容进入 cold store/query；每标签页
+UI/路由数据留在 session Store。授权来自 session，不从 query 参数取得身份。
+操作可能改变的分区列入 `affected-partitions`，访问范围由 `session-partitions` 决定。
+
+## 代码合同
+
+- Updater 是纯函数，返回新 Db；I/O、日志、WebSocket 与持久化放在外层派发/同步。
+- Twig 必须在服务端过滤会话可见数据，绝不广播所有私有数据或密码字段。优先显式
+  投影公开字段；不要依赖浏览器过滤来保护数据。
+- 线输入、旧存档经现有 decoder 校验并重建本地名义值。名称/字段相同不代表定义身份，
+  class mapper 也不替代字段校验。保留受检 wire 恢复与错误顺序。
+- DOM handler 使用 RespoEvent 和单个具名 Op 派发，不能继续 `d! cursor state`。
+  读取文本优先复用 Respo 的受检 `event-value`；事件 raw Dynamic 不是已验证 String。
+  需要返回 Unit 的副作用回调明确丢弃分支返回值。
+- 根组件构建与实际渲染同处 managed memo frame；数据 key 不因 CoordKey 的渲染边界
+  而被强行收窄。spacer 使用 `space-x` / `space-y`，保持原宽高。
+- UI 使用 Respo memo；服务端纯投影使用 Recollect 的 typed twig memo helper。
+  服务端在完整 dirty-client pass 外管理 twig frame，feature 不另开嵌套帧。
+  不重新加入通用 memof，不为协议/revision cache 隐藏生命周期。
+- 优先真实 Struct/Enum/union/generic 合同。开放 payload、存档和异构状态在真实入口
+  保留受检边界，不用假泛型、有限 union、assert-type 或 unsafe 冒充业务证明。
+- 保留 `hud!` 的页面错误展示，不改为 raise；原后端监听、服务目录与前端部署路径保持。
+
+## 原门禁必须保留
+
+原工作流 `.github/workflows/upload.yaml` 是完整入口，不能仅凭 check-only 或历史数字
+声称完成迁移。安装使用 Caps strict/toolchain 和 Yarn immutable；未发布候选链接
+必须明确标识，其通过不能冒充正式根依赖图已解析。npm 安装隔离期保持一小时。
+
+```sh
+caps --strict --ci
+yarn install --immutable
+caps verify --toolchain
 calcit --check-only
-
-# Run once and exit
-calcit
-
-# Compile JS once
-calcit js
+calcit --entry server --check-only
+calcit fix --workflow strict --verify
+calcit test --tag client --require-match
+calcit --entry server test --require-match
+yarn check-types
+yarn compile-page
+yarn release-page
 ```
 
-### Server Logs (set `dev? true` in config)
-
-```cirru
-; In dispatch! and sync-clients!, you'll see:
-; "Dispatch!" :user/log-in {...}
-; "Changes for" "sid-123" : [[:assoc [:field] value]]
-```
-
----
-
-## Performance Tips
-
-### When to Memoize Twigs
-
-```cirru
-ns app.twig.analytics $ :require
-  recollect.memo :refer $ memo-twig-by1
-
-defn compute-user-stats (user-data)
-  ; Heavy computation...
-  ...
-
-; ✅ Stable logical key + typed unary builder
-memo-twig-by1 (:id user-data) compute-user-stats user-data
-```
-
-**Use when**:
-
-- Called in `twig-container` (runs every 100ms)
-- Pure function with repeated inputs
-- Expensive: sorting, filtering, aggregations
-
-**Don't use when**:
-
-- Function has side effects
-- Arguments always change
-
-The server owns `begin-twig-frame!`/`finish-twig-frame!` around one complete
-dirty-client synchronization pass. Feature twigs should not open nested frames.
-Use Respo's memo helpers for UI components, and keep revision/protocol caches
-explicit. Do not add the generic `memof` module back to application projects.
-
-### Optimize Diffs
-
-```cirru
-; Always provide :key for list of objects
-diff-twig old-tasks new-tasks $ {} (:key :id)
-```
-
----
-
-## Common Patterns Reference
-
-### Session Management (rarely needs changes)
-
-```cirru
-; Template already handles connect/disconnect
-; You mainly add session-specific data:
-
-defn add-user-data-to-session (db sid data op-id op-time)
-  assoc-in db ([] :sessions sid :user-data) data
-```
-
-### Authentication (template has basic version)
-
-### Authentication (template has basic version)
-
-Extend with custom logic:
-
-```cirru
-defn user/log-in (db username password sid op-id op-time)
-  let
-      maybe-user $ find-user db username
-    if
-      and (non-nil? maybe-user)
-        = (md5 password) (:password maybe-user)
-      ; Success: Set user-id in session
-      assoc-in db ([] :sessions sid :user-id) (:id maybe-user)
-      ; Failure: Add error message
-      add-error-message db sid "|Invalid credentials"
-```
-
-### Router Integration (template configured)
-
-```cirru
-; Client triggers route change
-dispatch! $ :: :router/change ({} (:name :profile))
-
-; Server stores in session (already in template)
-; Twig returns page-specific data based on router
-```
-
----
-
-## Rapid Reference
-
-### CLI Commands for Development
-
-```bash
-# Development cycle
-calcit --check-only              # Fast syntax check
-calcit                           # Run once
-calcit js                        # Watch compile
-mode=dev calcit --entry server   # Dev server
-
-# Code exploration
-calcit query def app.updater/updater
-calcit query usages your-function
-calcit query find symbol-name
-
-# Code modification
-calcit tree show path/to/func -p "2,1"
-calcit tree replace path/to/func -p "2,1,0" -e 'new-code'
-calcit edit def new/function -e 'defn ...'
-```
-
-### Common Code Patterns
-
-```cirru
-; Get user from session
-let
-    user-id $ get-in db ([] :sessions sid :user-id)
-    user $ get-in db ([] :users user-id)
-  ...
-
-; Add nested field
-assoc-in db ([] :users user-id :field) value
-
-; Update nested field
-update-in db ([] :users user-id :field) inc
-
-; Check if logged in
-if-let (user-id (get-in db ([] :sessions sid :user-id)))
-  ; Logged in
-  ...
-  ; Not logged in
-  ...
-
-; Filter map
--> data
-  filter $ fn (entry)
-    condition? entry
-
-; Transform list
--> items
-  map $ fn (item)
-    transform item
-  take 10
-```
-
----
-
-## Error Patterns
-
-### Show Error to User
-
-```cirru
-defn add-error-message (db sid message)
-  let
-      msg-id $ generate-id!
-    assoc-in db ([] :sessions sid :messages msg-id)
-      {}
-        :id msg-id
-        :text message
-        :kind :error
-```
-
-### Client Displays (template has `comp-messages`)
-
-```cirru
-; Already in template's container component
-comp-messages (:messages session)
-  {} $ :on-clear $ fn (msg-id)
-    dispatch! $ :: :session/remove-message msg-id
-```
-
----
-
-## Testing
-
-```bash
-calcit --check-only  # Syntax only (fast)
-
-calcit --check-only  # Syntax only (fast)
-calcit               # Run full cycle once
-```
-
----
-
-## Common Pitfalls (Critical!)
-
-### ❌ **Side Effects in Updaters**
-
-```cirru
-; ❌ WRONG
-defn bad-updater (db sid)
-  println "|Logging in"     ; NO!
-  wss-send! sid data        ; NO!
-  assoc-in db ...
-
-; ✅ CORRECT
-defn good-updater (db sid)
-  assoc-in db ...           ; Pure function
-
-; ✅ Side effects belong in dispatch!
-defn dispatch! (op sid)
-  println "|Debug"          ; OK here
-  reset! *reel $ reel-reducer @*reel updater op sid op-id op-time
-```
-
-### ❌ **Exposing Sensitive Data**
-
-```cirru
-; ❌ WRONG: Leaks password
-defn bad-twig (user)
-  user
-
-; ✅ CORRECT: Filter
-defn good-twig (user)
-  dissoc user :password
-```
-
-### ❌ **Broadcasting Private Data**
-
-```cirru
-; ❌ WRONG: Everyone sees all users
-defn bad-twig-container (db session)
-  {} $ :all-users (:users db)
-
-; ✅ CORRECT: Filter by session
-defn good-twig-container (db session)
-  if-let (user-id (:user-id session))
-    {} $ :user $ twig-user $ get-in db ([] :users user-id)
-    {}
-```
-
-### ❌ **Mutating State**
-
-```cirru
-; ❌ WRONG
-defn bad (db)
-  assoc! db :key val  ; Mutates!
-  db
-
-; ✅ CORRECT
-defn good (db)
-  assoc db :key val   ; Returns new
-```
-
----
-
-## Summary: Development Checklist
-
-When adding a feature:
-
-1. ✅ **Schema** - Define data structure in `app.schema`
-2. ✅ **Updater** - Pure function `(db ...) → new-db` in `app.updater.*`
-3. ✅ **Wire** - Add case to `app.updater/updater` tag-match
-4. ✅ **Twig** - Filter data by session in `app.twig.*`
-5. ✅ **UI** - Create Respo component in `app.comp.*`
-6. ✅ **Test** - `calcit --check-only` before commit
-
-**Key Rules**:
-
-- Updaters must be **pure** (no I/O, no side effects)
-- Twigs must **filter by session** (never leak private data)
-- Always **dissoc :password** before sending to client
-- Use **`(:: :namespace/action args)`** for operations
-- Test with **`calcit --check-only`** frequently
-
-**Template handles** (don't need to modify often):
-
-- WebSocket lifecycle (connect/disconnect)
-- Render loop (100ms sync)
-- Client patch application
-- Basic session management
-- Reel/time-travel setup
-
-**You mainly add**:
-
-- New schemas
-- New updaters
-- New twigs
-- New UI components
-
----
-
-**Further Reading**:
-
-- Template source → https://github.com/Cumulo/calcium-workflow
+还须按原 CI 执行：双入口 dynamic-method/deprecated 零诊断、完整 strict 空 diagnostics
+且无 unsafe-coerce findings、session Option 投影、五组客户端/挂载/存档/URL 边界、
+模板分层检查、diff/patch smoke 和原生 Kanban E2E。JS 检查须在对应源码生成完成后运行。
+本地原生 E2E 使用既有回环/独立数据隔离流程，不把配置断言当作实际监听验收。
+涉及 UI 更新时保留真实浏览器的 identity/listener/focus/selection/no-op 验收。
+
+迁移不新增项目级 checker 或永久改写脚本，不放宽预算或跳过原测试。
+COS 仅上传 dist，沿用 action 内置 verify 和独立 PR 预览前缀；不把后端源码混入 COS。
+发现上游问题先核对真实 owner、版本和既有 issue，再补充最小事实与消费者证据，
+优先完善现有门禁和提示，不为各项目增加编译器专用 fix/proof 规则。
