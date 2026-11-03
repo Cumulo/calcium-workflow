@@ -11,7 +11,7 @@ CLI 与 `@calcit/procs` 成对升级为正式 **0.34.3**。前后端须一起安
 UI 0.12.1、Respo 0.18.1、WSS 0.2.42、Std 0.2.50、JS FFI 0.2.9、Recollect 0.2.1、WS-EDN 0.0.53；
 间接 Value 0.6.3 和 Router 0.10.1。
 
-0.34 的源码改动只有 `comp-session-messages`：不再把 `Map.to-list` 的 tuple 交给 `list->`，
+0.34 的行为相关改动只有 `comp-session-messages`（另有 `calcit edit format` 把类型位置改为不带引号的写法，不影响行为）：不再把 `Map.to-list` 的 tuple 交给 `list->`，
 改为生成 `[] id element`。`tests/client-patch.mjs` 里故意构造的坏 op 改为不经 `%::` 校验直接构造，
 因为 0.34 的 `%::` 会检查 payload 类型。
 
