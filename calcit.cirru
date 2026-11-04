@@ -46,7 +46,7 @@
           :schema $ quote $ Fn (-> Unit)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
-            let
+            with-memo-frame $ fn () $ let
                 states $ decode-map-as
                   match (get @*states :states)
                     (:some value) value
@@ -79,6 +79,7 @@
             app.feature.kanban.workload :as kanban-workload
             app.sync.client :refer $ *partitions *states *store connect! dispatch-from-respo! install-activity-lifecycle! mount-target on-server-data
             app.feature.kanban.client :refer $ *resources
+            respo.memo :refer $ with-memo-frame
     'app.comp.container $ %{} 'FileEntry
       :defs $ {}
         'comp-container $ %{} 'CodeEntry
@@ -111,14 +112,14 @@
                           comp-board (>> states :board)
                             partition-view partitions $ schema/PartitionKey :board board-id
                             , resources compact?
-                        (:none) (<> "|No board selected" nil)
+                        (:none) (<> "|No board selected")
                       :history $ comp-history resources user-view
                       :profile $ div ({})
                         comp-profile
                           .unwrap $ :user store
                           , router-data
                         comp-settings user-view
-                      _ $ <> (str router) nil
+                      _ $ <> $ str router
                   comp-login $ >> states :login
                 comp-status-color $ :color store
                 if dev?
@@ -178,7 +179,7 @@
                           :cursor :pointer
                         :on-click $ fn (e d!)
                           d! $ schema/Op :session/remove-message $ schema/RemoveMessage :id id
-                      <> (:text message) nil
+                      <> $ :text message
           :examples $ []
           :schema $ quote $ Fn (Map String app.schema/MessageView) (-> respo.schema/Component)
         'comp-status-color $ %{} 'CodeEntry (:doc |)
@@ -249,18 +250,24 @@
                       input $ {} (:placeholder |Username) (:class-name css/input)
                         :value $ .unwrap-or (get state :username) |
                         :on-input $ fn (e d!)
+                          hint-fn $ Fn respo.schema/RespoEvent
+                            Fn app.schema/Op $ -> Unit
+                            -> Unit
                           let
-                              value $ get e :value
-                            d! $ schema/Op :states cursor $ assoc state :username (value .unwrap-or |)
-                    =< nil 8
+                              value $ event-value e
+                            d! $ schema/Op :states cursor $ assoc state :username value
+                    space-y 8
                     div ({})
                       input $ {} (:placeholder |Password) (:class-name css/input)
                         :value $ .unwrap-or (get state :password) |
                         :on-input $ fn (e d!)
+                          hint-fn $ Fn respo.schema/RespoEvent
+                            Fn app.schema/Op $ -> Unit
+                            -> Unit
                           let
-                              value $ get e :value
-                            d! $ schema/Op :states cursor $ assoc state :password (value .unwrap-or |)
-                  =< nil 8
+                              value $ event-value e
+                            d! $ schema/Op :states cursor $ assoc state :password value
+                  space-y 8
                   div
                     {} $ :style $ {} (:text-align :right)
                     span $ {} (:inner-text "|Sign up") (:class-name css/link)
@@ -268,7 +275,7 @@
                         .unwrap-or (get state :username) |
                         .unwrap-or (get state :password) |
                         , true
-                    =< 8 nil
+                    space-x 8
                     span $ {} (:inner-text "|Log in") (:class-name css/link)
                       :on-click $ on-submit
                         .unwrap-or (get state :username) |
@@ -284,6 +291,9 @@
         'on-submit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-submit (username password signup?)
             fn (e dispatch!)
+              hint-fn $ Fn respo.schema/RespoEvent
+                Fn app.schema/Op $ -> Unit
+                -> Unit
               dispatch! $ if signup? (app.schema/Op :user/sign-up username password) (app.schema/Op :user/log-in username password)
               when (js-present? js/localStorage)
                 let
@@ -293,14 +303,15 @@
                       .unwrap $ get config/site :storage-key
                       , 'String
                     format-cirru-edn $ [] username password
+              , &unit
           :examples $ []
-          :schema $ quote $ Fn String String Bool (-> Fn) (:features :js-ffi)
+          :schema $ quote $ Fn String String Bool (-> respo.schema/EventHandler) (:features :js-ffi)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.login
           :require
-            respo.core :refer $ defcomp <> div input button span
+            respo.core :refer $ defcomp <> div input button span event-value
             respo.css :refer $ defstyle
-            respo.comp.space :refer $ =<
+            respo.comp.space :refer $ space-x space-y
             respo.comp.inspect :refer $ comp-inspect
             respo-ui.core :as ui
             respo-ui.css :as css
@@ -318,11 +329,9 @@
                   :on-click $ fn (e d!)
                     d! $ app.schema/Op :router/change $ app.schema/Router :name :home :target (Option :none)
                   :style $ {} $ :cursor :pointer
-                <>
-                  decode-map-as
-                    .unwrap-or (get config/site :title) |Calcium
-                    , 'String
-                  , nil
+                <> $ decode-map-as
+                  .unwrap-or (get config/site :title) |Calcium
+                  , 'String
               div
                 {} $ :class-name css/row-middle
                 if logged-in?
@@ -338,7 +347,7 @@
                     :on-click $ fn (e d!)
                       d! $ app.schema/Op :router/change $ app.schema/Router :name :profile :target (Option :none)
                   <> $ if logged-in? |Me |Guest
-                  =< 8 nil
+                  space-x 8
                   <> $ str count-members
           :examples $ []
           :schema $ quote $ Fn Bool Number (-> respo.schema/Component)
@@ -356,7 +365,7 @@
             respo-ui.css :as css
             respo-ui.core :as ui
             respo.css :refer $ defstyle
-            respo.comp.space :refer $ =<
+            respo.comp.space :refer $ space-x space-y
             respo.core :refer $ defcomp <> span div
             app.config :as config
     'app.comp.profile $ %{} 'FileEntry
@@ -370,11 +379,11 @@
                 {} (:class-name css/font-fancy)
                   :style $ {} (:font-size 32) (:font-weight 100)
                 <> $ str "|Hello! " $ :name user
-              =< nil 16
+              space-y 16
               div
                 {} $ :class-name css/row
                 <> |Members:
-                =< 8 nil
+                space-x 8
                 list->
                   {} $ :class-name css/row
                   -> members (.to-list)
@@ -387,7 +396,7 @@
                             <> $ .unwrap-or name-option |
                           (:err detail)
                             raise $ str |Invalid-profile-member: detail
-              =< nil 48
+              space-y 48
               div ({})
                 button
                   {} (:class-name css/button)
@@ -395,7 +404,7 @@
                       js/location.replace $ str js/location.origin |?time= $ js/Date.now
                       , &unit
                   <> |Refresh
-                =< 8 nil
+                space-x 8
                 button
                   {} (:class-name css/button)
                     :style $ {} (:color :red) (:border-color :red)
@@ -423,10 +432,15 @@
             respo-ui.css :as css
             respo.core :refer $ defcomp list-> <> span div button
             respo.css :refer $ defstyle
-            respo.comp.space :refer $ =<
+            respo.comp.space :refer $ space-x space-y
             app.config :as config
     'app.config $ %{} 'FileEntry
       :defs $ {}
+        'SiteValue $ %{} 'CodeEntry
+          :doc "|The existing site Map stores textual settings and a numeric port. This union preserves that Map representation and its raw primitive values; field-specific readers still validate their expected types."
+          :code $ quote $ defunion SiteValue String Number
+          :examples $ []
+          :schema $ quote UnionDef
         'dev? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def dev?
             = |dev $ .unwrap-or (get-env |mode) |release
@@ -436,7 +450,7 @@
           :code $ quote $ def site
             {} (:port 5021) (:title |Calcium) (:icon |https://cdn.tiye.me/logo/cumulo.png) (:theme |#eeeeff) (:storage-key |calcium-storage) (:storage-file |storage.cirru)
           :examples $ []
-          :schema $ quote Dynamic
+          :schema $ quote $ Map Tag app.config/SiteValue
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.config
     'app.feature.kanban.client $ %{} 'FileEntry
@@ -544,11 +558,14 @@
                       {} $ :class-name css/row-middle
                       span $ {} (:class-name css/link) (:inner-text "|← Boards")
                         :on-click $ fn (e d!)
+                          hint-fn $ Fn respo.schema/RespoEvent
+                            Fn app.schema/Op $ -> Unit
+                            -> Unit
                           d! $ route-op :home $ Option :none
-                      =< 12 nil
+                      space-x 12
                       <> (:title board)
                         {} (:font-size 22) (:font-family "|Josefin Sans, sans-serif")
-                    =< nil 12
+                    space-y 12
                     list->
                       {} $ :style $ {} (:display :flex) (:align-items :flex-start) (:gap 12) (:overflow-x :auto)
                       map-indexed columns $ fn (index column)
@@ -592,9 +609,7 @@
               (:none)
                 div
                   {} $ :style $ {} (:padding 16)
-                  <>
-                    if (missing-view? view-option) "|Board not found." "|Loading board..."
-                    , nil
+                  <> $ if (missing-view? view-option) "|Board not found." "|Loading board..."
           :examples $ []
           :schema $ quote $ Fn (Map StateKey Dynamic) (Option app.schema/PartitionView) app.feature.kanban.resource/Resources Bool (-> respo.schema/Component) (:generics StateKey)
         'comp-card $ %{} 'CodeEntry (:doc |)
@@ -606,7 +621,11 @@
                   hint-fn $ Fn String app.schema/Op $ -> respo.schema/Element
                   span $ {} (:inner-text label) (:class-name css/link)
                     :style $ {} (:margin-left 6) (:font-size 12)
-                    :on-click $ fn (e d!) (d! op)
+                    :on-click $ fn (e d!)
+                      hint-fn $ Fn respo.schema/RespoEvent
+                        Fn app.schema/Op $ -> Unit
+                        -> Unit
+                      d! op
               div
                 {} $ :style $ {} (:background-color :white) (:border-radius 6) (:margin-bottom 6)
                   :padding $ if compact? "|4px 8px" "|8px 10px"
@@ -615,8 +634,11 @@
                   {}
                     :style $ {} $ :cursor :pointer
                     :on-click $ fn (e d!)
+                      hint-fn $ Fn respo.schema/RespoEvent
+                        Fn app.schema/Op $ -> Unit
+                        -> Unit
                       d! $ schema/Op :client/open-card board-id card-id
-                  <> (:title card) nil
+                  <> $ :title card
                 div
                   {} $ :class-name css/row-middle
                   match prev-column
@@ -675,6 +697,9 @@
                   <> title $ {} $ :font-weight :bold
                   span $ {} (:class-name css/link) (:inner-text |Close)
                     :on-click $ fn (e d!)
+                      hint-fn $ Fn respo.schema/RespoEvent
+                        Fn app.schema/Op $ -> Unit
+                        -> Unit
                       d! $ schema/Op :client/close-card card-id
                 div
                   {} $ :style $ {} (:font-size 12)
@@ -692,10 +717,16 @@
                 textarea $ {} (:class-name css/textarea) (:value text) (:placeholder "|Description lives in cold storage")
                   :style $ {} (:width |100%) (:min-height 120)
                   :on-input $ fn (e d!)
-                    d! $ schema/Op :states cursor $ .unwrap-or (get e :value) |
-                =< nil 8
+                    hint-fn $ Fn respo.schema/RespoEvent
+                      Fn app.schema/Op $ -> Unit
+                      -> Unit
+                    d! $ schema/Op :states cursor $ event-value e
+                space-y 8
                 button $ {} (:class-name css/button) (:inner-text |Save)
                   :on-click $ fn (e d!)
+                    hint-fn $ Fn respo.schema/RespoEvent
+                      Fn app.schema/Op $ -> Unit
+                      -> Unit
                     d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :card/edit-detail (:id board) card-id text
                     d! $ schema/Op :states cursor nil
           :examples $ []
@@ -719,14 +750,21 @@
                 input $ {} (:class-name css/input) (:placeholder placeholder) (:value draft)
                   :style $ {} (:min-width 80) (:flex 1)
                   :on-input $ fn (e d!)
-                    d! $ schema/Op :states cursor $ .unwrap-or (get e :value) |
-                =< 6 nil
+                    hint-fn $ Fn respo.schema/RespoEvent
+                      Fn app.schema/Op $ -> Unit
+                      -> Unit
+                    d! $ schema/Op :states cursor $ event-value e
+                space-x 6
                 button $ {} (:class-name css/button) (:inner-text |Add)
                   :on-click $ fn (e d!)
+                    hint-fn $ Fn respo.schema/RespoEvent
+                      Fn app.schema/Op $ -> Unit
+                      -> Unit
                     when
                       not $ blank? draft
                       d! $ on-submit draft
                       d! $ schema/Op :states cursor |
+                    , &unit
           :examples $ []
           :schema $ quote $ Fn (Map StateKey Dynamic) String
             Fn String $ -> app.schema/Op
@@ -755,8 +793,11 @@
                       (> unseen 0) (str "|Load " unseen "| new")
                       true |Refresh
                     :on-click $ fn (e d!)
+                      hint-fn $ Fn respo.schema/RespoEvent
+                        Fn app.schema/Op $ -> Unit
+                        -> Unit
                       d! $ schema/Op :client/load-history false
-                =< nil 12
+                space-y 12
                 list->
                   {} $ :class-name css/column
                   map (:items history)
@@ -766,8 +807,8 @@
                         div
                           {} $ :style $ {} (:padding "|6px 0")
                             :border-bottom $ str "|1px solid " $ hsl 0 0 92
-                          <> (:summary event) nil
-                          =< 8 nil
+                          <> $ :summary event
+                          space-x 8
                           <>
                             str $ :kind event
                             {} (:font-size 11)
@@ -778,6 +819,9 @@
                       {} $ :style $ {} (:margin-top 12)
                       button $ {} (:class-name css/button) (:inner-text "|Load older")
                         :on-click $ fn (e d!)
+                          hint-fn $ Fn respo.schema/RespoEvent
+                            Fn app.schema/Op $ -> Unit
+                            -> Unit
                           d! $ schema/Op :client/load-history true
                   (:none)
                     span $ {}
@@ -812,18 +856,21 @@
                                     :style $ {} (:padding "|8px 12px") (:margin-bottom 6) (:cursor :pointer) (:border-radius 6)
                                       :border $ str "|1px solid " $ hsl 0 0 88
                                     :on-click $ fn (e d!)
+                                      hint-fn $ Fn respo.schema/RespoEvent
+                                        Fn app.schema/Op $ -> Unit
+                                        -> Unit
                                       d! $ route-op :board $ Option :some (:id brief)
-                                  <> (:title brief) nil
-                                  =< 8 nil
+                                  <> $ :title brief
+                                  space-x 8
                                   <>
                                     str (:card-count brief) "| cards"
                                     {}
                                       :color $ hsl 0 0 60
                                       :font-size 12
-                    =< nil 8
+                    space-y 8
                     comp-draft-input (>> states :new-board) "|New board title" $ fn (title)
                       kanban-op $ app.feature.kanban.schema/KanbanOp :board/create title
-                    =< nil 16
+                    space-y 16
                     div
                       {} $ :style $ {}
                         :color $ hsl 0 0 50
@@ -833,7 +880,7 @@
                             hint-fn $ Fn String String $ -> String
                             , name
                         , "|, "
-                (:none) (<> "|Loading lobby..." nil)
+                (:none) (<> "|Loading lobby...")
           :examples $ []
           :schema $ quote $ Fn (Map StateKey Dynamic) (Option app.schema/PartitionView) (-> respo.schema/Component) (:generics StateKey)
         'comp-settings $ %{} 'CodeEntry (:doc |)
@@ -846,15 +893,18 @@
                     {} $ :style $ {} (:padding "|0 16px 16px")
                     div
                       {} $ :class-name css/row-middle
-                      <> "|Settings (synced to all your tabs)" nil
-                    =< nil 8
+                      <> "|Settings (synced to all your tabs)"
+                    space-y 8
                     div
                       {} $ :class-name css/row-middle
                       button $ {} (:class-name css/button)
                         :inner-text $ if (:compact? settings) "|Compact cards: on" "|Compact cards: off"
                         :on-click $ fn (e d!)
+                          hint-fn $ Fn respo.schema/RespoEvent
+                            Fn app.schema/Op $ -> Unit
+                            -> Unit
                           d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :settings/toggle-compact
-                      =< 12 nil
+                      space-x 12
                       list-> ({})
                         map ([] |#2a8bd6 |#d6542a |#2ab36b |#8a4bd6)
                           fn (color)
@@ -864,6 +914,9 @@
                                   = color $ :accent settings
                                   , "|2px solid #333" |none
                               :on-click $ fn (e d!)
+                                hint-fn $ Fn respo.schema/RespoEvent
+                                  Fn app.schema/Op $ -> Unit
+                                  -> Unit
                                 d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :settings/set-accent color
               (:none)
                 span $ {}
@@ -925,8 +978,8 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.comp
           :require
-            respo.core :refer $ defcomp <> >> div span button input textarea list->
-            respo.comp.space :refer $ =<
+            respo.core :refer $ defcomp <> >> div span button input textarea list-> event-value
+            respo.comp.space :refer $ space-x space-y
             respo.util.format :refer $ hsl
             respo-ui.css :as css
             app.schema :as schema
@@ -3597,7 +3650,8 @@
                 {} $ |u1 $ {} (:id |u2) (:name |demo) (:nickname nil) (:avatar nil) (:password |hash)
                 , |users
             :tags $ #{} :server
-        'enum-definition-matches? $ %{} 'CodeEntry (:doc |)
+        'enum-definition-matches? $ %{} 'CodeEntry
+          :doc "|Compare the definition identity of any nominal or anonymous Enum with an EnumDef. This is an intentionally open enum-definition boundary, not an application operation decoder or payload/authorization check."
           :code $ quote $ defn enum-definition-matches? (value target)
             match (enum-definition value)
               (:none) false
@@ -3735,7 +3789,8 @@
           :doc "|Cleanup capability for Calcium application-level browser activity signals."
           :code $ quote $ defref *activity-cleanup (Option :none)
           :examples $ []
-          :schema $ quote $ Ref (Option Fn)
+          :schema $ quote $ Ref
+            Option $ Fn $ -> Unit
         '*connected? $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *connected? false
           :examples $ []
@@ -3875,7 +3930,10 @@
                 port $ match
                   js-nullish->option $ contract/object-field "|connection query" query |port
                   (:none)
-                    str $ .unwrap $ get config/site :port
+                    match
+                      .unwrap $ get config/site :port
+                      (Number number-port) (str number-port)
+                      (String string-port) string-port
                   (:some value) (contract/expect-string "|connection port" value)
               str |ws:// host |: port
           :examples $ []

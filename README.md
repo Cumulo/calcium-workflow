@@ -2,34 +2,34 @@
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
-### Calcit 0.34.3：使用者影响
+### 现代 Respo 迁移候选：使用者影响
 
-CLI 与 `@calcit/procs` 成对升级为正式 **0.34.3**。前后端须一起安装完整依赖图、
-重启服务并完整刷新，不能让旧后端配新页面；原 `/servers/calcium-workflow/` 与前端 rsync 路径保持。
+候选 0.1.0 保留正式 CLI / `@calcit/procs` **0.34.3**，前后端须同步完整依赖图并
+重新生成/重启。目标图为 Reel 0.2.0、Util 0.0.38、Message 0.2.1、UI 0.14.1、
+Respo 0.19.2、JS-FFI 0.2.10、Recollect 0.2.2、WS-EDN 0.0.54、WSS 0.2.42、
+Std 0.2.50，传递 Value 0.7.0 / Router 0.11.2。Reel 0.2.0 已正式发布；
+已从发布 tag 重新完成根 Caps strict/toolchain 校验，12 个模块的 Snapshot 与本轮
+实际验收的候选源码字节完全一致，不使用 main/hash 替代版本。
 
-依赖走 Respo 0.18 兼容线，均为已发布精确 Git tag：Cumulo Reel 0.1.1、Util 0.0.37、Message 0.1.4、
-UI 0.12.1、Respo 0.18.1、WSS 0.2.42、Std 0.2.50、JS FFI 0.2.9、Recollect 0.2.1、WS-EDN 0.0.53；
-间接 Value 0.6.3 和 Router 0.10.1。
+16 个 DOM 回调采用 RespoEvent/Op，登录回调返回具体 EventHandler，副作用回调
+明确返回 Unit。四个文本输入复用 Respo 的受检 event-value：空字符串仍有效，缺失或
+非字符串值会在修改状态前报错，不再先写入不合法文本。组件构建与实际渲染同处
+managed memo frame；19 个 spacer 保持原尺寸，10 处旧 nil 文本样式使用原默认值。
 
-0.34 的行为相关改动只有 `comp-session-messages`（另有 `calcit edit format` 把类型位置改为不带引号的写法，不影响行为）：不再把 `Map.to-list` 的 tuple 交给 `list->`，
-改为生成 `[] id element`。`tests/client-patch.mjs` 里故意构造的坏 op 改为不经 `%::` 校验直接构造，
-因为 0.34 的 `%::` 会检查 payload 类型。
+site 配置保留原 Map 和原始值，以真实 String/Number union 替代裸 Dynamic；原有字段
+decoder 保留，连接 URL 的端口以 match 分解两类值，保持原字符串化语义。活动清理 Ref 收紧为 Option<Fn()->Unit>，与现有 Util
+返回值及安装/清理调用一致。任意 Enum 的定义身份比较保持开放且已说明用途，不伪装
+成业务 Op 解码。原 wire/受检 Store 恢复、数据可见性、监听、HUD 和部署路径保持。
 
-以下为 0.32.1 迁移时的记录：
+原 client44/server99、双入口完整 strict（空 diagnostics，无 unsafe-coerce）、所有
+原 JS 边界、模板分层、diff/patch smoke、构建及回环原生 Kanban E2E 已通过迁移候选。
+100 实体浏览器六类操作的 patched/fresh、key/ref/listener/focus/selection 和 no-op
+断言通过；仅夹具 favicon.ico 有既有404，应用访客输入/导航/刷新未见控制台错误。
+未进行浏览器账户/存档恢复验收，不把旧版本记录当成本次证据。site union 已通过最终完整 strict、原测试、JS边界、构建及原生E2E重跑；
+正式依赖解析已通过，精确远端 CI 仍须完成；不合并或部署本应用。
 
-Snapshot 类型语法通过官方事务规范化；322个完整定义视图只有 `mount-target` 增补真实
-`JsNullish respo.dom/DomElement` schema，执行代码及原99个附带测试和断言相同。
-挂载查询仍先检查可空 DOM，再用原 Respo 边界适配；缺少挂载节点的原拒绝行为保持。
-两个真实 `hud!`、wire/Store受检恢复、存储、同步协议、监听与失败顺序不变。
-
-官方release binary下，Caps12模块 strict/toolchain、immutable、双入口公开定义154/239、
-双份完整 strict（空 diagnostics、无 unsafe-coerce）、client44/44与server全99/99测试、
-全部既有JS边界及diff/patch smoke、真实回环 native Kanban E2E通过。
-原100-entity浏览器DOM workload六类操作通过，patched/fresh相同且key/ref/listener/focus/
-selection保留，no-op无DOM改动，console warning/error=[]；这不等于整个Kanban UI手工验收。
-本机原生E2E仅在忽略Snapshot副本追加公开WSS绑定参数127.0.0.1；最终源码默认监听未改，
-原默认路径仍须在原隔离Linux CI验证。精确PR CI/评审尚未执行，不把本地通过当作发布许可。
-保留全部原门禁、60分钟npm隔离与COS内置verify，不新增检查脚本、强转、预算或兼容开关。
+Agents.md 从639行收敛为87行，删除旧 CLI/宏示例和重复段落，保留模板分层、数据
+隐私、原门禁和当前操作合同。不新增 checker、永久迁移脚本、unsafe 或预算例外。
 
 ### Usages
 
@@ -67,84 +67,6 @@ mode=dev calcit -w calcit.cirru --entry server
 # release mode
 calcit calcit.cirru --entry server
 ```
-
-### 0.31.0 历史迁移记录
-
-上一轮 CLI 与 npm runtime 配对正式 Calcit **0.31.0**。升级后重新安装依赖、重启
-服务并刷新浏览器，不能混用旧 runtime/native 库。Respo `0.17.0-alpha.2`、
-JS-FFI `0.2.5`、UI `0.9.0-alpha.1`、Util `0.0.31`、Message `0.1.0-alpha.1`、Recollect `0.1.0-alpha.1`、
-ws-edn `0.0.47`、calcit-wss `0.2.37`、calcit.std `0.2.44`、Cumulo Reel `0.1.0-alpha.1`
-均使用已发布 Git tag，不使用 main/hash 或本地候选覆盖。Respo 0.17 不再包装两参数的
-`d! cursor state`，界面派发统一走带类型的 `app.schema/Op`。
-
-本轮使用官方受保护事务清理原附带测试中的 23 处旧 Option helper，原 99 项测试的名称、
-tag、断言和执行顺序保留；两处页面 `hud!` 不改。连接状态、同步 revision、
-只读 Reel 和同步 metrics 四个 Ref 补上真实具体类型合同，不增加强转或 Dynamic 预算。
-原模板边界检查改用官方 query 读取 imports、定义及附带区域，不再正则拆 Snapshot 文本；
-原三类边界规则保留，独立合成副本验证非法 import/附带测试/entry 依赖仍会被拒绝。
-已有 workload 的 List 转换改用公开 `listToArray`，不读取 runtime 私有数组布局。
-不增加测试脚本、验证框架或进程管理器。正式 Linux 验收已通过 browser 300/native 164、
-公开定义 154/239、双入口完整 strict、原 client 44/server 99 项测试、全部原 JS 回归及
-native Kanban E2E。原 100-entity DOM workload 在真实浏览器通过六类操作，patch/fresh
-一致且 key/ref/listener/focus/selection 保持、no-op 无 DOM 修改，控制台无 warning/error。
-这不是整个 Kanban UI 的手工验收，也未做完整性能 benchmark 或生产部署。
-后续收敛登录存储与 URL 边界：复用 js-ffi 已发布的 StorageHost getter 和 object-field /
-expect-string，应用 unsafe 2→0，移除两个只用于 URL 强转的本地 trait。保留原 url-parse、
-空参数/重复键/非法转义结果；存储仍先 dispatch 后写入，getter/quota 异常原样传播，
-不改用会吞掉 getter 异常的 availability 逻辑。`main!` 与 `dev?` 补齐 Unit/Bool 合同。
-已有存储测试补齐上述写入合同，原七项 URL 用例、44/99 项原测试及全部原回归通过；
-完整 strict 中增加应用 unsafe=0 门槛，不另建脚本或质量基线。
-类型覆盖为 285 full / 33 partial / 4 none，开放状态与宿主边界不因正式配对而视为清零。
-后续源码写法维护使用公开 `.len`、`.merge`、`.foldl`，包括原附带测试中的对应调用；
-Map 合并仍从左到右以后值覆盖，左折叠仍按原顺序传入初值和 reducer，List/Map/Set
-计数单位不变。三个 Map 解码器以 `map-entries` / `MapEntry` 字段和自有回调的
-泛型 K/V、具体 Result 累积合同保留键值关系，
-不再用无类型 pair List 解构；原 Map/key/value/id 检查及错误 Result 保留。
-两处实际 `hud!`、协议、登录存储与所有原测试断言保留，
-不新增强转、Dynamic 预算、检查脚本或 COS 探测。开放 Map/List 边界仍按原合同审阅，
-不因改用方法拼写而宣称类型债务清零；本轮不改工具链、正式依赖图或部署条件。
-查询定义名仍需读取 CLI human 列表并核对计数，稳定 JSON 枚举需求见
-[Calcit #2301](https://github.com/calcit-lang/calcit/issues/2301)；不再解析 Snapshot 存储格式。
-
-### 历史 alpha.4 迁移与验收
-
-必填配置通过公开 `get` / Option 和具体边界解码读取，缺失仍拒绝，不新增兜底值。
-Kanban 操作参数直接用类型谓词验证；Map 遍历使用 `MapEntry` / `map-list-kv` /
-`filter-map-kv` 保留键值关系，不把异构 pair List 断言成业务类型。
-共享 Twig 的私有缓存改为具名 Struct + Option，避免热路径反复深度解码缓存值；
-它不进入数据库或线协议。effect 与 WSS callback 明确返回 Unit，保留原有副作用顺序。
-历史 Reel 的 base 仍先验证，再构造保留 records/merged? 的具体数据库类型 Reel。
-旧 Dynamic 数量 baseline 已退役，`yarn check-types`
-按 browser/native 检查全项目公开定义（154/239 个）。严格入口检查、完整 strict、
-dynamic-method/deprecated-call 检查和全部既有原生、生成 JS 回归均保留。
-项目代码中的 Option helper 改为 `.unwrap`、`.unwrap-or`、`.some?`、`.none?`，
-旧 `list-match` 改为 `match (destruct-list ...)`，原生定时器使用带 `!` 的正式 API。
-组件状态的 key 类型由泛型保留，不能强制收窄为 Tag 或扩大为 Dynamic；
-固定 `:cursor` / `:data` 元数据通过公开 `get-in` 读取，业务输入仍经过原有具体类型解码。
-运行时会在非法 Struct 写入时提前拒绝，解码器和补丁原子性测试仍独立验证数据边界。
-CI 完整执行上述验证与原有运行回归，不以入口检查代替完整验收。详见
-[发布工具链与成员显示回归](history/20261005-respo-alpha7-and-member-options.md)；
-[UI 发布依赖与 Struct 更新](history/20261005-ui-alpha4-and-struct-updates.md)记录后续验证；
-[Reel reset/merge 与 resync 指标](history/20261005-reel-and-resync-struct-updates.md)记录服务端更新；
-[旧类型边界迁移记录](history/20261004-strict-client-boundaries.md)保留历史验证范围；
-[冷热分区同步与 Kanban 模板](history/20261007-hot-cold-partitions.md)记录本次分区改造；
-[模板分层](history/20261007-template-layers.md)记录模板与业务代码的拆分。
-
-本轮原 client 44/44、server 68/68、全部既有 Node 回归与 100-entity workload smoke 通过。
-核对完整测试清单后，还发现原 tag 分组漏跑两项已有测试；CI 的 native server entry
-现直接执行全部 99 项（99/99），保留原 client 分组，不新增测试或单独 runner。
-真实浏览器运行原 diff/patch workload：六类操作、patched DOM 与 fresh render 相同，
-key/ref/listener/focus/selection 保持，no-op 无 DOM 修改；这不是整个 Kanban UI 的手工验收。
-隔离 native Kanban E2E 验证共享 board patch、冷详情与私有历史、匿名拒绝和退出分区清理；
-测试只使用临时合成数据库，不连接生产数据。完整性能 benchmark 不在本轮验收范围。
-源码及附带测试的旧 `%{}` / `%::` 构造器已迁移到直接具名构造器，原断言、
-variant、字段和执行顺序保持；用于解码兼容性测试的 EDN 字符串不作文本替换。
-完整 strict、附带区域 surface 预览均无诊断或迁移建议；开放状态/宿主边界仍存在，
-不宣称整个项目已静态化。
-
-前端监听使用 `calcit calcit.cirru js -w`。结构化 CLI 编辑保存后，使用
-`calcit edit inc --changed <namespace/definition>` 通知 watcher；忽略的
-`.compact-inc.cirru` 是临时通知，不是退役的 `compact.cirru` 源码格式。
 
 ### CDN 与部署边界
 
