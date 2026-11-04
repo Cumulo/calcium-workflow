@@ -7,8 +7,9 @@
 候选 0.1.0 保留正式 CLI / `@calcit/procs` **0.34.3**，前后端须同步完整依赖图并
 重新生成/重启。目标图为 Reel 0.2.0、Util 0.0.38、Message 0.2.1、UI 0.14.1、
 Respo 0.19.2、JS-FFI 0.2.10、Recollect 0.2.2、WS-EDN 0.0.54、WSS 0.2.42、
-Std 0.2.50，传递 Value 0.7.0 / Router 0.11.2。Reel 0.2.0 尚未正式发布；
-本轮验收使用明确标记的本地候选链接，不能当作正式根 Caps strict 已通过或已发布。
+Std 0.2.50，传递 Value 0.7.0 / Router 0.11.2。Reel 0.2.0 已正式发布；
+已从发布 tag 重新完成根 Caps strict/toolchain 校验，12 个模块的 Snapshot 与本轮
+实际验收的候选源码字节完全一致，不使用 main/hash 替代版本。
 
 16 个 DOM 回调采用 RespoEvent/Op，登录回调返回具体 EventHandler，副作用回调
 明确返回 Unit。四个文本输入复用 Respo 的受检 event-value：空字符串仍有效，缺失或
@@ -25,7 +26,7 @@ decoder 保留，连接 URL 的端口以 match 分解两类值，保持原字符
 100 实体浏览器六类操作的 patched/fresh、key/ref/listener/focus/selection 和 no-op
 断言通过；仅夹具 favicon.ico 有既有404，应用访客输入/导航/刷新未见控制台错误。
 未进行浏览器账户/存档恢复验收，不把旧版本记录当成本次证据。site union 已通过最终完整 strict、原测试、JS边界、构建及原生E2E重跑；
-正式依赖解析及精确 CI 仍待发布的 Reel tag，不合并或部署本应用。
+正式依赖解析已通过，精确远端 CI 仍须完成；不合并或部署本应用。
 
 Agents.md 从639行收敛为87行，删除旧 CLI/宏示例和重复段落，保留模板分层、数据
 隐私、原门禁和当前操作合同。不新增 checker、永久迁移脚本、unsafe 或预算例外。
