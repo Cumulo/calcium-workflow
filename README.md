@@ -2,39 +2,23 @@
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
-### 现代 Respo 迁移候选：使用者影响
+### Calcit 0.38.0 升级
 
-候选 0.1.0 保留正式 CLI / `@calcit/procs` **0.34.3**，前后端须同步完整依赖图并
-重新生成/重启。目标图为 Reel 0.2.0、Util 0.0.38、Message 0.2.1、UI 0.14.1、
-Respo 0.19.2、JS-FFI 0.2.10、Recollect 0.2.2、WS-EDN 0.0.54、WSS 0.2.42、
-Std 0.2.50，传递 Value 0.7.0 / Router 0.11.2。Reel 0.2.0 已正式发布；
-已从发布 tag 重新完成根 Caps strict/toolchain 校验，12 个模块的 Snapshot 与本轮
-实际验收的候选源码字节完全一致，不使用 main/hash 替代版本。
+前后端使用同一套正式依赖。部署时为服务进程安装 Calcit 0.38.0、重新解析模块，
+并重新生成前端。原 WebSocket 操作、分区同步、受检 Store 恢复、存档与 HUD 行为继续沿用。
+原部署路径见下文。
 
-16 个 DOM 回调采用 RespoEvent/Op，登录回调返回具体 EventHandler，副作用回调
-明确返回 Unit。四个文本输入复用 Respo 的受检 event-value：空字符串仍有效，缺失或
-非字符串值会在修改状态前报错，不再先写入不合法文本。组件构建与实际渲染同处
-managed memo frame；19 个 spacer 保持原尺寸，10 处旧 nil 文本样式使用原默认值。
+`deps.cirru` 固定正式依赖标签，包括 Cumulo Reel 0.3.2、Respo 0.19.5、
+Recollect 0.3.4、WS-EDN 0.1.1 和 WSS 0.2.44。浏览器运行库与 CLI 均为 0.38.0。
 
-site 配置保留原 Map 和原始值，以真实 String/Number union 替代裸 Dynamic；原有字段
-decoder 保留，连接 URL 的端口以 match 分解两类值，保持原字符串化语义。活动清理 Ref 收紧为 Option<Fn()->Unit>，与现有 Util
-返回值及安装/清理调用一致。任意 Enum 的定义身份比较保持开放且已说明用途，不伪装
-成业务 Op 解码。原 wire/受检 Store 恢复、数据可见性、监听、HUD 和部署路径保持。
-
-原 client44/server99、双入口完整 strict（空 diagnostics，无 unsafe-coerce）、所有
-原 JS 边界、模板分层、diff/patch smoke、构建及回环原生 Kanban E2E 已通过迁移候选。
-100 实体浏览器六类操作的 patched/fresh、key/ref/listener/focus/selection 和 no-op
-断言通过；仅夹具 favicon.ico 有既有404，应用访客输入/导航/刷新未见控制台错误。
-未进行浏览器账户/存档恢复验收，不把旧版本记录当成本次证据。site union 已通过最终完整 strict、原测试、JS边界、构建及原生E2E重跑；
-正式依赖解析已通过，精确远端 CI 仍须完成；不合并或部署本应用。
-
-Agents.md 从639行收敛为87行，删除旧 CLI/宏示例和重复段落，保留模板分层、数据
-隐私、原门禁和当前操作合同。不新增 checker、永久迁移脚本、unsafe 或预算例外。
+服务端确认缓存持有已经验证的 `Store`，派发副作用返回 `Unit`。Kanban 的测试夹具
+用具名 union 表达分区视图与资源，离线页面传入明确的提示文本。WebSocket 注册表和
+旧载荷解码仍在各自边界按原合同处理。
 
 ### Usages
 
-Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.34.3](https://github.com/calcit-lang/calcit/releases/tag/0.34.3).
-The local CLI must stay at `0.34.3`, matching `deps.cirru` and `@calcit/procs`.
+Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.38.0](https://github.com/calcit-lang/calcit/releases/tag/0.38.0).
+The local CLI must stay at `0.38.0`, matching `deps.cirru` and `@calcit/procs`.
 
 Install the dependencies declared in `deps.cirru` with `caps --strict --ci`.
 They are linked under `.calcit/modules/` from the immutable module cache.
@@ -76,8 +60,7 @@ PR prefix 隔离编号、run 和 attempt。构建使用 `VITE_BASE_URL`，本地
 
 原网页 rsync 和 `/servers/calcium-workflow/` 后端路径不变，只允许 main push 执行。
 服务端产物包含 Snapshot、`deps.cirru` 与 `package.json`；服务器须安装匹配工具与模块后，
-继续使用 `calcit calcit.cirru --entry server`。本轮不确认服务器已准备好，**不合并、不部署**；
-前后端应一起升级，页面完整刷新，不能让旧服务配新页面。
+继续使用 `calcit calcit.cirru --entry server`。发布前需要验证服务器就绪，前后端一起升级后完整刷新页面。
 
 ### Template layers
 
