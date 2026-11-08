@@ -86,8 +86,8 @@ assert.equal(timeouts.size, 0);
 ws.client_close_$x_(connection);
 c.reset_$x_(ws._$s_global_client, c._PCT__$o__$o_(c.Option, c.newTag("none")));
 
-for (const [tag, text] of [["loading", "Loading..."], ["offline", "No connection..."]]) {
-  const html = make_string(comp_offline(c.parse_cirru_edn(`:: :${tag}`)));
+for (const text of ["Loading...", "No connection..."]) {
+  const html = make_string(comp_offline(text));
   assert.ok(html.includes(text));
   assert.ok(html.includes('data-comp="comp-offline"'));
 }
