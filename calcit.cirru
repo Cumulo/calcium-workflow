@@ -230,7 +230,7 @@
                   .unwrap-or
                     get-in states $ [] :cursor
                     []
-                  List Dynamic
+                  List app.schema/StateKey
                 state $ decode-map-as
                   .unwrap-or
                     get-in states $ [] :data
@@ -665,7 +665,7 @@
                   .unwrap-or
                     get-in states $ [] :cursor
                     []
-                  List Dynamic
+                  List app.schema/StateKey
                 draft-option $ get-in states $ [] :data
                 card-option $ get (:cards board) card-id
                 hot-rev $ match card-option
@@ -733,7 +733,7 @@
                   .unwrap-or
                     get-in states $ [] :cursor
                     []
-                  List Dynamic
+                  List app.schema/StateKey
                 draft $ decode-map-as
                   .unwrap-or
                     get-in states $ [] :data
@@ -2486,7 +2486,7 @@
           :schema $ quote StructDef
         'Op $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defenum Op (:session/connect) (:session/disconnect) (:session/remove-message app.schema/RemoveMessage) (:user/log-in String String) (:user/sign-up String String) (:user/log-out) (:router/change app.schema/Router) (:effect/persist) (:effect/ping) (:effect/pong) (:effect/connect) (:reel/reset) (:reel/merge) (:kanban app.feature.kanban.schema/KanbanOp) (:client/open-card String String) (:client/close-card String) (:client/load-history Bool)
-            :states (List Dynamic) Dynamic
+            :states (List app.schema/StateKey) Dynamic
           :examples $ []
           :schema $ quote EnumDef
         'PartitionKey $ %{} 'CodeEntry
@@ -2565,6 +2565,10 @@
             :session-count Number
           :examples $ []
           :schema $ quote StructDef
+        'StateKey $ %{} 'CodeEntry (:doc |)
+          :code $ quote $ defunion StateKey Tag String Number
+          :examples $ []
+          :schema $ quote UnionDef
         'Store $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defstruct Store (:logged-in? Bool) (:session app.schema/SessionView) (:reel-length Number) (:attached app.schema/AttachedView)
             :user $ Option app.schema/UserView
@@ -3017,7 +3021,11 @@
                     Result :ok $ Op :reel/merge
                   (:states cursor state)
                     if (list? cursor)
-                      Result :ok $ Op :states cursor state
+                      match
+                        try-decode-map-as cursor $ List app.schema/StateKey
+                        (:ok keys)
+                          Result :ok $ Op :states keys state
+                        (:err _) (invalid-message |Invalid-state-cursor-key)
                       invalid-message |Expected-list-state-cursor
                   (:kanban kanban-op)
                     match (app.feature.kanban.schema/decode-kanban-op kanban-op)
