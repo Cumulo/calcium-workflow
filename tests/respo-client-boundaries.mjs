@@ -48,7 +48,7 @@ assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.field.data, { v
 assert.equal(dispatch(c.parse_cirru_edn(":: :states ([] :mixed |id 7) ({} (:value |kept))")), undefined);
 assert.deepEqual(c.to_js_data(c.deref(client._$s_states)).states.mixed.id["7"].data, { value: "kept" });
 const priorStates = c.deref(client._$s_states);
-for (const raw of [42, c.parse_cirru_edn("{}"), c.parse_cirru_edn(":: :states 42 $ {}")]) {
+for (const raw of [42, c.parse_cirru_edn("{}"), c.parse_cirru_edn(":: :states 42 $ {}"), c.parse_cirru_edn(":: :states ([] true) $ {}")]) {
   assert.throws(() => client.dispatch_from_respo_$x_(raw), /Invalid-UI-operation/);
   assert.strictEqual(c.deref(client._$s_states), priorStates);
 }
