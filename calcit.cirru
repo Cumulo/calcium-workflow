@@ -155,16 +155,15 @@
           :schema $ quote $ Fn String (-> respo.schema/Component)
         'comp-session-messages $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-session-messages (messages)
-            list->
+            keyed->
               {} $ :style $ {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
               -> messages (.to-list)
                 .map $ fn (entry)
-                  hint-fn $ Fn (Tuple String app.schema/MessageView)
-                    -> $ List Dynamic
+                  hint-fn $ Fn (Tuple String app.schema/MessageView) (-> respo.schema/ChildPair)
                   let
                       id $ nth entry 0
                       message $ nth entry 1
-                    [] id $ div
+                    keyed-element id $ div
                       {}
                         :style $ {} (:padding 8) (:margin-bottom 8)
                           :background-color $ hsl 0 80 95
@@ -209,7 +208,7 @@
             respo.util.format :refer $ hsl
             respo-ui.core :as ui
             respo-ui.css :as css
-            respo.core :refer $ defcomp <> >> div span button input pre list->
+            respo.core :refer $ defcomp <> >> div span button input pre keyed-> keyed-element
             respo.css :refer $ defstyle
             respo.comp.inspect :refer $ comp-inspect
             respo.comp.space :refer $ =<
@@ -560,11 +559,11 @@
                       <> (:title board)
                         {} (:font-size 22) (:font-family "|Josefin Sans, sans-serif")
                     space-y 12
-                    list->
+                    keyed->
                       {} $ :style $ {} (:display :flex) (:align-items :flex-start) (:gap 12) (:overflow-x :auto)
                       map-indexed columns $ fn (index column)
-                        hint-fn $ Fn Number app.feature.kanban.schema/Column $ -> (List Dynamic)
-                        [] (:id column)
+                        hint-fn $ Fn Number app.feature.kanban.schema/Column $ -> respo.schema/ChildPair
+                        keyed-element (:id column)
                           div
                             {} $ :style $ {} (:width 240) (:flex-shrink 0) (:padding 8) (:border-radius 8)
                               :background-color $ hsl 220 20 96
@@ -572,12 +571,12 @@
                               {} $ :style $ {} (:font-weight :bold) (:margin-bottom 8)
                               <> $ str (:title column) "| · " $ .len
                                 column-cards board $ :id column
-                            list-> ({})
+                            keyed-> ({})
                               map
                                 column-cards board $ :id column
                                 fn (card)
-                                  hint-fn $ Fn app.feature.kanban.schema/Card $ -> (List Dynamic)
-                                  [] (:id card)
+                                  hint-fn $ Fn app.feature.kanban.schema/Card $ -> respo.schema/ChildPair
+                                  keyed-component (:id card)
                                     comp-card board card
                                       nth column-ids $ - index 1
                                       nth column-ids $ + index 1
@@ -586,18 +585,17 @@
                               >> states $ turn-tag $ :id column
                               , "|New card" $ fn (title)
                                 kanban-op $ app.feature.kanban.schema/KanbanOp :card/add (:id board) (:id column) title
-                    list-> ({})
+                    keyed-> ({})
                       ->
                         map-entries $ :details resources
                         map $ fn (pair)
-                          hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource)
-                            -> $ List Dynamic
+                          hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource) (-> respo.schema/ChildPair)
                           let
                               raw-card-id $ :key pair
                               raw-resource $ :value pair
                             let
                                 card-id $ assert-type raw-card-id String
-                              [] card-id $ comp-card-detail
+                              keyed-component card-id $ comp-card-detail
                                 >> states $ turn-tag $ str |detail- card-id
                                 , board card-id $ assert-type raw-resource app.feature.kanban.resource/DetailResource
               (:none)
@@ -792,12 +790,12 @@
                         -> Unit
                       d! $ schema/Op :client/load-history false
                 space-y 12
-                list->
+                keyed->
                   {} $ :class-name css/column
                   map (:items history)
                     fn (event)
-                      hint-fn $ Fn app.feature.kanban.schema/HistoryEvent $ -> (List Dynamic)
-                      [] (:id event)
+                      hint-fn $ Fn app.feature.kanban.schema/HistoryEvent $ -> respo.schema/ChildPair
+                      keyed-element (:id event)
                         div
                           {} $ :style $ {} (:padding "|6px 0")
                             :border-bottom $ str "|1px solid " $ hsl 0 0 92
@@ -832,19 +830,18 @@
                       {} (:class-name css/font-fancy)
                         :style $ {} (:font-size 24) (:margin-bottom 12)
                       <> |Boards
-                    list->
+                    keyed->
                       {} $ :class-name css/column
                       ->
                         map-entries $ :boards lobby
                         map $ fn (pair)
-                          hint-fn $ Fn (MapEntry String app.feature.kanban.schema/BoardBrief)
-                            -> $ List Dynamic
+                          hint-fn $ Fn (MapEntry String app.feature.kanban.schema/BoardBrief) (-> respo.schema/ChildPair)
                           let
                               raw-id $ :key pair
                               raw-brief $ :value pair
                             let
                                 brief $ assert-type raw-brief app.feature.kanban.schema/BoardBrief
-                              [] (:id brief)
+                              keyed-element (:id brief)
                                 div
                                   {} (:class-name css/row-middle)
                                     :style $ {} (:padding "|8px 12px") (:margin-bottom 6) (:cursor :pointer) (:border-radius 6)
@@ -899,10 +896,10 @@
                             -> Unit
                           d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :settings/toggle-compact
                       space-x 12
-                      list-> ({})
+                      keyed-> ({})
                         map ([] |#2a8bd6 |#d6542a |#2ab36b |#8a4bd6)
                           fn (color)
-                            [] color $ span $ {}
+                            keyed-element color $ span $ {}
                               :style $ {} (:display :inline-block) (:width 20) (:height 20) (:margin-right 6) (:border-radius 10) (:cursor :pointer) (:background-color color)
                                 :outline $ if
                                   = color $ :accent settings
@@ -971,7 +968,7 @@
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.feature.kanban.comp
           :require
-            respo.core :refer $ defcomp <> >> div span button input textarea list-> event-value
+            respo.core :refer $ defcomp <> >> div span button input textarea keyed-> keyed-element keyed-component event-value
             respo.comp.space :refer $ space-x space-y
             respo.util.format :refer $ hsl
             respo-ui.css :as css

@@ -2,14 +2,14 @@
 
 > template for mini realtime apps, based on calcit-js eco. But with calcit-rs runtime.
 
-### Calcit 0.38.0 升级
+### Calcit 0.40.0 升级
 
-前后端使用同一套正式依赖。部署时为服务进程安装 Calcit 0.38.0、重新解析模块，
+前后端使用同一套正式依赖。部署时为服务进程安装 Calcit 0.40.0、重新解析模块，
 并重新生成前端。原 WebSocket 操作、分区同步、受检 Store 恢复、存档与 HUD 行为继续沿用。
 原部署路径见下文。
 
 `deps.cirru` 固定正式依赖标签，包括 Cumulo Reel 0.3.2、Respo 0.19.5、
-Recollect 0.3.4、WS-EDN 0.1.1 和 WSS 0.2.44。浏览器运行库与 CLI 均为 0.38.0。
+Recollect 0.3.4、WS-EDN 0.1.1 和 WSS 0.2.45。浏览器运行库与 CLI 均为 0.40.0。
 
 服务端确认缓存持有已经验证的 `Store`，派发副作用返回 `Unit`。Kanban 的测试夹具
 用具名 union 表达分区视图与资源，离线页面传入明确的提示文本。WebSocket 注册表和
@@ -17,8 +17,8 @@ Recollect 0.3.4、WS-EDN 0.1.1 和 WSS 0.2.44。浏览器运行库与 CLI 均为
 
 ### Usages
 
-Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.38.0](https://github.com/calcit-lang/calcit/releases/tag/0.38.0).
-The local CLI must stay at `0.38.0`, matching `deps.cirru` and `@calcit/procs`.
+Install Node.js 24, Yarn 4.18.0, and [Calcit CLI 0.40.0](https://github.com/calcit-lang/calcit/releases/tag/0.40.0).
+The local CLI must stay at `0.40.0`, matching `deps.cirru` and `@calcit/procs`.
 
 Install the dependencies declared in `deps.cirru` with `caps --strict --ci`.
 They are linked under `.calcit/modules/` from the immutable module cache.
