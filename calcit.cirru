@@ -159,7 +159,7 @@
               {} $ :style $ {} (:position :fixed) (:top 8) (:right 8) (:z-index 1000)
               -> messages (.to-list)
                 .map $ fn (entry)
-                  hint-fn $ Fn (Tuple String app.schema/MessageView) (-> respo.schema/ChildPair)
+                  hint-fn $ Fn (Tuple String schema/MessageView) (-> respo.schema/ChildPair)
                   let
                       id $ nth entry 0
                       message $ nth entry 1
@@ -244,7 +244,7 @@
                         :value $ .unwrap-or (get state :username) |
                         :on-input $ fn (e d!)
                           hint-fn $ Fn respo.schema/RespoEvent
-                            Fn app.schema/Op $ -> Unit
+                            Fn schema/Op $ -> Unit
                             -> Unit
                           let
                               value $ event-value e
@@ -255,7 +255,7 @@
                         :value $ .unwrap-or (get state :password) |
                         :on-input $ fn (e d!)
                           hint-fn $ Fn respo.schema/RespoEvent
-                            Fn app.schema/Op $ -> Unit
+                            Fn schema/Op $ -> Unit
                             -> Unit
                           let
                               value $ event-value e
@@ -285,7 +285,7 @@
           :code $ quote $ defn on-submit (username password signup?)
             fn (e dispatch!)
               hint-fn $ Fn respo.schema/RespoEvent
-                Fn app.schema/Op $ -> Unit
+                Fn schema/Op $ -> Unit
                 -> Unit
               dispatch! $ if signup? (app.schema/Op :user/sign-up username password) (app.schema/Op :user/log-in username password)
               when (js-present? js/localStorage)
@@ -484,7 +484,7 @@
         'receive-reply! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn receive-reply! (request-id reply)
             swap! *resources $ fn (resources)
-              hint-fn $ Fn app.feature.kanban.resource/Resources $ -> app.feature.kanban.resource/Resources
+              hint-fn $ Fn resource/Resources $ -> resource/Resources
               resource/receive-reply resources request-id reply
             , &unit
           :examples $ []
@@ -497,7 +497,7 @@
                 match (get partitions key)
                   (:some raw-slot)
                     match
-                      :view $ assert-type raw-slot $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+                      :view $ assert-type raw-slot $ cumulo-reel.partition/PartitionSlot schema/PartitionView
                       (:board board)
                         each (resource/stale-details @*resources board)
                           fn (card-id)
@@ -552,7 +552,7 @@
                       span $ {} (:class-name css/link) (:inner-text "|← Boards")
                         :on-click $ fn (e d!)
                           hint-fn $ Fn respo.schema/RespoEvent
-                            Fn app.schema/Op $ -> Unit
+                            Fn schema/Op $ -> Unit
                             -> Unit
                           d! $ route-op :home None
                       space-x 12
@@ -610,12 +610,12 @@
                 board-id $ :id board
                 card-id $ :id card
                 tool $ fn (label op)
-                  hint-fn $ Fn String app.schema/Op $ -> respo.schema/Element
+                  hint-fn $ Fn String schema/Op $ -> respo.schema/Element
                   span $ {} (:inner-text label) (:class-name css/link)
                     :style $ {} (:margin-left 6) (:font-size 12)
                     :on-click $ fn (e d!)
                       hint-fn $ Fn respo.schema/RespoEvent
-                        Fn app.schema/Op $ -> Unit
+                        Fn schema/Op $ -> Unit
                         -> Unit
                       d! op
               div
@@ -627,7 +627,7 @@
                     :style $ {} $ :cursor :pointer
                     :on-click $ fn (e d!)
                       hint-fn $ Fn respo.schema/RespoEvent
-                        Fn app.schema/Op $ -> Unit
+                        Fn schema/Op $ -> Unit
                         -> Unit
                       d! $ schema/Op :client/open-card board-id card-id
                   <> $ :title card
@@ -690,7 +690,7 @@
                   span $ {} (:class-name css/link) (:inner-text |Close)
                     :on-click $ fn (e d!)
                       hint-fn $ Fn respo.schema/RespoEvent
-                        Fn app.schema/Op $ -> Unit
+                        Fn schema/Op $ -> Unit
                         -> Unit
                       d! $ schema/Op :client/close-card card-id
                 div
@@ -710,14 +710,14 @@
                   :style $ {} (:width |100%) (:min-height 120)
                   :on-input $ fn (e d!)
                     hint-fn $ Fn respo.schema/RespoEvent
-                      Fn app.schema/Op $ -> Unit
+                      Fn schema/Op $ -> Unit
                       -> Unit
                     d! $ schema/Op :states cursor $ event-value e
                 space-y 8
                 button $ {} (:class-name css/button) (:inner-text |Save)
                   :on-click $ fn (e d!)
                     hint-fn $ Fn respo.schema/RespoEvent
-                      Fn app.schema/Op $ -> Unit
+                      Fn schema/Op $ -> Unit
                       -> Unit
                     d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :card/edit-detail (:id board) card-id text
                     d! $ schema/Op :states cursor nil
@@ -743,14 +743,14 @@
                   :style $ {} (:min-width 80) (:flex 1)
                   :on-input $ fn (e d!)
                     hint-fn $ Fn respo.schema/RespoEvent
-                      Fn app.schema/Op $ -> Unit
+                      Fn schema/Op $ -> Unit
                       -> Unit
                     d! $ schema/Op :states cursor $ event-value e
                 space-x 6
                 button $ {} (:class-name css/button) (:inner-text |Add)
                   :on-click $ fn (e d!)
                     hint-fn $ Fn respo.schema/RespoEvent
-                      Fn app.schema/Op $ -> Unit
+                      Fn schema/Op $ -> Unit
                       -> Unit
                     when
                       not $ blank? draft
@@ -786,7 +786,7 @@
                       true |Refresh
                     :on-click $ fn (e d!)
                       hint-fn $ Fn respo.schema/RespoEvent
-                        Fn app.schema/Op $ -> Unit
+                        Fn schema/Op $ -> Unit
                         -> Unit
                       d! $ schema/Op :client/load-history false
                 space-y 12
@@ -812,7 +812,7 @@
                       button $ {} (:class-name css/button) (:inner-text "|Load older")
                         :on-click $ fn (e d!)
                           hint-fn $ Fn respo.schema/RespoEvent
-                            Fn app.schema/Op $ -> Unit
+                            Fn schema/Op $ -> Unit
                             -> Unit
                           d! $ schema/Op :client/load-history true
                   (:none)
@@ -848,7 +848,7 @@
                                       :border $ str "|1px solid " $ hsl 0 0 88
                                     :on-click $ fn (e d!)
                                       hint-fn $ Fn respo.schema/RespoEvent
-                                        Fn app.schema/Op $ -> Unit
+                                        Fn schema/Op $ -> Unit
                                         -> Unit
                                       d! $ route-op :board $ Some (:id brief)
                                   <> $ :title brief
@@ -892,7 +892,7 @@
                         :inner-text $ if (:compact? settings) "|Compact cards: on" "|Compact cards: off"
                         :on-click $ fn (e d!)
                           hint-fn $ Fn respo.schema/RespoEvent
-                            Fn app.schema/Op $ -> Unit
+                            Fn schema/Op $ -> Unit
                             -> Unit
                           d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :settings/toggle-compact
                       space-x 12
@@ -906,7 +906,7 @@
                                   , "|2px solid #333" |none
                               :on-click $ fn (e d!)
                                 hint-fn $ Fn respo.schema/RespoEvent
-                                  Fn app.schema/Op $ -> Unit
+                                  Fn schema/Op $ -> Unit
                                   -> Unit
                                 d! $ kanban-op $ app.feature.kanban.schema/KanbanOp :settings/set-accent color
               (:none)
@@ -942,7 +942,7 @@
           :code $ quote $ defn partition-view (partitions key)
             match (get partitions key)
               (:some raw-slot)
-                Some $ :view $ assert-type raw-slot (cumulo-reel.partition/PartitionSlot app.schema/PartitionView)
+                Some $ :view $ assert-type raw-slot (cumulo-reel.partition/PartitionSlot schema/PartitionView)
               (:none) None
           :examples $ []
           :schema $ quote $ Fn
@@ -1101,7 +1101,7 @@
                         (:some current)
                           let
                               update! $ fn (next)
-                                hint-fn $ Fn app.feature.kanban.resource/DetailResource $ -> app.feature.kanban.resource/Resources
+                                hint-fn $ Fn DetailResource $ -> Resources
                                 struct-with base $ :details $ assoc (:details base) card-id next
                             match reply
                               (:card-detail detail)
@@ -1123,7 +1123,7 @@
           :tests $ [] $ %{} 'TestEntry (:name |stale-and-versioned-replies)
             :code $ quote $ let
                 detail $ fn (rev text)
-                  hint-fn $ Fn Number String $ -> app.feature.kanban.schema/CardDetail
+                  hint-fn $ Fn Number String $ -> CardDetail
                   CardDetail :card-id |c1 :board-id |b1 :rev rev :description text :updated-at 0
                 r1 $ begin-detail-query empty-resources |b1 |c1
                 r2 $ begin-detail-query (:resources r1) |b1 |c1
@@ -1139,7 +1139,7 @@
                   :request-id r3
                   QueryReply :card-detail $ detail 3 |x
                 description $ fn (resources)
-                  hint-fn $ Fn app.feature.kanban.resource/Resources $ -> (Option String)
+                  hint-fn $ Fn Resources $ -> (Option String)
                   match
                     get (:details resources) |c1
                     (:some resource)
@@ -1169,13 +1169,13 @@
             ->
               map-entries $ :details resources
               filter $ fn (pair)
-                hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource) (-> Bool)
+                hint-fn $ Fn (MapEntry String DetailResource) (-> Bool)
                 let
                     raw-card-id $ :key pair
                     raw-resource $ :value pair
                   let
                       card-id $ assert-type raw-card-id String
-                      resource $ assert-type raw-resource app.feature.kanban.resource/DetailResource
+                      resource $ assert-type raw-resource DetailResource
                     and
                       = (:board-id resource) (:id board)
                       not $ :loading? resource
@@ -1190,7 +1190,7 @@
                                 > hot-rev $ :rev detail
                               (:none) false
               map $ fn (pair)
-                hint-fn $ Fn (MapEntry String app.feature.kanban.resource/DetailResource) (-> String)
+                hint-fn $ Fn (MapEntry String DetailResource) (-> String)
                 :key pair
           :examples $ []
           :schema $ quote $ Fn Resources app.feature.kanban.schema/Board
@@ -1199,7 +1199,7 @@
           :doc "|Forget older requests for the same target so their late replies are ignored."
           :code $ quote $ defn without-target (pending matches?)
             .filter-map-kv pending $ fn (id target)
-              hint-fn $ Fn String app.feature.kanban.resource/QueryTarget $ -> (MapEntryDecision String app.feature.kanban.resource/QueryTarget)
+              hint-fn $ Fn String QueryTarget $ -> (MapEntryDecision String QueryTarget)
               if (matches? target) (MapEntryDecision :drop) (MapEntryDecision :keep id target)
           :examples $ []
           :schema $ quote $ Fn (Map String QueryTarget)
@@ -1511,12 +1511,12 @@
                   (:some user-id)
                     #{} $ PartitionKey :user user-id
                   (:none)
-                    assert-type (#{}) (Set app.schema/PartitionKey)
+                    assert-type (#{}) (Set PartitionKey)
               match op
                 (:kanban kanban-op)
                   let
                       board-key $ fn (board-id)
-                        hint-fn $ Fn String $ -> (Set app.schema/PartitionKey)
+                        hint-fn $ Fn String $ -> (Set PartitionKey)
                         include
                           include user-keys $ PartitionKey :lobby
                           PartitionKey :board board-id
@@ -1534,9 +1534,9 @@
                       (:settings/toggle-compact) user-keys
                       (:settings/set-accent _accent) user-keys
                 (:router/change _router)
-                  assert-type (#{}) (Set app.schema/PartitionKey)
+                  assert-type (#{}) (Set PartitionKey)
                 (:session/remove-message _message)
-                  assert-type (#{}) (Set app.schema/PartitionKey)
+                  assert-type (#{}) (Set PartitionKey)
                 _ $ include user-keys $ PartitionKey :lobby
           :examples $ []
           :schema $ quote $ Fn app.schema/Db app.schema/DomainOp Number
@@ -1547,7 +1547,7 @@
             LobbyView :boards
               .filter-map-kv (:boards db)
                 fn (id board)
-                  hint-fn $ Fn String app.feature.kanban.schema/Board $ -> (MapEntryDecision String app.feature.kanban.schema/BoardBrief)
+                  hint-fn $ Fn String app.feature.kanban.schema/Board $ -> (MapEntryDecision String BoardBrief)
                   MapEntryDecision :keep id $ BoardBrief :id id :title (:title board) :card-count $ .len (:cards board)
               , :online $ .foldl
                 map-entries $ :sessions db
@@ -1705,9 +1705,9 @@
                 history $ .foldl (:history effects) (:history cold)
                   fn (acc event)
                     hint-fn $ Fn
-                      Map String $ List app.feature.kanban.schema/HistoryEvent
-                      , app.feature.kanban.schema/HistoryEvent $ ->
-                        Map String $ List app.feature.kanban.schema/HistoryEvent
+                      Map String $ List HistoryEvent
+                      , HistoryEvent $ ->
+                        Map String $ List HistoryEvent
                     let
                         user-id $ :user-id event
                         events $ match (get acc user-id)
@@ -1719,7 +1719,7 @@
                         , events
                 details $ .foldl (:details effects) (:details cold)
                   fn (acc detail)
-                    hint-fn $ Fn (Map String app.feature.kanban.schema/CardDetail) app.feature.kanban.schema/CardDetail $ -> (Map String app.feature.kanban.schema/CardDetail)
+                    hint-fn $ Fn (Map String CardDetail) CardDetail $ -> (Map String CardDetail)
                     assoc acc (:card-id detail) detail
               struct-with cold (:history history) (:details details)
           :examples $ []
@@ -1741,7 +1741,7 @@
                       struct-with board $ :columns $ assoc (:columns board) op-id
                         Column :id op-id :title (trim title) :rank $ next-rank $ map (board-columns board)
                           fn (column)
-                            hint-fn $ Fn app.feature.kanban.schema/Column $ -> Number
+                            hint-fn $ Fn Column $ -> Number
                             :rank column
                   (:card/add board-id column-id title)
                     if (blank? title) db $ update-board db board-id $ fn (board)
@@ -1785,12 +1785,12 @@
                 blank $ apply-kanban db5 (KanbanOp :card/add |b1 |b1-todo "|  ") 1 |o6 6
                 bad-column $ apply-kanban db5 (KanbanOp :card/move |b1 |c2 |missing) 1 |o7 7
                 card-in $ fn (db card-id)
-                  hint-fn $ Fn app.schema/Db String $ -> app.feature.kanban.schema/Card
+                  hint-fn $ Fn app.schema/Db String $ -> Card
                   match (board-of db |b1)
                     (:some board)
                       assert-type
                         .unwrap $ get (:cards board) card-id
-                        , app.feature.kanban.schema/Card
+                        , Card
                     (:none) (raise |Missing-board)
               assert= db0 anon
               assert= |Plan $ :title $ .unwrap (board-of db1 |b1)
@@ -1810,7 +1810,7 @@
           :code $ quote $ defn board-cards (board)
             map-list-kv (:cards board)
               fn (_id value)
-                hint-fn $ Fn String app.feature.kanban.schema/Card $ -> app.feature.kanban.schema/Card
+                hint-fn $ Fn String Card $ -> Card
                 , value
           :examples $ []
           :schema $ quote $ Fn Board
@@ -1820,10 +1820,10 @@
             .sort-by
               map-list-kv (:columns board)
                 fn (_id value)
-                  hint-fn $ Fn String app.feature.kanban.schema/Column $ -> app.feature.kanban.schema/Column
+                  hint-fn $ Fn String Column $ -> Column
                   , value
               fn (column)
-                hint-fn $ Fn app.feature.kanban.schema/Column $ -> Number
+                hint-fn $ Fn Column $ -> Number
                 :rank column
           :examples $ []
           :schema $ quote $ Fn Board
@@ -1833,7 +1833,7 @@
             match
               get (:boards db) board-id
               (:some raw)
-                Some $ assert-type raw app.feature.kanban.schema/Board
+                Some $ assert-type raw Board
               (:none) None
           :examples $ []
           :schema $ quote $ Fn app.schema/Db String
@@ -1845,7 +1845,7 @@
                 match
                   get (:cards board) card-id
                   (:some raw)
-                    :column-id $ assert-type raw app.feature.kanban.schema/Card
+                    :column-id $ assert-type raw Card
                   (:none) |
               (:none) |
           :examples $ []
@@ -1862,7 +1862,7 @@
                   (:some _)
                     app.schema/QueryReply :card-detail $ match
                       get (:details cold) card-id
-                      (:some raw) (assert-type raw app.feature.kanban.schema/CardDetail)
+                      (:some raw) (assert-type raw CardDetail)
                       (:none)
                         CardDetail :card-id card-id :board-id board-id :rev 0 :description | :updated-at 0
           :examples $ []
@@ -1874,7 +1874,7 @@
                 match
                   get (:cards board) card-id
                   (:some raw)
-                    :title $ assert-type raw app.feature.kanban.schema/Card
+                    :title $ assert-type raw Card
                   (:none) card-id
               (:none) card-id
           :examples $ []
@@ -1883,7 +1883,7 @@
           :code $ quote $ defn column-card-ranks (board column-id)
             map (column-cards board column-id)
               fn (card)
-                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Number
+                hint-fn $ Fn Card $ -> Number
                 :rank card
           :examples $ []
           :schema $ quote $ Fn Board String
@@ -1892,10 +1892,10 @@
           :code $ quote $ defn column-cards (board column-id)
             -> (board-cards board)
               filter $ fn (card)
-                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Bool
+                hint-fn $ Fn Card $ -> Bool
                 = column-id $ :column-id card
               .sort-by $ fn (card)
-                hint-fn $ Fn app.feature.kanban.schema/Card $ -> Number
+                hint-fn $ Fn Card $ -> Number
                 :rank card
           :examples $ []
           :schema $ quote $ Fn Board String
@@ -1907,7 +1907,7 @@
                 match
                   get (:columns board) column-id
                   (:some raw)
-                    :title $ assert-type raw app.feature.kanban.schema/Column
+                    :title $ assert-type raw Column
                   (:none) column-id
               (:none) column-id
           :examples $ []
@@ -1916,7 +1916,7 @@
           :code $ quote $ defn create-board (db title op-id op-time)
             let
                 column $ fn (suffix label rank)
-                  hint-fn $ Fn String String Number $ -> app.feature.kanban.schema/Column
+                  hint-fn $ Fn String String Number $ -> Column
                   let
                       id $ str op-id |- suffix
                     Column :id id :title label :rank rank
@@ -1947,7 +1947,7 @@
                   get (:history cold) user-id
                   (:some existing) existing
                   (:none)
-                    assert-type ([]) (List app.feature.kanban.schema/HistoryEvent)
+                    assert-type ([]) (List HistoryEvent)
                 total $ .len events
                 page-size $ if (< limit 1) 1 $ if (> limit 50) 50 limit
                 end $ match cursor
@@ -1965,7 +1965,7 @@
           :tests $ [] $ %{} 'TestEntry (:name |stable-cursor-paging-and-bound)
             :code $ quote $ let
                 event $ fn (id)
-                  hint-fn $ Fn String $ -> app.feature.kanban.schema/HistoryEvent
+                  hint-fn $ Fn String $ -> HistoryEvent
                   HistoryEvent :id id :time 0 :user-id |u1 :kind :card/add :board-id |b1 :summary id
                 effects $ ColdEffects :history
                   map ([] |e1 |e2 |e3 |e4) event
@@ -1977,7 +1977,7 @@
                   hint-fn $ Fn app.feature.kanban.schema/HistoryPage $ -> (List String)
                   map (:items page)
                     fn (item)
-                      hint-fn $ Fn app.feature.kanban.schema/HistoryEvent $ -> String
+                      hint-fn $ Fn HistoryEvent $ -> String
                       :id item
               assert= 3 $ :history-rev first-page
               assert= ([] |e4 |e3) (ids first-page)
@@ -1993,17 +1993,17 @@
             let
                 none $ ColdEffects :history ([]) :details $ []
                 event $ fn (user-id kind board-id summary)
-                  hint-fn $ Fn String Tag String String $ -> app.feature.kanban.schema/HistoryEvent
+                  hint-fn $ Fn String Tag String String $ -> HistoryEvent
                   HistoryEvent :id op-id :time op-time :user-id user-id :kind kind :board-id board-id :summary summary
                 board-change $ fn (board-id)
                   hint-fn $ Fn String $ ->
-                    Option $ List app.feature.kanban.schema/Board
+                    Option $ List Board
                   let
                       before $ board-of db-before board-id
                       after $ board-of db-after board-id
                     if (= before after) None $ Some $ []
                 only $ fn (user-id kind board-id summary)
-                  hint-fn $ Fn String Tag String String $ -> app.feature.kanban.schema/ColdEffects
+                  hint-fn $ Fn String Tag String String $ -> ColdEffects
                   match (board-change board-id)
                     (:none) none
                     (:some _)
@@ -2015,10 +2015,10 @@
                 (:some user-id)
                   let
                       before-of $ fn (board-id)
-                        hint-fn $ Fn String $ -> (Option app.feature.kanban.schema/Board)
+                        hint-fn $ Fn String $ -> (Option Board)
                         board-of db-before board-id
                       after-of $ fn (board-id)
-                        hint-fn $ Fn String $ -> (Option app.feature.kanban.schema/Board)
+                        hint-fn $ Fn String $ -> (Option Board)
                         board-of db-after board-id
                     match op
                       (:board/create title)
@@ -2053,7 +2053,7 @@
                               (:none) none
                               (:some raw-card)
                                 let
-                                    card $ assert-type raw-card app.feature.kanban.schema/Card
+                                    card $ assert-type raw-card Card
                                   ColdEffects :history
                                     [] $ event user-id :card/edit-detail board-id $ str "|edited description of " (:title card)
                                     , :details $ [] $ CardDetail :card-id card-id :board-id board-id :rev (:detail-rev card) :description description :updated-at op-time
@@ -2081,7 +2081,7 @@
                 .unwrap $ get
                   :cards $ .unwrap $ board-of db4 |b1
                   , |c1
-                , app.feature.kanban.schema/Card
+                , Card
               assert= 1 $ :rev $ .unwrap
                 first $ :details edit-effects
               assert= 2 $ .len $ .unwrap
@@ -2139,11 +2139,11 @@
               (:none) board
               (:some raw-card)
                 let
-                    card $ assert-type raw-card app.feature.kanban.schema/Card
+                    card $ assert-type raw-card Card
                     siblings $ column-cards board $ :column-id card
                   match
                     find-index siblings $ fn (item)
-                      hint-fn $ Fn app.feature.kanban.schema/Card $ -> Bool
+                      hint-fn $ Fn Card $ -> Bool
                       = card-id $ :id item
                     (:none) board
                     (:some index)
@@ -2168,7 +2168,7 @@
               get (:boards db) board-id
               (:some raw-board)
                 struct-with db $ :boards $ assoc (:boards db) board-id
-                  f $ assert-type raw-board app.feature.kanban.schema/Board
+                  f $ assert-type raw-board Board
               (:none) db
           :examples $ []
           :schema $ quote $ Fn app.schema/Db String
@@ -2180,7 +2180,7 @@
               get (:cards board) card-id
               (:some raw-card)
                 struct-with board $ :cards $ assoc (:cards board) card-id
-                  f $ assert-type raw-card app.feature.kanban.schema/Card
+                  f $ assert-type raw-card Card
               (:none) board
           :examples $ []
           :schema $ quote $ Fn Board String
@@ -2284,10 +2284,10 @@
                 saved-payloads @app.sync.server/*partition-payloads
                 sids $ [] 1 2 3 4 5
                 user $ fn (sid)
-                  hint-fn $ Fn Number $ -> app.schema/User
+                  hint-fn $ Fn Number $ -> schema/User
                   schema/User :id (str |u sid) :name (str |user sid) :nickname None :avatar None :password |hash
                 session $ fn (sid)
-                  hint-fn $ Fn Number $ -> app.schema/Session
+                  hint-fn $ Fn Number $ -> schema/Session
                   schema/Session :id sid :user-id
                     Some $ str |u sid
                     , :nickname None :router
@@ -2297,20 +2297,20 @@
                   assert-type
                     pairs-map $ map sids $ fn (sid)
                       [] sid $ session sid
-                    Map Number app.schema/Session
+                    Map Number schema/Session
                   , :users
                     assert-type
                       pairs-map $ map sids $ fn (sid)
                         [] (str |u sid) (user sid)
-                      Map String app.schema/User
+                      Map String schema/User
                     , :boards ({}) :settings $ {}
                 db1 $ app.feature.kanban.updater/apply-kanban base (app.feature.kanban.schema/KanbanOp :board/create |Plan) 1 |b1 1
                 add-op $ schema/DomainOp :kanban $ app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship
                 db2 $ app.feature.kanban.updater/apply-kanban db1 (app.feature.kanban.schema/KanbanOp :card/add |b1 |b1-todo |Ship) 1 |c1 2
                 *sent $ ref $ assert-type ([])
-                  List $ cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
+                  List $ cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView
                 record! $ fn (sid action)
-                  hint-fn $ Fn Number (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
+                  hint-fn $ Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit)
                   swap! *sent conj action
                   match action
                     (:drop _key) &unit
@@ -2325,7 +2325,7 @@
                 sends-of $ fn (tag)
                   hint-fn $ Fn Tag $ -> Number
                   .len $ filter @*sent $ fn (action)
-                    hint-fn $ Fn (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Bool)
+                    hint-fn $ Fn (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Bool)
                     = tag $ match action
                       (:snapshot _state) :snapshot
                       (:deltas _state _deltas) :deltas
@@ -2339,7 +2339,7 @@
                     fn (acc action)
                       hint-fn $ Fn
                         List $ List cumulo-reel.partition/PartitionDelta
-                        cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
+                        cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView
                         -> $ List $ List cumulo-reel.partition/PartitionDelta
                       match action
                         (:deltas state deltas)
@@ -2349,12 +2349,12 @@
                             , acc
                         _ acc
               reset! app.sync.server/*partitions $ assert-type ({})
-                Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+                Map schema/PartitionKey $ cumulo-reel.partition/PartitionState schema/PartitionKey schema/PartitionView
               reset! app.sync.server/*partition-progress $ assert-type ({})
-                Map Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
-              reset! app.sync.server/*dirty-partitions $ assert-type (#{}) (Set app.schema/PartitionKey)
+                Map Number $ Map schema/PartitionKey cumulo-reel.partition/PartitionProgress
+              reset! app.sync.server/*dirty-partitions $ assert-type (#{}) (Set schema/PartitionKey)
               reset! app.sync.server/*partition-metrics app.sync.server/empty-partition-metrics
-              reset! app.sync.server/*partition-payloads $ assert-type ({}) (Map app.schema/PartitionKey app.sync.server/CachedPayload)
+              reset! app.sync.server/*partition-payloads $ assert-type ({}) (Map schema/PartitionKey app.sync.server/CachedPayload)
               reset! app.feature.kanban.server/*cold-store app.feature.kanban.schema/empty-cold-store
               reset! app.sync.server/*client-states $ assert-type
                 pairs-map $ map sids $ fn (sid)
@@ -2365,7 +2365,7 @@
                   initial-snapshots $ sends-of :snapshot
                   initial-partitions $ .len @app.sync.server/*partitions
                 reset! *sent $ assert-type ([])
-                  List $ cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView
+                  List $ cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView
                 app.sync.server/mark-partitions-dirty! $ app.hooks.server/affected-partitions db1 add-op 1
                 app.sync.server/sync-partitions-with! db2 record!
                 let
@@ -2920,12 +2920,12 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+                  Result (Map String Message) DatabaseDecodeError
                 fn (acc pair)
                   hint-fn $ Fn
-                    Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+                    Result (Map String Message) DatabaseDecodeError
                     MapEntry K V
-                    -> $ Result (Map String app.schema/Message) app.schema/DatabaseDecodeError
+                    -> $ Result (Map String Message) DatabaseDecodeError
                     :generics K V
                   match acc
                     (:err error) (Result :err error)
@@ -3098,7 +3098,7 @@
           :doc "|Normalize a persisted optional string from missing, nil, legacy String, or nominal Option data."
           :code $ quote $ defn decode-optional-string (data path)
             hint-fn $ Fn T String
-              -> $ Result (Option String) app.schema/DatabaseDecodeError
+              -> $ Result (Option String) DatabaseDecodeError
               :generics T
             match data
               (:none) (Result :ok None)
@@ -3396,12 +3396,12 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+                  Result (Map Number Session) DatabaseDecodeError
                 fn (acc pair)
                   hint-fn $ Fn
-                    Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+                    Result (Map Number Session) DatabaseDecodeError
                     MapEntry K V
-                    -> $ Result (Map Number app.schema/Session) app.schema/DatabaseDecodeError
+                    -> $ Result (Map Number Session) DatabaseDecodeError
                     :generics K V
                   match acc
                     (:err error) (Result :err error)
@@ -3598,12 +3598,12 @@
               .foldl (map-entries data)
                 assert-type
                   Result :ok $ {}
-                  Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+                  Result (Map String User) DatabaseDecodeError
                 fn (acc pair)
                   hint-fn $ Fn
-                    Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+                    Result (Map String User) DatabaseDecodeError
                     MapEntry K V
-                    -> $ Result (Map String app.schema/User) app.schema/DatabaseDecodeError
+                    -> $ Result (Map String User) DatabaseDecodeError
                     :generics K V
                   match acc
                     (:err error) (Result :err error)
@@ -3763,7 +3763,7 @@
           :doc "|Validated partition caches keyed by partition; each slot is replaced only by a complete snapshot or atomic delta chain."
           :code $ quote $ defref *partitions
             assert-type ({})
-              Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
+              Map schema/PartitionKey $ PartitionSlot schema/PartitionView
           :examples $ []
           :schema $ quote $ Ref
             Map schema/PartitionKey $ PartitionSlot schema/PartitionView
@@ -4194,7 +4194,7 @@
           :schema $ quote $ Ref (Set Number)
         '*dirty-partitions $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defref *dirty-partitions
-            assert-type (#{}) (Set app.schema/PartitionKey)
+            assert-type (#{}) (Set schema/PartitionKey)
           :examples $ []
           :schema $ quote $ Ref (Set schema/PartitionKey)
         '*initial-db $ %{} 'CodeEntry (:doc |)
@@ -4222,14 +4222,14 @@
         '*partition-payloads $ %{} 'CodeEntry
           :doc "|Encoded single-delta patch per partition, reused by every subscriber at the previous revision."
           :code $ quote $ defref *partition-payloads
-            assert-type ({}) (Map app.schema/PartitionKey app.sync.server/CachedPayload)
+            assert-type ({}) (Map schema/PartitionKey CachedPayload)
           :examples $ []
           :schema $ quote $ Ref (Map schema/PartitionKey CachedPayload)
         '*partition-progress $ %{} 'CodeEntry
           :doc "|Per-connection subscription progress: acknowledged revision and pending send for each partition."
           :code $ quote $ defref *partition-progress
             assert-type ({})
-              Map Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
+              Map Number $ Map schema/PartitionKey PartitionProgress
           :examples $ []
           :schema $ quote $ Ref
             Map Number $ Map schema/PartitionKey PartitionProgress
@@ -4237,7 +4237,7 @@
           :doc "|Live partitions with at least one subscribed connection; each keeps one view, revision and bounded delta history."
           :code $ quote $ defref *partitions
             assert-type ({})
-              Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+              Map schema/PartitionKey $ PartitionState schema/PartitionKey schema/PartitionView
           :examples $ []
           :schema $ quote $ Ref
             Map schema/PartitionKey $ PartitionState schema/PartitionKey schema/PartitionView
@@ -4386,22 +4386,22 @@
           :code $ quote $ defn collect-partitions! ()
             let
                 live $ .foldl (map-entries @*partition-progress)
-                  assert-type (#{}) (Set app.schema/PartitionKey)
+                  assert-type (#{}) (Set schema/PartitionKey)
                   fn (acc pair)
-                    hint-fn $ Fn (Set app.schema/PartitionKey)
-                      MapEntry Number $ Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress
-                      -> $ Set app.schema/PartitionKey
+                    hint-fn $ Fn (Set schema/PartitionKey)
+                      MapEntry Number $ Map schema/PartitionKey PartitionProgress
+                      -> $ Set schema/PartitionKey
                     let
                         _sid $ :key pair
                         raw-progress $ :value pair
-                      union acc $ keys $ assert-type raw-progress (Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress)
+                      union acc $ keys $ assert-type raw-progress (Map schema/PartitionKey PartitionProgress)
               swap! *partitions $ fn (partitions)
                 hint-fn $ Fn
-                  Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
-                  -> $ Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+                  Map schema/PartitionKey $ PartitionState schema/PartitionKey schema/PartitionView
+                  -> $ Map schema/PartitionKey $ PartitionState schema/PartitionKey schema/PartitionView
                 .filter-map-kv partitions $ fn (key state)
-                  hint-fn $ Fn app.schema/PartitionKey (cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView)
-                    -> $ MapEntryDecision app.schema/PartitionKey $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+                  hint-fn $ Fn schema/PartitionKey (PartitionState schema/PartitionKey schema/PartitionView)
+                    -> $ MapEntryDecision schema/PartitionKey $ PartitionState schema/PartitionKey schema/PartitionView
                   if (includes? live key) (MapEntryDecision :keep key state) (MapEntryDecision :drop)
               , &unit
           :examples $ []
@@ -4409,7 +4409,7 @@
         'count-partition-event! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn count-partition-event! (kind)
             swap! *partition-metrics $ fn (m)
-              hint-fn $ Fn app.sync.server/PartitionMetrics $ -> app.sync.server/PartitionMetrics
+              hint-fn $ Fn PartitionMetrics $ -> PartitionMetrics
               match kind
                 :advance $ struct-with m $ :advances
                   inc $ :advances m
@@ -4688,8 +4688,8 @@
         'mark-partitions-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-partitions-dirty! (partition-keys)
             swap! *dirty-partitions $ fn (dirty)
-              hint-fn $ Fn (Set app.schema/PartitionKey)
-                -> $ Set app.schema/PartitionKey
+              hint-fn $ Fn (Set schema/PartitionKey)
+                -> $ Set schema/PartitionKey
               union dirty partition-keys
             , &unit
           :examples $ []
@@ -4903,7 +4903,7 @@
             match (get @*partition-progress sid)
               (:some progress) progress
               (:none)
-                assert-type ({}) (Map app.schema/PartitionKey cumulo-reel.partition/PartitionProgress)
+                assert-type ({}) (Map schema/PartitionKey PartitionProgress)
           :examples $ []
           :schema $ quote $ Fn Number
             -> $ Map schema/PartitionKey PartitionProgress
@@ -4969,7 +4969,7 @@
           :doc "|Count one explicit client request for a full synchronization snapshot."
           :code $ quote $ defn record-resync! ()
             swap! *sync-metrics $ fn (metrics)
-              hint-fn $ Fn app.sync.server/SyncMetrics $ -> app.sync.server/SyncMetrics
+              hint-fn $ Fn SyncMetrics $ -> SyncMetrics
               struct-with metrics $ :resync-count $ inc (:resync-count metrics)
             , &unit
           :examples $ []
@@ -4990,7 +4990,7 @@
           :doc "|Record metrics for one synchronization send attempt before transport admission."
           :code $ quote $ defn record-sync-send! (message-kind revision diff-latency payload stats budget-fallback?)
             swap! *sync-metrics $ fn (metrics)
-              hint-fn $ Fn app.sync.server/SyncMetrics $ -> app.sync.server/SyncMetrics
+              hint-fn $ Fn SyncMetrics $ -> SyncMetrics
               next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
             , &unit
           :examples $ []
@@ -5006,7 +5006,7 @@
                   %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                     :records $ []
                     :merged? false
-                  cumulo-reel.core/ReelState app.schema/Db
+                  cumulo-reel.core/ReelState schema/Db
               assert= schema/database $ reel-db reel
               assert= 0 $ reel-record-count reel
             :tags $ #{} :server
@@ -5022,7 +5022,7 @@
                     %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                       :records $ [] ([] :first 1 |op-1 10) ([] :second 2 |op-2 20)
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                 assert= 2 $ reel-record-count reel
               :tags $ #{} :server
             %{} 'TestEntry (:name |rejects-non-list-record-slot)
@@ -5031,7 +5031,7 @@
                     %{} cumulo-reel.core/ReelState (:db schema/database) (:base schema/database)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                 assert= true $ try
                   do
                     reel-record-count $ &struct:assoc reel :records $ parse-cirru-edn "|{} (:wrong |container)"
@@ -5092,14 +5092,14 @@
           :code $ quote $ defn refresh-partitions! (db)
             let
                 dirty @*dirty-partitions
-              reset! *dirty-partitions $ assert-type (#{}) (Set app.schema/PartitionKey)
+              reset! *dirty-partitions $ assert-type (#{}) (Set schema/PartitionKey)
               each dirty $ fn (key)
-                hint-fn $ Fn app.schema/PartitionKey $ -> Unit
+                hint-fn $ Fn schema/PartitionKey $ -> Unit
                 match (get @*partitions key)
                   (:none) &unit
                   (:some raw-state)
                     let
-                        state $ assert-type raw-state $ cumulo-reel.partition/PartitionState app.schema/PartitionKey app.schema/PartitionView
+                        state $ assert-type raw-state $ PartitionState schema/PartitionKey schema/PartitionView
                         step $ advance-partition state (hooks/project-partition db key) sync-diff-budget partition-history-limit patch-operation-limit
                       swap! *partitions assoc key $ :state step
                       count-partition-event! :diff
@@ -5115,7 +5115,7 @@
           :code $ quote $ defn release-partition-sends! (sid)
             update-progress! sid $ fn (progress)
               .filter-map-kv progress $ fn (key item)
-                hint-fn $ Fn app.schema/PartitionKey cumulo-reel.partition/PartitionProgress $ -> (MapEntryDecision app.schema/PartitionKey cumulo-reel.partition/PartitionProgress)
+                hint-fn $ Fn schema/PartitionKey PartitionProgress $ -> (MapEntryDecision schema/PartitionKey PartitionProgress)
                 MapEntryDecision :keep key $ release-partition-send item
           :examples $ []
           :schema $ quote $ Fn Number (-> Unit)
@@ -5340,7 +5340,7 @@
                   if-let
                     raw-session $ get (:sessions db) sid
                     let
-                        session-data $ assert-type raw-session app.schema/Session
+                        session-data $ assert-type raw-session schema/Session
                         shared $ get-shared-twig reel revision
                         old-store-option $ get @*client-caches sid
                         new-store $ hooks/session-store db session-data shared
@@ -5431,14 +5431,14 @@
                       (:none) &unit
                       (:some raw-session)
                         let
-                            desired $ hooks/session-partitions db $ assert-type raw-session app.schema/Session
+                            desired $ hooks/session-partitions db $ assert-type raw-session schema/Session
                           each desired $ fn (key)
-                            hint-fn $ Fn app.schema/PartitionKey $ -> Unit
+                            hint-fn $ Fn schema/PartitionKey $ -> Unit
                             ensure-partition! db key
                           each
                             connection-actions @*partitions (progress-of sid) desired
                             fn (action)
-                              hint-fn $ Fn (cumulo-reel.partition/PartitionAction app.schema/PartitionKey app.schema/PartitionView) (-> Unit)
+                              hint-fn $ Fn (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit)
                               send! sid action
                   , &unit
             collect-partitions!
@@ -5492,7 +5492,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                   updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
                 assert= (hooks/updater base connect-op 1 |op-1 10) (:db updated)
                 assert=
@@ -5507,7 +5507,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                   router $ schema/Router :name :profile :target None
                   expected $ hooks/updater (hooks/updater base connect-op 1 |op-1 10) (schema/DomainOp :router/change router) 1 |op-2 20
                   records $ []
@@ -5527,10 +5527,10 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                   updated $ reel-reducer reel hooks/updater connect-op 1 |op-1 10 true
                   control-updater $ fn (db op sid op-id op-time)
-                    hint-fn $ Fn app.schema/Db app.schema/Op Number String Number $ -> app.schema/Db
+                    hint-fn $ Fn schema/Db Op Number String Number $ -> schema/Db
                     raise |Updater-must-not-run
                   reset $ reel-reducer updated control-updater (schema/Op :reel/reset) 1 |reset 20 true
                   merged $ reel-reducer updated control-updater (schema/Op :reel/merge) 1 |merge 30 true
@@ -5549,7 +5549,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                   records $ [] $ [] (:: :effect/persist) 1 |op-1 10
                 assert= true $ try
                   do
@@ -5564,7 +5564,7 @@
                     %{} cumulo-reel.core/ReelState (:db base) (:base base)
                       :records $ []
                       :merged? false
-                    cumulo-reel.core/ReelState app.schema/Db
+                    cumulo-reel.core/ReelState schema/Db
                   records $ [] $ [] (:: :session/connect) |not-a-number |op-1 10
                 assert= true $ try
                   do
@@ -5608,7 +5608,7 @@
                 router-view $ RouterView :name router-name :target (:target router-data) :data router-view-data :router None
                 messages-view $ .filter-map-kv (:messages session-data)
                   fn (id message)
-                    hint-fn $ Fn String app.schema/Message $ -> (MapEntryDecision String app.schema/MessageView)
+                    hint-fn $ Fn String app.schema/Message $ -> (MapEntryDecision String MessageView)
                     MapEntryDecision :keep id $ app.schema/MessageView :id (:id message) :text $ :text message
                 session-view $ SessionView :user-id user-id-option :id
                   Some $ :id session-data
@@ -5642,7 +5642,7 @@
                   decoded $ parse-cirru-edn (format-cirru-edn store) mapper
                   session-view $ :session store
                   raw-message $ .unwrap $ get (:messages session-view) |m1
-                  typed-message $ assert-type raw-message app.schema/MessageView
+                  typed-message $ assert-type raw-message MessageView
                 assert= true $ &struct:matches? store Store
                 assert= (Result :ok store) (app.schema/decode-store decoded)
                 assert= true $ &struct:matches? typed-message MessageView
@@ -5797,7 +5797,7 @@
             if-let
               raw-session $ get (:sessions db) sid
               let
-                  session-data $ assert-type raw-session app.schema/Session
+                  session-data $ assert-type raw-session schema/Session
                 struct-with db $ :sessions $ assoc (:sessions db) sid
                   struct-with session-data $ :messages $ dissoc (:messages session-data) (:id op-data)
               , db
@@ -5814,10 +5814,10 @@
                   , :users ({}) :boards ({}) :settings $ {}
                 result $ remove-message db (app.schema/RemoveMessage :id |m1) sid |op 0
                 raw-session $ .unwrap $ get (:sessions result) sid
-                next-session $ assert-type raw-session app.schema/Session
+                next-session $ assert-type raw-session schema/Session
                 next-message $ assert-type
                   .unwrap $ get (:messages next-session) |m2
-                  , app.schema/Message
+                  , schema/Message
               assert= None $ get (:messages next-session) |m1
               assert= |keep $ :text next-message
             :tags $ #{} :protocol :server
@@ -6014,7 +6014,7 @@
           :code $ quote $ defn entities-by-id (entities)
             .foldl entities ({})
               fn (acc entity)
-                hint-fn $ Fn (Map String app.workload.diff-patch/Entity) app.workload.diff-patch/Entity $ -> (Map String app.workload.diff-patch/Entity)
+                hint-fn $ Fn (Map String Entity) Entity $ -> (Map String Entity)
                 assoc acc (:id entity) entity
           :examples $ []
           :schema $ quote $ Fn (List Entity)
