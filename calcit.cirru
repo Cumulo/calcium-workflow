@@ -28,22 +28,22 @@
             workload-entry!
             println "|App started!"
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :io :js-ffi :state)
         'on-states-change! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-states-change! (states prev) (render-app!)
           :examples $ []
-          :schema $ quote $ Fn Current Previous (-> Unit) (:generics Current Previous)
+          :schema $ quote $ Fn Current Previous (-> Unit) (:generics Current Previous) (:features :io :state)
         'on-store-change! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-store-change! (store prev) (render-app!)
           :examples $ []
-          :schema $ quote $ Fn app.sync.client/ClientState app.sync.client/ClientState (-> Unit)
+          :schema $ quote $ Fn app.sync.client/ClientState app.sync.client/ClientState (-> Unit) (:features :io :state)
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! ()
             if (non-nil? client-errors) (hud! |error client-errors)
               do (hud! |inactive nil) (remove-watch! *store :changes) (remove-watch! *states :changes) (clear-cache!) (render-app!) (add-watch! *store :changes on-store-change!) (add-watch! *states :changes on-states-change!) (install-activity-lifecycle!) (ws-set-on-data! on-server-data) (println "|Code updated.")
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'render-app! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn render-app! ()
             with-memo-frame $ fn () $ let
@@ -58,7 +58,7 @@
                   (:ready store) (comp-container states store @*partitions @*resources)
               render! mount-target app dispatch-from-respo!
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'workload-entry! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn workload-entry! () (workload/main!) (kanban-workload/main!)
           :examples $ []
@@ -471,7 +471,7 @@
                   , true
               _ false
           :examples $ []
-          :schema $ quote $ Fn schema/Op (-> Bool)
+          :schema $ quote $ Fn schema/Op (-> Bool) (:features :state)
         'on-partition-drop! $ %{} 'CodeEntry
           :doc "|Dropping the private user partition (logout, revoked access) clears cached private cold data."
           :code $ quote $ defn on-partition-drop! (key)
@@ -480,7 +480,7 @@
               _ &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/PartitionKey (-> Unit)
+          :schema $ quote $ Fn schema/PartitionKey (-> Unit) (:features :state)
         'receive-reply! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn receive-reply! (request-id reply)
             swap! *resources $ fn (resources)
@@ -488,7 +488,7 @@
               resource/receive-reply resources request-id reply
             , &unit
           :examples $ []
-          :schema $ quote $ Fn String schema/QueryReply (-> Unit)
+          :schema $ quote $ Fn String schema/QueryReply (-> Unit) (:features :state)
         'refresh-stale-details! $ %{} 'CodeEntry
           :doc "|After a board update, refetch only open card details whose hot detail-rev moved forward."
           :code $ quote $ defn refresh-stale-details! (key partitions)
@@ -511,12 +511,13 @@
           :schema $ quote $ Fn schema/PartitionKey
             Map schema/PartitionKey $ cumulo-reel.partition/PartitionSlot schema/PartitionView
             -> Unit
+            :features :state
         'send-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-query! (request)
             reset! *resources $ :resources request
             ws-send! $ schema/ClientMessage :query (:request-id request) (:query request)
           :examples $ []
-          :schema $ quote $ Fn resource/QueryRequest (-> Unit)
+          :schema $ quote $ Fn resource/QueryRequest (-> Unit) (:features :state)
       :ns $ %{} 'NsEntry
         :doc "|Kanban browser-side business state: the cold resource cache and client-local operations."
         :code $ quote $ ns app.feature.kanban.client
@@ -1423,11 +1424,11 @@
               _ &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/Db schema/Db schema/DomainOp Number String Number (-> Unit)
+          :schema $ quote $ Fn schema/Db schema/Db schema/DomainOp Number String Number (-> Unit) (:features :state)
         'answer-query $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn answer-query (db sid query) (query-reply db @*cold-store sid query)
           :examples $ []
-          :schema $ quote $ Fn schema/Db Number schema/Query (-> schema/QueryReply)
+          :schema $ quote $ Fn schema/Db Number schema/Query (-> schema/QueryReply) (:features :state)
         'cold-history-limit $ %{} 'CodeEntry
           :doc "|Per-user bound of the in-process cold history log used by this template."
           :code $ quote $ def cold-history-limit 2000
@@ -1444,12 +1445,12 @@
             check-write-file! cold-storage-file $ format-cirru-edn @*cold-store
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'project $ %{} 'CodeEntry
           :doc "|Project one partition with the current cold store (only history-rev is read from it)."
           :code $ quote $ defn project (db key) (project-partition db @*cold-store key)
           :examples $ []
-          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> schema/PartitionView)
+          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> schema/PartitionView) (:features :state)
         'query-reply $ %{} 'CodeEntry
           :doc "|Answer one cold read using the session identity; history is always the caller's own."
           :code $ quote $ defn query-reply (db cold sid query)
@@ -2241,6 +2242,7 @@
           :schema $ quote $ Fn app.schema/PartitionKey
             Map app.schema/PartitionKey $ cumulo-reel.partition/PartitionSlot app.schema/PartitionView
             -> Unit
+            :features :state
         'class-mapper $ %{} 'CodeEntry
           :doc "|Feature structs and enums that ws-edn must restore by name inside partition views and query replies."
           :code $ quote $ def class-mapper
@@ -2251,16 +2253,16 @@
           :doc "|Handle feature client-local operations; return false to send the operation to the server."
           :code $ quote $ defn dispatch-client! (op) (kanban-client/dispatch-client! op)
           :examples $ []
-          :schema $ quote $ Fn app.schema/Op (-> Bool)
+          :schema $ quote $ Fn app.schema/Op (-> Bool) (:features :state)
         'on-partition-drop! $ %{} 'CodeEntry
           :doc "|Called when the server revokes a partition; clear private caches tied to it."
           :code $ quote $ defn on-partition-drop! (key) (kanban-client/on-partition-drop! key)
           :examples $ []
-          :schema $ quote $ Fn app.schema/PartitionKey (-> Unit)
+          :schema $ quote $ Fn app.schema/PartitionKey (-> Unit) (:features :state)
         'on-query-reply! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-query-reply! (request-id reply) (kanban-client/receive-reply! request-id reply)
           :examples $ []
-          :schema $ quote $ Fn String app.schema/QueryReply (-> Unit)
+          :schema $ quote $ Fn String app.schema/QueryReply (-> Unit) (:features :state)
       :ns $ %{} 'NsEntry
         :doc "|Wiring layer for the browser entry: every call from app.sync.client into business code goes through these functions. Replace their bodies when swapping app.feature.*."
         :code $ quote $ ns app.hooks.client
@@ -2393,22 +2395,22 @@
           :doc "|Side effects after a committed operation, such as appending cold data, before partitions are published."
           :code $ quote $ defn after-domain-op! (db-before db-after op sid op-id op-time) (kanban-server/after-domain-op! db-before db-after op sid op-id op-time)
           :examples $ []
-          :schema $ quote $ Fn schema/Db schema/Db schema/DomainOp Number String Number (-> Unit)
+          :schema $ quote $ Fn schema/Db schema/Db schema/DomainOp Number String Number (-> Unit) (:features :state)
         'answer-query $ %{} 'CodeEntry
           :doc "|Answer one cold read. Identity must come from the session, never from query parameters."
           :code $ quote $ defn answer-query (db sid query) (kanban-server/answer-query db sid query)
           :examples $ []
-          :schema $ quote $ Fn schema/Db Number schema/Query (-> schema/QueryReply)
+          :schema $ quote $ Fn schema/Db Number schema/Query (-> schema/QueryReply) (:features :state)
         'persist! $ %{} 'CodeEntry
           :doc "|Persist feature-owned state next to the hot database snapshot."
           :code $ quote $ defn persist! () (kanban-server/persist-cold!)
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'project-partition $ %{} 'CodeEntry
           :doc "|Project one partition. A partition is a visibility boundary: include only data every subscriber may see."
           :code $ quote $ defn project-partition (db key) (kanban-server/project db key)
           :examples $ []
-          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> schema/PartitionView)
+          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> schema/PartitionView) (:features :state)
         'session-partitions $ %{} 'CodeEntry
           :doc "|Server-side authorization: the partitions this session may subscribe to."
           :code $ quote $ defn session-partitions (db session) (kanban-twig/session-partitions db session)
@@ -3713,7 +3715,7 @@
             on-control-c on-exit!
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'reload! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn reload! () (println "|Code updated..")
             if (not config/dev?) (raise "|reloading only happens in dev mode")
@@ -3724,7 +3726,7 @@
             render-loop!
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
       :ns $ %{} 'NsEntry
         :doc "|Server entry (wiring): main!/reload!. Runtime lives in app.sync.server; business hooks in app.hooks.server."
         :code $ quote $ ns app.server
@@ -3829,7 +3831,7 @@
               _ &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/ServerMessage (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn schema/ServerMessage (-> Unit) (:features :js-ffi :state)
         'apply-server-patch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn apply-server-patch! (base-revision revision changes)
             match @*store
@@ -3851,7 +3853,7 @@
               (:loading) (request-snapshot!)
               (:offline) (request-snapshot!)
           :examples $ []
-          :schema $ quote $ Fn Number Number (List recollect.schema/change-op) (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn Number Number (List recollect.schema/change-op) (-> Unit) (:features :js-ffi :state)
         'cleanup-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Run and clear the current application activity cleanup capability."
           :code $ quote $ defn cleanup-activity-lifecycle! ()
@@ -3861,7 +3863,7 @@
             reset! *activity-cleanup None
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'connect! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connect! ()
             let
@@ -3880,7 +3882,7 @@
                     , hooks/class-mapper
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'connection-url $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn connection-url ()
             let
@@ -3916,7 +3918,7 @@
               _ $ if (hooks/dispatch-client! op) &unit $ ws-send! (schema/ClientMessage :dispatch op)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Op (-> Unit)
+          :schema $ quote $ Fn Op (-> Unit) (:features :io :state)
         'dispatch-from-respo! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch-from-respo! (raw-op)
             match (schema/decode-operation raw-op)
@@ -3925,7 +3927,7 @@
                 raise $ str |Invalid-UI-operation: error
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Input (-> Unit) (:generics Input)
+          :schema $ quote $ Fn Input (-> Unit) (:generics Input) (:features :io :state)
         'install-activity-lifecycle! $ %{} 'CodeEntry
           :doc "|Install one cleanup-backed application activity watcher without duplicating ws-edn reconnect ownership."
           :code $ quote $ defn install-activity-lifecycle! () (cleanup-activity-lifecycle!)
@@ -3945,7 +3947,7 @@
               reset! *activity-cleanup $ Some cleanup
               , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn (-> Unit) (:features :js-ffi :state)
         'mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
@@ -3971,7 +3973,7 @@
                   (:query/reply request-id reply) (hooks/on-query-reply! request-id reply)
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
-          :schema $ quote $ Fn Dynamic (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn Dynamic (-> Unit) (:features :io :js-ffi :state)
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
@@ -3984,14 +3986,14 @@
           :code $ quote $ defn request-snapshot! ()
             ws-send! $ schema/ClientMessage :sync/resume @*sync-revision
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'send-activity! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn send-activity! ()
             if (page-visible?)
               ws-send! $ schema/ClientMessage :sync/active @*sync-revision
               ws-send! $ schema/ClientMessage :sync/idle @*sync-revision
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'simulate-login! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn simulate-login! ()
             match (stored-login)
@@ -4002,7 +4004,7 @@
                     .unwrap $ nth pair 1
               (:none) (println "|Found no storage.")
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'stored-login $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn stored-login ()
             let
@@ -4312,7 +4314,7 @@
                 (:none) progress
             request-sync!
           :examples $ []
-          :schema $ quote $ Fn Number schema/PartitionKey Number Number (-> Unit)
+          :schema $ quote $ Fn Number schema/PartitionKey Number Number (-> Unit) (:features :io :state)
         'ack-partition-progress-for! $ %{} 'CodeEntry
           :doc "|Apply the acknowledgement a client sends after applying the given partition state's revision; used by ack-partition! and regression tests."
           :code $ quote $ defn ack-partition-progress-for! (sid state)
@@ -4324,7 +4326,7 @@
                     ack-partition-progress current (:epoch state) (:revision state)
                 (:none) progress
           :examples $ []
-          :schema $ quote $ Fn Number (PartitionState schema/PartitionKey schema/PartitionView) (-> Unit)
+          :schema $ quote $ Fn Number (PartitionState schema/PartitionKey schema/PartitionView) (-> Unit) (:features :state)
         'acknowledge-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn acknowledge-client! (sid revision)
             let
@@ -4347,7 +4349,7 @@
                   request-sync!
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number Number (-> Unit)
+          :schema $ quote $ Fn Number Number (-> Unit) (:features :io :state)
         'assoc-client-state-field $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn assoc-client-state-field (states sid field value)
             assoc states sid $ assoc
@@ -4405,7 +4407,7 @@
                   if (includes? live key) (MapEntryDecision :keep key state) (MapEntryDecision :drop)
               , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'count-partition-event! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn count-partition-event! (kind)
             swap! *partition-metrics $ fn (m)
@@ -4430,7 +4432,7 @@
                 _ m
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Tag (-> Unit)
+          :schema $ quote $ Fn Tag (-> Unit) (:features :state)
         'dispatch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn dispatch! (op sid)
             let
@@ -4475,7 +4477,7 @@
                 _ $ do (eprintln "|Ignoring client-local operation on server:" op) &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Op Number (-> Unit)
+          :schema $ quote $ Fn Op Number (-> Unit) (:features :io :state)
           :tests $ [] $ %{} 'TestEntry (:name |reset-and-merge-preserve-reel-boundaries)
             :code $ quote $ let
                 saved-reel @*reel
@@ -4517,7 +4519,7 @@
               request-sync!
               , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/DomainOp Number String Number (-> Unit)
+          :schema $ quote $ Fn schema/DomainOp Number String Number (-> Unit) (:features :io :state)
         'empty-diff-stats $ %{} 'CodeEntry
           :doc "|Zero work statistics used when an existing recovery state already requires a snapshot and no diff runs."
           :code $ quote $ def empty-diff-stats
@@ -4536,12 +4538,12 @@
               swap! *partitions assoc key $ new-partition key (next-partition-epoch!) (hooks/project-partition db key)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> Unit)
+          :schema $ quote $ Fn schema/Db schema/PartitionKey (-> Unit) (:features :state)
         'get-backup-path! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-backup-path! ()
             join-path calcit-dirname |backups $ str (unix-time-ms) |-snapshot.cirru
           :examples $ []
-          :schema $ quote $ Fn (-> String)
+          :schema $ quote $ Fn (-> String) (:features :io)
         'get-shared-twig $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn get-shared-twig (reel revision)
             let
@@ -4554,7 +4556,7 @@
                   reset! *shared-twig-cache $ SharedTwigCache :revision revision :value $ Some value
                   , value
           :examples $ []
-          :schema $ quote $ Fn (cumulo-reel.core/ReelState schema/Db) Number (-> schema/SharedTwig)
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState schema/Db) Number (-> schema/SharedTwig) (:features :state)
         'handle-client-message! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-client-message! (message sid)
             match message
@@ -4573,7 +4575,7 @@
               (:part/ack key epoch revision) (ack-partition! sid key epoch revision)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/ClientMessage Number (-> Unit)
+          :schema $ quote $ Fn schema/ClientMessage Number (-> Unit) (:features :io :state)
         'handle-partition-send! $ %{} 'CodeEntry
           :doc "|Only an accepted send records a pending revision; backpressure retries later from the unchanged acknowledged baseline."
           :code $ quote $ defn handle-partition-send! (sid state outcome)
@@ -4590,14 +4592,14 @@
                   , &unit
               (:closed) &unit
           :examples $ []
-          :schema $ quote $ Fn Number (PartitionState schema/PartitionKey schema/PartitionView) wss.core/WssSendOutcome (-> Unit)
+          :schema $ quote $ Fn Number (PartitionState schema/PartitionKey schema/PartitionView) wss.core/WssSendOutcome (-> Unit) (:features :io :state)
         'handle-query! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-query! (sid request-id query) (count-partition-event! :query)
             wss-send! sid $ format-cirru-edn $ schema/ServerMessage :query/reply request-id
               hooks/answer-query (reel-db @*reel) sid query
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number String schema/Query (-> Unit)
+          :schema $ quote $ Fn Number String schema/Query (-> Unit) (:features :state)
         'handle-sync-send! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn handle-sync-send! (sid revision new-store outcome)
             swap! *client-states update sid $ fn (current) (next-sync-send-state current revision new-store outcome)
@@ -4608,7 +4610,7 @@
               (:too-large) (println "|WebSocket sync payload is too large for client:" sid)
               (:closed) &unit
           :examples $ []
-          :schema $ quote $ Fn Number Number schema/Store wss.core/WssSendOutcome (-> Unit)
+          :schema $ quote $ Fn Number Number schema/Store wss.core/WssSendOutcome (-> Unit) (:features :io :state)
         'heartbeat-timeout $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def heartbeat-timeout 12000
           :examples $ []
@@ -4629,13 +4631,13 @@
                     , :status
                   swap! *dirty-clients include sid
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'mark-all-partitions-dirty! $ %{} 'CodeEntry
           :doc "|Used when the whole database may have changed (reel reset/merge, hot reload)."
           :code $ quote $ defn mark-all-partitions-dirty! ()
             mark-partitions-dirty! $ keys @*partitions
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
         'mark-client-active! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-active! (sid client-revision force-snapshot?)
             let
@@ -4659,7 +4661,7 @@
               when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (release-partition-sends! sid) (request-sync!)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number Number Bool (-> Unit)
+          :schema $ quote $ Fn Number Number Bool (-> Unit) (:features :io :state)
         'mark-client-idle! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-client-idle! (sid client-revision)
             when
@@ -4672,7 +4674,7 @@
               swap! *dirty-clients remove-dirty-client sid
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number Number (-> Unit)
+          :schema $ quote $ Fn Number Number (-> Unit) (:features :state)
         'mark-clients-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-clients-dirty! (revision)
             each (keys @*client-states)
@@ -4684,7 +4686,7 @@
                     = :active $ .unwrap $ get state :status
                     swap! *dirty-clients include sid
           :examples $ []
-          :schema $ quote $ Fn Number (-> Unit)
+          :schema $ quote $ Fn Number (-> Unit) (:features :state)
         'mark-partitions-dirty! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn mark-partitions-dirty! (partition-keys)
             swap! *dirty-partitions $ fn (dirty)
@@ -4693,11 +4695,11 @@
               union dirty partition-keys
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (Set schema/PartitionKey) (-> Unit)
+          :schema $ quote $ Fn (Set schema/PartitionKey) (-> Unit) (:features :state)
         'next-partition-epoch! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-partition-epoch! () (swap! *partition-epoch inc) @*partition-epoch
           :examples $ []
-          :schema $ quote $ Fn (-> Number)
+          :schema $ quote $ Fn (-> Number) (:features :state)
         'next-sync-ack-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn next-sync-ack-state (current revision)
             dissoc
@@ -4847,11 +4849,11 @@
         'now-ms $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn now-ms () (unix-time-ms)
           :examples $ []
-          :schema $ quote $ Fn (-> Number)
+          :schema $ quote $ Fn (-> Number) (:features :io)
         'on-exit! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-exit! () (persist-db!) (; println "|exit code is...") (quit! 0)
           :examples $ []
-          :schema $ quote $ Fn (-> Dynamic)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'partition-history-limit $ %{} 'CodeEntry
           :doc "|Retained deltas per partition; slower subscribers fall back to one bounded partition snapshot."
           :code $ quote $ def partition-history-limit 32
@@ -4881,7 +4883,7 @@
                     encode!
                 (:none) (encode!)
           :examples $ []
-          :schema $ quote $ Fn (PartitionState schema/PartitionKey schema/PartitionView) (List cumulo-reel.partition/PartitionDelta) (-> String)
+          :schema $ quote $ Fn (PartitionState schema/PartitionKey schema/PartitionView) (List cumulo-reel.partition/PartitionDelta) (-> String) (:features :state)
         'patch-operation-limit $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def patch-operation-limit 64
           :examples $ []
@@ -4897,7 +4899,7 @@
               check-write-file! backup-path file-content
               hooks/persist!
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'progress-of $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn progress-of (sid)
             match (get @*partition-progress sid)
@@ -4907,11 +4909,12 @@
           :examples $ []
           :schema $ quote $ Fn Number
             -> $ Map schema/PartitionKey PartitionProgress
+            :features :state
         'read-partition-metrics $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-partition-metrics ()
             struct-with @*partition-metrics $ :live-partitions $ .len @*partitions
           :examples $ []
-          :schema $ quote $ Fn (-> PartitionMetrics)
+          :schema $ quote $ Fn (-> PartitionMetrics) (:features :state)
         'read-persisted-database $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn read-persisted-database (content)
             try
@@ -4943,7 +4946,7 @@
                       , 'Bool
               struct-with @*sync-metrics (:pending-clients pending-clients) (:slow-clients slow-clients)
           :examples $ []
-          :schema $ quote $ Fn (-> SyncMetrics)
+          :schema $ quote $ Fn (-> SyncMetrics) (:features :state)
           :tests $ [] $ %{} 'TestEntry
             :name |preserves-counters-and-derives-connection-gauges
             :code $ quote $ let
@@ -4973,7 +4976,7 @@
               struct-with metrics $ :resync-count $ inc (:resync-count metrics)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :state)
           :tests $ [] $ %{} 'TestEntry
             :name |increments-resync-without-changing-other-counters
             :code $ quote $ let
@@ -4994,7 +4997,7 @@
               next-sync-metrics metrics message-kind revision diff-latency payload stats budget-fallback?
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Tag Number Number String DiffStats Bool (-> Unit)
+          :schema $ quote $ Fn Tag Number Number String DiffStats Bool (-> Unit) (:features :state)
         'reel-db $ %{} 'CodeEntry
           :doc "|Named adapter for the legacy generic ReelState database slot."
           :code $ quote $ defn reel-db (reel) (:db reel)
@@ -5109,7 +5112,7 @@
                         (:reset _stats) (count-partition-event! :reset)
               , &unit
           :examples $ []
-          :schema $ quote $ Fn schema/Db (-> Unit)
+          :schema $ quote $ Fn schema/Db (-> Unit) (:features :state)
         'release-partition-sends! $ %{} 'CodeEntry
           :doc "|When a connection resumes after idling, forget sends whose ACK may have been lost; clients reject mismatched bases and resync."
           :code $ quote $ defn release-partition-sends! (sid)
@@ -5118,7 +5121,7 @@
                 hint-fn $ Fn schema/PartitionKey PartitionProgress $ -> (MapEntryDecision schema/PartitionKey PartitionProgress)
                 MapEntryDecision :keep key $ release-partition-send item
           :examples $ []
-          :schema $ quote $ Fn Number (-> Unit)
+          :schema $ quote $ Fn Number (-> Unit) (:features :state)
         'remove-client-cache $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn remove-client-cache (caches sid) (dissoc caches sid)
           :examples $ []
@@ -5140,7 +5143,7 @@
             sync-clients! @*reader-reel
             sync-partitions! $ reel-db @*reader-reel
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'request-sync! $ %{} 'CodeEntry
           :doc "|Request one bounded, coalesced server sync callback."
           :code $ quote $ defn request-sync! ()
@@ -5148,7 +5151,7 @@
               set-timeout! sync-coalesce-delay $ fn () (reset! *sync-scheduled? false) (render-loop!)
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'request-sync-retry! $ %{} 'CodeEntry
           :doc "|Request one slower retry without blocking new fast sync requests."
           :code $ quote $ defn request-sync-retry! ()
@@ -5160,7 +5163,7 @@
                 , &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'resolve-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn resolve-port ()
             hint-fn $ Fn $ -> Number
@@ -5171,14 +5174,14 @@
                   (:err _) (site-port)
               (:none) (site-port)
           :examples $ []
-          :schema $ quote $ Fn (-> Number)
+          :schema $ quote $ Fn (-> Number) (:features :io)
         'resync-partition! $ %{} 'CodeEntry
           :doc "|Forget progress for one partition so the next flush sends a fresh snapshot."
           :code $ quote $ defn resync-partition! (sid key)
             update-progress! sid $ fn (progress) (dissoc progress key)
             request-sync!
           :examples $ []
-          :schema $ quote $ Fn Number schema/PartitionKey (-> Unit)
+          :schema $ quote $ Fn Number schema/PartitionKey (-> Unit) (:features :io :state)
         'run-server! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn run-server! (port)
             wss-serve!
@@ -5212,7 +5215,7 @@
                 , &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number (-> Unit)
+          :schema $ quote $ Fn Number (-> Unit) (:features :io :state)
         'select-sync-diff $ %{} 'CodeEntry
           :doc "|Convert one atomic Recollect outcome into patch, snapshot, or idle policy while retaining the existing top-level patch-operation limit."
           :code $ quote $ defn select-sync-diff (outcome)
@@ -5285,7 +5288,7 @@
                 do (count-partition-event! :delta)
                   handle-partition-send! sid state $ wss-send! sid $ partition-patch-payload state deltas
           :examples $ []
-          :schema $ quote $ Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit)
+          :schema $ quote $ Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit) (:features :io :state)
         'site-port $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn site-port ()
             decode-map-as
@@ -5326,7 +5329,7 @@
                         .unwrap-or (get state :acked-rev) 0
                         , 'Number
           :examples $ []
-          :schema $ quote $ Fn (-> Unit)
+          :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'sync-client! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sync-client! (sid reel revision) (swap! *dirty-clients remove-dirty-client sid)
             let
@@ -5371,7 +5374,7 @@
                     do (eprintln |Missing-typed-session-during-sync: sid) &unit
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number (cumulo-reel.core/ReelState schema/Db) Number (-> Unit)
+          :schema $ quote $ Fn Number (cumulo-reel.core/ReelState schema/Db) Number (-> Unit) (:features :io :state)
         'sync-clients! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn sync-clients! (reel)
             when
@@ -5387,7 +5390,7 @@
               finish-twig-frame!
             , &unit
           :examples $ []
-          :schema $ quote $ Fn (cumulo-reel.core/ReelState schema/Db) (-> Unit)
+          :schema $ quote $ Fn (cumulo-reel.core/ReelState schema/Db) (-> Unit) (:features :io :state)
         'sync-coalesce-delay $ %{} 'CodeEntry
           :doc "|Maximum coalescing delay in milliseconds for ordinary state updates."
           :code $ quote $ def sync-coalesce-delay 16
@@ -5415,7 +5418,7 @@
           :doc "|Partition synchronization over the WebSocket transport."
           :code $ quote $ defn sync-partitions! (db) (sync-partitions-with! db send-partition-action!)
           :examples $ []
-          :schema $ quote $ Fn schema/Db (-> Unit)
+          :schema $ quote $ Fn schema/Db (-> Unit) (:features :io :state)
         'sync-partitions-with! $ %{} 'CodeEntry
           :doc "|Advance dirty partitions once, then plan each active connection from its authorized partition set through an injectable transport; diff count is independent of subscriber count."
           :code $ quote $ defn sync-partitions-with! (db send!) (refresh-partitions! db)
@@ -5446,6 +5449,7 @@
           :schema $ quote $ Fn schema/Db
             Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit)
             -> Unit
+            :features :state
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200
@@ -5461,7 +5465,7 @@
                 mark-client-active! sid client-revision true
             , &unit
           :examples $ []
-          :schema $ quote $ Fn Number Number (-> Unit)
+          :schema $ quote $ Fn Number Number (-> Unit) (:features :io :state)
         'update-progress! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn update-progress! (sid f)
             swap! *partition-progress assoc sid $ f $ progress-of sid
@@ -5471,6 +5475,7 @@
             Fn (Map schema/PartitionKey PartitionProgress)
               -> $ Map schema/PartitionKey PartitionProgress
             -> Unit
+            :features :state
         'updater-from-reel $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn updater-from-reel (db op sid op-id op-time)
             let
