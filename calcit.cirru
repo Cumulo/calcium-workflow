@@ -1299,8 +1299,9 @@
               (:err detail)
                 Result :err $ DatabaseDecodeError :invalid |cold detail
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ColdStore DatabaseDecodeError
+            :generics Input
         'decode-kanban-op $ %{} 'CodeEntry
           :doc "|Validate one untrusted Kanban operation payload before it reaches the reducer."
           :code $ quote $ defn decode-kanban-op (data)
@@ -1365,8 +1366,9 @@
                   _ $ invalid-message $ str "|Unknown Kanban operation: " op
                 invalid-message $ str "|Expected-enum-kanban-op: " op
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result KanbanOp app.schema/MessageDecodeError
+            :generics Input
           :tests $ [] $ %{} 'TestEntry (:name |accepts-typed-and-rejects-bad-payloads)
             :code $ quote $ do
               assert=
@@ -3157,8 +3159,9 @@
           :code $ quote $ defn decode-partition-view (value)
             try-decode-map-as (struct-tree-input value) 'app.schema/PartitionView
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result PartitionView String
+            :generics Input
           :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
             :code $ quote $ let
                 mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board app.feature.kanban.schema/Board) (:Column app.feature.kanban.schema/Column) (:Card app.feature.kanban.schema/Card)
@@ -3559,8 +3562,9 @@
               (:err detail)
                 invalid-message $ str "|Invalid server message: " detail
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ServerMessage MessageDecodeError
+            :generics Input
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
