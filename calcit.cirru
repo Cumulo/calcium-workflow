@@ -4371,9 +4371,10 @@
               , field value
           :examples $ []
           :schema $ quote $ Fn
-            Map Number $ Map Tag Dynamic
-            , Number Tag Dynamic
-              -> $ Map Number $ Map Tag Dynamic
+            Map Number $ Map Tag V
+            , Number Tag V
+              -> $ Map Number $ Map Tag V
+              :generics V
           :tests $ []
             %{} 'TestEntry
               :name |updates-one-client-without-changing-other-fields
@@ -4382,7 +4383,9 @@
                     :opaque $ [] 1 |text
                     :dirty-rev 3
                   other $ {} $ :status :idle
-                  states $ {} (1 state) (2 other)
+                  states $ decode-map-as
+                    {} (1 state) (2 other)
+                    Map Number $ Map Tag Dynamic
                 assert=
                   {}
                     1 $ {} (:status :active)
