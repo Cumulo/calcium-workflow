@@ -1299,8 +1299,9 @@
               (:err detail)
                 Result :err $ DatabaseDecodeError :invalid |cold detail
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ColdStore DatabaseDecodeError
+            :generics Input
         'decode-kanban-op $ %{} 'CodeEntry
           :doc "|Validate one untrusted Kanban operation payload before it reaches the reducer."
           :code $ quote $ defn decode-kanban-op (data)
@@ -1365,8 +1366,9 @@
                   _ $ invalid-message $ str "|Unknown Kanban operation: " op
                 invalid-message $ str "|Expected-enum-kanban-op: " op
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result KanbanOp app.schema/MessageDecodeError
+            :generics Input
           :tests $ [] $ %{} 'TestEntry (:name |accepts-typed-and-rejects-bad-payloads)
             :code $ quote $ do
               assert=
@@ -2653,8 +2655,9 @@
                     (:err error) (Result :err error)
                 invalid-message $ str "|Expected-enum-message: " message
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ClientMessage MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |decodes-sync-control)
               :code $ quote $ assert=
@@ -2875,8 +2878,9 @@
                     _ $ invalid-message |Expected-domain-operation
               invalid-message |Expected-domain-operation
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result DomainOp MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
               :code $ quote $ assert=
@@ -3046,8 +3050,9 @@
                   _ $ invalid-message $ str "|Unknown application operation: " op
                 invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result Op MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
               :code $ quote $ do
@@ -3146,15 +3151,17 @@
                   _ $ invalid-message $ str "|Unknown partition: " key
                 invalid-message $ str "|Expected-enum-partition: " key
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result PartitionKey MessageDecodeError
+            :generics Input
         'decode-partition-view $ %{} 'CodeEntry
           :doc "|Validate a patched partition view against the nominal PartitionView; passed to cumulo-reel.partition/apply-partition-deltas."
           :code $ quote $ defn decode-partition-view (value)
             try-decode-map-as (struct-tree-input value) 'app.schema/PartitionView
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result PartitionView String
+            :generics Input
           :tests $ [] $ %{} 'TestEntry (:name |nominal-enum-payloads-decode)
             :code $ quote $ let
                 mapper $ {} (:Option Option) (:PartitionView PartitionView) (:Board app.feature.kanban.schema/Board) (:Column app.feature.kanban.schema/Column) (:Card app.feature.kanban.schema/Card)
@@ -3210,8 +3217,9 @@
                   _ $ invalid-message $ str "|Unknown query: " query
                 invalid-message $ str "|Expected-enum-query: " query
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result Query MessageDecodeError
+            :generics Input
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
@@ -3276,8 +3284,9 @@
                   _ $ invalid-message $ str "|Unknown server message: " message
                 invalid-message $ str "|Unknown server message: " message
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ServerMessage MessageDecodeError
+            :generics Input
             :features :js-ffi
           :tests $ []
             %{} 'TestEntry (:name |decodes-pong)
@@ -3553,8 +3562,9 @@
               (:err detail)
                 invalid-message $ str "|Invalid server message: " detail
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ServerMessage MessageDecodeError
+            :generics Input
         'decode-user $ %{} 'CodeEntry (:doc "|Decode and validate one stored user.")
           :code $ quote $ defn decode-user (data path)
             let
@@ -3975,7 +3985,7 @@
                   (:query/reply request-id reply) (hooks/on-query-reply! request-id reply)
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
-          :schema $ quote $ Fn Dynamic (-> Unit) (:features :io :js-ffi :state)
+          :schema $ quote $ Fn Input (-> Unit) (:generics Input) (:features :io :js-ffi :state)
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
@@ -4361,9 +4371,10 @@
               , field value
           :examples $ []
           :schema $ quote $ Fn
-            Map Number $ Map Tag Dynamic
-            , Number Tag Dynamic
-              -> $ Map Number $ Map Tag Dynamic
+            Map Number $ Map Tag V
+            , Number Tag V
+              -> $ Map Number $ Map Tag V
+              :generics V
           :tests $ []
             %{} 'TestEntry
               :name |updates-one-client-without-changing-other-fields
@@ -4372,7 +4383,9 @@
                     :opaque $ [] 1 |text
                     :dirty-rev 3
                   other $ {} $ :status :idle
-                  states $ {} (1 state) (2 other)
+                  states $ decode-map-as
+                    {} (1 state) (2 other)
+                    Map Number $ Map Tag Dynamic
                 assert=
                   {}
                     1 $ {} (:status :active)
