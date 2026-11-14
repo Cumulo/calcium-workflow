@@ -3985,7 +3985,7 @@
                   (:query/reply request-id reply) (hooks/on-query-reply! request-id reply)
               (:err error) (eprintln "|Invalid server message:" error)
           :examples $ []
-          :schema $ quote $ Fn Dynamic (-> Unit) (:features :io :js-ffi :state)
+          :schema $ quote $ Fn Input (-> Unit) (:generics Input) (:features :io :js-ffi :state)
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
