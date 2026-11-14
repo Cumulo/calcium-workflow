@@ -2653,8 +2653,9 @@
                     (:err error) (Result :err error)
                 invalid-message $ str "|Expected-enum-message: " message
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ClientMessage MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |decodes-sync-control)
               :code $ quote $ assert=
@@ -2875,8 +2876,9 @@
                     _ $ invalid-message |Expected-domain-operation
               invalid-message |Expected-domain-operation
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result DomainOp MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |reconstructs-legacy-router-operation)
               :code $ quote $ assert=
@@ -3046,8 +3048,9 @@
                   _ $ invalid-message $ str "|Unknown application operation: " op
                 invalid-message $ str "|Expected-enum-message: " op
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result Op MessageDecodeError
+            :generics Input
           :tests $ []
             %{} 'TestEntry (:name |decodes-concrete-domain-payloads)
               :code $ quote $ do
@@ -3146,8 +3149,9 @@
                   _ $ invalid-message $ str "|Unknown partition: " key
                 invalid-message $ str "|Expected-enum-partition: " key
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result PartitionKey MessageDecodeError
+            :generics Input
         'decode-partition-view $ %{} 'CodeEntry
           :doc "|Validate a patched partition view against the nominal PartitionView; passed to cumulo-reel.partition/apply-partition-deltas."
           :code $ quote $ defn decode-partition-view (value)
@@ -3210,8 +3214,9 @@
                   _ $ invalid-message $ str "|Unknown query: " query
                 invalid-message $ str "|Expected-enum-query: " query
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result Query MessageDecodeError
+            :generics Input
         'decode-router $ %{} 'CodeEntry (:doc "|Decode and validate one stored route.")
           :code $ quote $ defn decode-router (data path)
             let
@@ -3276,8 +3281,9 @@
                   _ $ invalid-message $ str "|Unknown server message: " message
                 invalid-message $ str "|Unknown server message: " message
           :examples $ []
-          :schema $ quote $ Fn Dynamic
+          :schema $ quote $ Fn Input
             -> $ Result ServerMessage MessageDecodeError
+            :generics Input
             :features :js-ffi
           :tests $ []
             %{} 'TestEntry (:name |decodes-pong)
