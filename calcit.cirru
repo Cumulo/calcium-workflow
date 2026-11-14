@@ -56,7 +56,9 @@
                   (:loading) (comp-offline |Loading...)
                   (:offline) (comp-offline "|No connection...")
                   (:ready store) (comp-container states store @*partitions @*resources)
-              render! mount-target app dispatch-from-respo!
+              match mount-target
+                (:some target) (render! target app dispatch-from-respo!)
+                (:none) (raise |[Respo/render!]-expected-mount-target)
           :examples $ []
           :schema $ quote $ Fn (-> Unit) (:features :io :state)
         'workload-entry! $ %{} 'CodeEntry (:doc |)
@@ -3951,7 +3953,7 @@
         'mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def mount-target (query-mount-target)
           :examples $ []
-          :schema $ quote $ JsNullish respo.dom/DomElement
+          :schema $ quote $ Option respo.dom/DomElement
         'on-server-data $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn on-server-data (data)
             match (schema/decode-server-message data)
@@ -3977,11 +3979,13 @@
         'query-mount-target $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn query-mount-target ()
             match (browser/query-selector |.app)
-              (:none) nil
-              (:some host-element) (narrow-element host-element)
+              (:none) None
+              (:some host-element)
+                Some $ narrow-element host-element
           :examples $ []
           :schema $ quote $ Fn
-            -> $ JsNullish respo.dom/DomElement
+            -> $ Option respo.dom/DomElement
+            :features :js-ffi
         'request-snapshot! $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defn request-snapshot! ()
             ws-send! $ schema/ClientMessage :sync/resume @*sync-revision

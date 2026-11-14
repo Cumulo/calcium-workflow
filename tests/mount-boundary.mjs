@@ -17,11 +17,14 @@ globalThis.document = {
   },
 };
 const client = await import(pathToFileURL(resolve(output, "app.sync.client.mjs")).href);
-assert.equal(client.mount_target, null);
-assert.equal(client.query_mount_target(), null);
+const core = await import(pathToFileURL(resolve(output, "calcit.core.mjs")).href);
+assert.equal(core.option_$o_none_$q_(client.mount_target), true);
+assert.equal(core.option_$o_none_$q_(client.query_mount_target()), true);
 result = { nodeType: 1 };
-assert.equal(client.query_mount_target(), result);
+const mounted = client.query_mount_target();
+assert.equal(core.option_$o_some_$q_(mounted), true);
+assert.equal(core.option_$o_unwrap(mounted), result);
 result = undefined;
-assert.equal(client.query_mount_target(), null);
+assert.equal(core.option_$o_none_$q_(client.query_mount_target()), true);
 assert.deepEqual(selectors, [".app", ".app", ".app", ".app"]);
 console.log("mount boundary: absence, host identity, selector and eager initialization passed");
