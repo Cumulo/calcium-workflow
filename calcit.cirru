@@ -132,7 +132,7 @@
           :examples $ []
           :schema $ quote $ Fn (Map StateKey Dynamic) schema/Store
             Map schema/PartitionKey $ cumulo-reel.partition/PartitionSlot schema/PartitionView
-            , app.feature.kanban.resource/Resources (-> respo.schema/Component) (:generics StateKey)
+            , app.feature.kanban.resource/Resources (-> respo.schema/Component) (:generics StateKey) (:features :io :state)
         'comp-offline $ %{} 'CodeEntry (:doc |)
           :code $ quote $ defcomp comp-offline (message)
             div
@@ -277,7 +277,7 @@
                         .unwrap-or (get state :password) |
                         , false
           :examples $ []
-          :schema $ quote $ Fn (Map StateKey Dynamic) (-> respo.schema/Component) (:generics StateKey)
+          :schema $ quote $ Fn (Map StateKey Dynamic) (-> respo.schema/Component) (:generics StateKey) (:features :io :state)
         'initial-state $ %{} 'CodeEntry (:doc |)
           :code $ quote $ def initial-state
             {} (:username |) (:password |)
@@ -287,7 +287,7 @@
           :code $ quote $ defn on-submit (username password signup?)
             fn (e dispatch!)
               hint-fn $ Fn respo.schema/RespoEvent
-                Fn schema/Op $ -> Unit
+                Fn schema/Op (-> Unit) (:features :state :io)
                 -> Unit
               dispatch! $ if signup? (app.schema/Op :user/sign-up username password) (app.schema/Op :user/log-in username password)
               when (js-present? js/localStorage)
@@ -300,7 +300,7 @@
                     format-cirru-edn $ [] username password
               , &unit
           :examples $ []
-          :schema $ quote $ Fn String String Bool (-> respo.schema/EventHandler) (:features :js-ffi)
+          :schema $ quote $ Fn String String Bool (-> respo.schema/EventHandler) (:features :io :js-ffi :state)
       :ns $ %{} 'NsEntry (:doc |)
         :code $ quote $ ns app.comp.login
           :require
@@ -3813,7 +3813,7 @@
           :code $ quote $ defn ack-sync! (revision)
             ws-send! $ schema/ClientMessage :sync/ack revision
           :examples $ []
-          :schema $ quote $ Fn Number (-> Unit) (:features :js-ffi)
+          :schema $ quote $ Fn Number (-> Unit) (:features :js-ffi :state)
         'apply-partition-message! $ %{} 'CodeEntry
           :doc "|Apply partition envelopes: snapshots replace the slot, delta chains apply atomically or trigger a partition resync, drops clear caches (dropping the user partition clears private cold data)."
           :code $ quote $ defn apply-partition-message! (message)
@@ -5078,6 +5078,7 @@
             Fn schema/Db Dynamic Dynamic Dynamic Dynamic $ -> schema/Db
             -> $ cumulo-reel.core/ReelState schema/Db
             :generics LegacyDb
+            :features :io
           :tests $ []
             %{} 'TestEntry (:name |rejects-invalid-merged-base)
               :code $ quote $ assert= true
@@ -5464,9 +5465,9 @@
             collect-partitions!
           :examples $ []
           :schema $ quote $ Fn schema/Db
-            Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit)
+            Fn Number (cumulo-reel.partition/PartitionAction schema/PartitionKey schema/PartitionView) (-> Unit) (:features :io :state)
             -> Unit
-            :features :state
+            :features :io :state
         'sync-retry-delay $ %{} 'CodeEntry
           :doc "|Retry delay in milliseconds after WebSocket backpressure."
           :code $ quote $ def sync-retry-delay 200

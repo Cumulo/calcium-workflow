@@ -90,6 +90,11 @@ jobs:
 
       - run: yarn compile-page && yarn release-page
 
+      - name: Generate JS entries used by regression tests
+        run: |
+          calcit --entry server --init-fn app.twig.container/twig-container --reload-fn app.twig.user/twig-user js
+          calcit --init-fn respo.render.html/make-string --reload-fn app.workload.diff-patch/main! js
+
       - name: Verify Session and User Option projections in generated JS
         run: yarn node tests/session-option.mjs
 
