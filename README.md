@@ -10,7 +10,7 @@
 函数签名声明状态与 I/O 副作用，服务端退出回调的返回合同为 `Unit`。
 
 `deps.cirru` 固定正式依赖标签，包括 Cumulo Reel 0.3.7、Respo 0.19.12、
-Recollect 0.3.9、WS-EDN 0.2.5 和 WSS 0.2.45。浏览器运行库与 CLI 均为 0.44.0。
+Recollect 0.3.9、WS-EDN 0.2.5、WSS 0.2.45 和标准库 0.2.58。浏览器运行库与 CLI 均为 0.44.0。
 
 服务端确认缓存持有已经验证的 `Store`，派发副作用返回 `Unit`。Kanban 的测试夹具
 用具名 union 表达分区视图与资源，离线页面传入明确的提示文本。WebSocket 注册表和
