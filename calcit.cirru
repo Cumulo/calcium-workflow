@@ -3881,17 +3881,18 @@
             let
                 url $ connection-url
               reset! *store $ ClientState :loading
-              reset! *ws-client $ Some $ ws-connect! url
-                {}
-                  :on-open $ fn (event) (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!)
-                  :on-close $ fn (event) (reset! *connected? false)
-                    reset! *store $ ClientState :offline
-                    console-error! "|Lost connection!"
-                  :on-data on-server-data
-                  :heartbeat-timeout-ms 75000
-                  :class-mapper $ .merge
+              let
+                  mapper $ .merge
                     {} (:Option Option) (:Store schema/Store) (:SessionView schema/SessionView) (:RouterView schema/RouterView) (:AttachedView schema/AttachedView) (:UserView schema/UserView) (:MessageView schema/MessageView) (:ServerMessage schema/ServerMessage) (:change-op patch-schema/change-op) (:PartitionDelta cumulo-reel.partition/PartitionDelta) (:PartitionView schema/PartitionView) (:PartitionKey schema/PartitionKey)
                     , hooks/class-mapper
+                  on-open $ fn (event) (reset! *connected? true) (request-snapshot!) (send-activity!) (simulate-login!) &unit
+                  on-close $ fn (event) (reset! *connected? false)
+                    reset! *store $ ClientState :offline
+                    console-error! "|Lost connection!"
+                    , &unit
+                reset! *ws-client $ Some $ ws-edn.client/ws-connect-typed! url
+                  ws-edn.client/ClientConfig :retry-base-ms None :retry-max-ms None :retry-jitter None :heartbeat-timeout-ms (Some 75000) :class-mapper mapper
+                  ws-edn.client/ClientCallbacks :on-open (Some on-open) :on-close (Some on-close) :on-error None :on-data $ Some on-server-data
             , &unit
           :examples $ []
           :schema $ quote $ Fn (-> Unit) (:features :io :state)
