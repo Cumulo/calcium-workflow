@@ -4673,7 +4673,7 @@
                     :last-heartbeat $ now-ms
                     :acked-rev $ if resumed? client-revision $ .unwrap-or (get state :acked-rev) client-revision
                     :in-flight? $ if resumed? false $ .unwrap-or (get state :in-flight?) false
-                    :needs-snapshot? $ or resumed? $ .unwrap-or (get state :needs-snapshot?) false
+                    :needs-snapshot? $ if resumed? true $ .unwrap-or (get state :needs-snapshot?) false
                 next-state $ if resumed? (dissoc next-state-base :sent-rev :sent-store) next-state-base
               swap! *client-states assoc sid next-state
               when resumed? (swap! *client-caches remove-client-cache sid) (swap! *dirty-clients include sid) (release-partition-sends! sid) (request-sync!)
@@ -5356,7 +5356,9 @@
               when
                 and
                   = :active $ .unwrap $ get state :status
-                  not $ .unwrap-or (get state :in-flight?) false
+                  let
+                      flag $ .unwrap-or (get state :in-flight?) false
+                    or (nil? flag) (= false flag)
                 let
                     db $ reel-db reel
                   if-let
@@ -5366,9 +5368,11 @@
                         shared $ get-shared-twig reel revision
                         old-store-option $ get @*client-caches sid
                         new-store $ hooks/session-store db session-data shared
-                        needs-snapshot? $ or
-                          .unwrap-or (get state :needs-snapshot?) true
-                          .none? old-store-option
+                        needs-snapshot? $ let
+                            flag $ .unwrap-or (get state :needs-snapshot?) true
+                          or
+                            not $ or (nil? flag) (= false flag)
+                            .none? old-store-option
                         diff-start $ now-ms
                         diff-plan $ if needs-snapshot? (SyncDiffPlan :snapshot empty-diff-stats None)
                           select-sync-diff $ diff-twig-budgeted (.unwrap old-store-option) new-store
