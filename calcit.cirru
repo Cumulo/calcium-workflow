@@ -4347,7 +4347,7 @@
             let
                 state $ .unwrap $ get @*client-states sid
               when
-                = revision $ .unwrap-or (get state :sent-rev) -1
+                &= revision $ .unwrap-or (get state :sent-rev) -1
                 let
                     sent-store $ decode-map-as
                       .unwrap $ get state :sent-store
@@ -4644,7 +4644,7 @@
                     .merge state $ {} (:needs-snapshot? true) (:in-flight? false)
                     , :sent-rev :sent-store
                 when
-                  = :active $ .unwrap $ get
+                  &= :active $ .unwrap $ get
                     .unwrap $ get @*client-states sid
                     , :status
                   swap! *dirty-clients include sid
@@ -4660,8 +4660,8 @@
           :code $ quote $ defn mark-client-active! (sid client-revision force-snapshot?)
             let
                 state $ .unwrap-or (get @*client-states sid) ({})
-                resumed? $ or force-snapshot? $ not= :active
-                  .unwrap-or (get state :status) :idle
+                resumed? $ or force-snapshot? $ not
+                  &= :active $ .unwrap-or (get state :status) :idle
                 next-state-base $ .merge
                   {} (:status :active)
                     :last-heartbeat $ now-ms
@@ -4701,7 +4701,7 @@
                     state $ .unwrap $ get @*client-states sid
                   swap! *client-states assoc-client-state-field sid :dirty-rev revision
                   when
-                    = :active $ .unwrap $ get state :status
+                    &= :active $ .unwrap $ get state :status
                     swap! *dirty-clients include sid
           :examples $ []
           :schema $ quote $ Fn Number (-> Unit) (:features :state)
@@ -5342,7 +5342,7 @@
                         , 'Number
                     when
                       and
-                        = :active $ .unwrap $ get state :status
+                        &= :active $ .unwrap $ get state :status
                         > (- current-time last-heartbeat) heartbeat-timeout
                       mark-client-idle! sid $ decode-map-as
                         .unwrap-or (get state :acked-rev) 0
@@ -5355,10 +5355,10 @@
                 state $ .unwrap $ get @*client-states sid
               when
                 and
-                  = :active $ .unwrap $ get state :status
+                  &= :active $ .unwrap $ get state :status
                   let
                       flag $ .unwrap-or (get state :in-flight?) false
-                    or (nil? flag) (= false flag)
+                    or (nil? flag) (&= false flag)
                 let
                     db $ reel-db reel
                   if-let
@@ -5371,7 +5371,7 @@
                         needs-snapshot? $ let
                             flag $ .unwrap-or (get state :needs-snapshot?) true
                           or
-                            not $ or (nil? flag) (= false flag)
+                            not $ or (nil? flag) (&= false flag)
                             .none? old-store-option
                         diff-start $ now-ms
                         diff-plan $ if needs-snapshot? (SyncDiffPlan :snapshot empty-diff-stats None)
@@ -5451,7 +5451,7 @@
                 let
                     state $ .unwrap $ get @*client-states sid
                   when
-                    = :active $ .unwrap-or (get state :status) :idle
+                    &= :active $ .unwrap-or (get state :status) :idle
                     match
                       get (:sessions db) sid
                       (:none) &unit
@@ -5483,7 +5483,7 @@
             let
                 state $ .unwrap $ get @*client-states sid
               if
-                = :active $ .unwrap $ get state :status
+                &= :active $ .unwrap $ get state :status
                 swap! *client-states assoc-client-state-field sid :last-heartbeat $ now-ms
                 mark-client-active! sid client-revision true
             , &unit
